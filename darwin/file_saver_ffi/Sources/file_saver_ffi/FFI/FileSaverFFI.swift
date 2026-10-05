@@ -1,4 +1,4 @@
-import DartApiDl
+import FileSaverDartApi
 import Foundation
 
 #if os(iOS)
@@ -171,7 +171,7 @@ private func getWriteSession(_ id: UInt) -> WriteSession? {
 @_cdecl("file_saver_init_dart_api_dl")
 public func fileSaverInitDartApiDL(_ data: UnsafeMutableRawPointer?) -> Int {
     guard let data = data else { return -1 }
-    return Dart_InitializeApiDL(data)
+    return FileSaver_InitializeApiDL(data)
 }
 
 @_cdecl("file_saver_init")

@@ -9,7 +9,7 @@ import 'package:ffigen/ffigen.dart';
 void main() {
   final packageRoot = Platform.script.resolve('../');
   final headerUri = packageRoot.resolve(
-    'darwin/Classes/FileSaver/FFI/file_saver_ffi.h',
+    'darwin/file_saver_ffi/Sources/file_saver_ffi/FFI/file_saver_ffi.h',
   );
   FfiGenerator(
     output: Output(

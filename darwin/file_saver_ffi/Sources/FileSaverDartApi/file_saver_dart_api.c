@@ -1,18 +1,18 @@
 /*
  * Dart API Dynamic Linking Implementation
  *
- * Provides Dart_PostCObject_DL for sending messages to Dart via NativePort.
+ * Provides FileSaver_PostCObject_DL for sending messages to Dart via NativePort.
  * Based on Dart SDK dart_api_dl.c
  */
 
-#include "include/dart_api_dl.h"
+#include "file_saver_dart_api.h"
 #include <string.h>
 
 // Function pointer storage
-static Dart_PostCObject_Type Dart_PostCObject_DL_ = NULL;
+static Dart_PostCObject_Type FileSaver_PostCObject_DL_ = NULL;
 
 // DartApi struct layout from Dart SDK
-// The data passed to Dart_InitializeApiDL contains function entries
+// The data passed to FileSaver_InitializeApiDL contains function entries
 typedef struct {
     const char* name;
     void* function;
@@ -24,7 +24,7 @@ typedef struct {
     DartApiEntry* functions;
 } DartApi;
 
-intptr_t Dart_InitializeApiDL(void* data) {
+intptr_t FileSaver_InitializeApiDL(void* data) {
     if (data == NULL) {
         return -1;
     }
@@ -32,22 +32,22 @@ intptr_t Dart_InitializeApiDL(void* data) {
     DartApi* api = (DartApi*)data;
 
     // Find Dart_PostCObject in the function table
-    // Note: Dart SDK uses "Dart_PostCObject" (not "Dart_PostCObject_DL")
+    // Note: Dart SDK exposes "Dart_PostCObject"; we wrap it as FileSaver_PostCObject_DL
     DartApiEntry* entry = api->functions;
     while (entry->name != NULL) {
         if (strcmp(entry->name, "Dart_PostCObject") == 0) {
-            Dart_PostCObject_DL_ = (Dart_PostCObject_Type)entry->function;
+            FileSaver_PostCObject_DL_ = (Dart_PostCObject_Type)entry->function;
             break;
         }
         entry++;
     }
 
-    return Dart_PostCObject_DL_ != NULL ? 0 : -1;
+    return FileSaver_PostCObject_DL_ != NULL ? 0 : -1;
 }
 
-bool Dart_PostCObject_DL(Dart_Port port_id, Dart_CObject* message) {
-    if (Dart_PostCObject_DL_ == NULL) {
+bool FileSaver_PostCObject_DL(Dart_Port port_id, Dart_CObject* message) {
+    if (FileSaver_PostCObject_DL_ == NULL) {
         return false;
     }
-    return Dart_PostCObject_DL_(port_id, message);
+    return FileSaver_PostCObject_DL_(port_id, message);
 }

@@ -110,7 +110,7 @@ Create `android/app/src/main/res/xml/file_saver_ffi_file_paths.xml`:
 <details>
 <summary><b>IOS Configuration</b></summary>
 
-**Supported:** IOS 13.0+
+**Supported:** IOS 13.0+ (Swift Package Manager and CocoaPods)
 
 Add to `ios/Runner/Info.plist`:
 
@@ -139,7 +139,7 @@ Add to `ios/Runner/Info.plist`:
 <details>
 <summary><b>MacOS Configuration</b></summary>
 
-**Supported:** macOS 10.15.4+
+**Supported:** macOS 10.15.4+ (Swift Package Manager and CocoaPods)
 
 Add to `macos/Runner/DebugProfile.entitlements` and `macos/Runner/Release.entitlements`:
 

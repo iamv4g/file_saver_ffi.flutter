@@ -1,0 +1,4 @@
+module FileSaverDartApi {
+    header "file_saver_dart_api.h"
+    export *
+}

@@ -1,7 +1,7 @@
-import DartApiDl
+import FileSaverDartApi
 import Foundation
 
-/// Reports async operation results to Dart via NativePort (`Dart_PostCObject_DL`).
+/// Reports async operation results to Dart via NativePort (`FileSaver_PostCObject_DL`).
 ///
 /// ## Message protocol
 ///
@@ -93,7 +93,7 @@ final class ProgressReporter {
         arrayObject.value.as_array.values = arrayPtr
 
         // Send to Dart
-        _ = Dart_PostCObject_DL(port, &arrayObject)
+        _ = FileSaver_PostCObject_DL(port, &arrayObject)
 
         // Clean up elements
         for element in elements {
