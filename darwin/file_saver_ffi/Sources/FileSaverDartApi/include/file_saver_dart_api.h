@@ -2,13 +2,13 @@
  * Dart API Dynamic Linking Header
  *
  * This header provides the necessary types and function declarations
- * for sending messages to Dart via NativePort (Dart_PostCObject_DL).
+ * for sending messages to Dart via NativePort (FileSaver_PostCObject_DL).
  *
- * Based on Dart SDK dart_api_dl.h
+ * Based on Dart SDK file_saver_dart_api.h
  */
 
-#ifndef DART_API_DL_H_
-#define DART_API_DL_H_
+#ifndef FILE_SAVER_DART_API_H_
+#define FILE_SAVER_DART_API_H_
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -104,12 +104,12 @@ typedef bool (*Dart_PostCObject_Type)(Dart_Port port_id, Dart_CObject* message);
 
 /**
  * Initialize Dart API DL with the given data pointer.
- * Must be called before using Dart_PostCObject_DL.
+ * Must be called before using FileSaver_PostCObject_DL.
  *
  * @param data Pointer from NativeApi.initializeApiDLData
  * @return 0 on success, -1 on failure
  */
-intptr_t Dart_InitializeApiDL(void* data);
+intptr_t FileSaver_InitializeApiDL(void* data);
 
 /**
  * Posts a message to a Dart NativePort.
@@ -118,10 +118,10 @@ intptr_t Dart_InitializeApiDL(void* data);
  * @param message The message to send
  * @return true if the message was posted successfully
  */
-bool Dart_PostCObject_DL(Dart_Port port_id, Dart_CObject* message);
+bool FileSaver_PostCObject_DL(Dart_Port port_id, Dart_CObject* message);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* DART_API_DL_H_ */
+#endif /* FILE_SAVER_DART_API_H_ */

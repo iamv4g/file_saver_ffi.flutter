@@ -1,3 +1,11 @@
+## 0.9.2
+
+### Added
+
+- **Swift Package Manager support** for iOS and macOS (CocoaPods is still supported).
+  - Native sources moved to `darwin/file_saver_ffi/Sources/` with a new `Package.swift`.
+  - The Dart API shim is now the `FileSaverDartApi` C target, with prefixed symbols (`FileSaver_InitializeApiDL`, `FileSaver_PostCObject_DL`) so it no longer clashes with other FFI plugins (e.g. `dir_picker`) when statically linked.
+
 ## 0.9.1
 
 - Update `jni` dependency to `1.0.0`
