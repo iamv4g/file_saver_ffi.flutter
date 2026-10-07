@@ -68,7 +68,7 @@ class _PathLocationScreenState extends State<PathLocationScreen> {
         }
       }
     }
-    final result = await FilePicker.platform.getDirectoryPath();
+    final result = await FilePicker.getDirectoryPath();
     if (result != null) setState(() => _selectedPath = result);
   }
 
