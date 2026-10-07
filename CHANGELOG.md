@@ -1,3 +1,14 @@
+## 0.10.0
+
+### Breaking Changes
+
+- **Minimum supported SDK raised to Flutter 3.44 / Dart 3.12** (required for built-in Kotlin).
+
+### Changed
+
+- Migrated the Android plugin and example app to built-in Kotlin (removes the Kotlin Gradle Plugin).
+- Update `dir_picker` dependency to `^0.5.0` (also migrated to built-in Kotlin).
+
 ## 0.9.2
 
 ### Added
