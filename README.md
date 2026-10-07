@@ -1,13 +1,13 @@
 <p align="center">
-  <img alt="cover" src="https://raw.githubusercontent.com/vanvixi/file_saver_ffi.flutter/main/screenshots/cover.png" />
+  <img alt="cover" src="https://raw.githubusercontent.com/iamv4g/file_saver_ffi.flutter/main/screenshots/cover.png" />
 </p>
 
 ## File Saver FFI
 
 <p align="left">
-  <a href="https://github.com/vanvixi/file_saver_ffi"><img src="https://img.shields.io/badge/platform-Android%20%7C%20iOS%20%7C%20macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Web-blue.svg" alt="Platform"></a>
+  <a href="https://github.com/iamv4g/file_saver_ffi.flutter"><img src="https://img.shields.io/badge/platform-Android%20%7C%20iOS%20%7C%20macOS%20%7C%20Windows%20%7C%20Linux%20%7C%20Web-blue.svg" alt="Platform"></a>
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/license-MIT-purple.svg" alt="License: MIT"></a>
-  <a href="https://deepwiki.com/vanvixi/file_saver_ffi.flutter"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki"></a>
+  <a href="https://deepwiki.com/iamv4g/file_saver_ffi.flutter"><img src="https://img.shields.io/badge/Ask-DeepWiki-blue.svg" alt="Ask DeepWiki"></a>
 </p>
 
 A high-performance file saver for Flutter supporting Android, iOS, macOS, Windows, Linux, and Web. Save to gallery,
@@ -30,7 +30,7 @@ If you want to say thank you, star us on GitHub or like us on pub.dev.
 Have questions about `file_saver_ffi`? Get instant AI-powered answers about the library's features, usage, and best
 practices.
 
-**[→ Chat with AI Documentation Assistant](https://deepwiki.com/vanvixi/file_saver_ffi.flutter)**
+**[→ Chat with AI Documentation Assistant](https://deepwiki.com/iamv4g/file_saver_ffi.flutter)**
 
 Ask anything like:
 
