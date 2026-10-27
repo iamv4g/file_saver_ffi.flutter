@@ -34,7 +34,7 @@ Never hand-edit `lib/src/platforms/{android,darwin}/bindings.g.dart`. Swift form
 - Conditional exports keep web and IO code apart: `io_platforms.dart` (real Android/Darwin/Windows/Linux classes) vs. `io_stub.dart` on web, and `web/file_saver_web.dart` vs. `web_stub.dart` on IO. **When you add or rename a platform class or a required interface method, update the matching stub too.**
 - Every operation returns `Stream<SaveProgress>` (Started → Update* → Complete | Error | Cancelled). `saveAsync` and similar wrappers sit on top of these streams.
 - `PathLocation` (a raw filesystem path) skips native code on every IO platform and goes through `shared/path_location_writer.dart`.
-- Windows and Linux share `shared/desktop_file_saver.dart`. Subclasses implement only `resolveDirectory` (Known Folder GUIDs on Windows, XDG dirs on Linux).
+- Windows and Linux share `shared/desktop_file_saver.dart`. Subclasses implement only `resolveDirectory` (Known Folder GUIDs on Windows, XDG dirs on Linux) and `launchFile` (`ShellExecuteExW` via `windows/windows_shell.dart` on Windows, `xdg-open` on Linux). `launchFile` must never pass the path through a shell such as `cmd`.
 - Streaming write sessions (`openWrite`/`openWriteAs`) return a `FileSaverSink`. Each platform has its own sink (`*_file_saver_sink.dart`).
 
 ### Native bridges

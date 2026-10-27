@@ -23,7 +23,8 @@ const int _chunkSize = 1048576;
 /// Shared base class for desktop (Windows + Linux) FileSaver implementations.
 ///
 /// All I/O logic is implemented here. Subclasses only need to implement
-/// [resolveDirectory] with platform-specific directory resolution.
+/// [resolveDirectory] with platform-specific directory resolution and
+/// [launchFile] to open a file with the default application.
 abstract class DesktopFileSaver extends FileSaverPlatform {
   final _httpClient = HttpClient();
   int _nextTokenId = 1;
@@ -289,20 +290,8 @@ abstract class DesktopFileSaver extends FileSaverPlatform {
       throw SourceFileNotFoundException(uri.toString());
     }
 
-    final path = uri.toFilePath();
     try {
-      final ProcessResult result;
-      if (Platform.isWindows) {
-        result = await Process.run('cmd', ['/c', 'start', '""', path]);
-      } else {
-        result = await Process.run('xdg-open', [path]);
-      }
-
-      if (result.exitCode != 0) {
-        throw OpenFailedException(
-          'exitCode=${result.exitCode} stdout=${result.stdout} stderr=${result.stderr}',
-        );
-      }
+      await launchFile(uri.toFilePath());
     } catch (e) {
       if (e is FileSaverException) rethrow;
       throw OpenFailedException('$e');
@@ -310,8 +299,17 @@ abstract class DesktopFileSaver extends FileSaverPlatform {
   }
 
   // ─────────────────────────────────────────────────────────────────────────
-  // Platform-specific directory resolution
+  // Platform-specific hooks
   // ─────────────────────────────────────────────────────────────────────────
+
+  /// Opens the existing file at [path] with the default application.
+  ///
+  /// Called by [openFile] after the URI and the file have been validated.
+  /// Implementations must pass [path] to the OS as a single argument and never
+  /// through a shell, because file names may contain shell metacharacters.
+  /// Throw [OpenFailedException] when the file cannot be opened.
+  @protected
+  Future<void> launchFile(String path);
 
   /// Resolves the target directory for the save operation.
   ///

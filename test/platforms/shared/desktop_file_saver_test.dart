@@ -19,6 +19,18 @@ class _TestDesktopFileSaver extends DesktopFileSaver {
 
   final String baseDir;
 
+  /// Paths passed to [launchFile], in call order.
+  final launchedPaths = <String>[];
+
+  /// Thrown by [launchFile] when set.
+  Object? launchError;
+
+  @override
+  Future<void> launchFile(String path) async {
+    launchedPaths.add(path);
+    if (launchError case final error?) throw error;
+  }
+
   @override
   Future<String> resolveDirectory(
     SaveLocation? saveLocation,
@@ -327,6 +339,45 @@ void main() {
       expect(
         await saver.canOpenFile(Uri.parse('https://example.com/a')),
         isFalse,
+      );
+    });
+  });
+
+  group('openFile', () {
+    test('passes the path unchanged, including shell metacharacters', () async {
+      // Windows forbids `|`, `<` and `>` in file names; `&`, `^`, `%` and `!`
+      // are allowed and are special to cmd.exe.
+      final file = File(inTmp('a&calc&b ^%PATH%! (1).txt'))
+        ..writeAsStringSync('x');
+
+      await saver.openFile(file.uri);
+
+      expect(saver.launchedPaths, [file.path]);
+    });
+
+    test('rejects non-file URIs without launching', () async {
+      await expectLater(
+        saver.openFile(Uri.parse('https://example.com/a.pdf')),
+        throwsA(isA<InvalidInputException>()),
+      );
+      expect(saver.launchedPaths, isEmpty);
+    });
+
+    test('throws SourceFileNotFoundException for a missing file', () async {
+      await expectLater(
+        saver.openFile(File(inTmp('missing.txt')).uri),
+        throwsA(isA<SourceFileNotFoundException>()),
+      );
+      expect(saver.launchedPaths, isEmpty);
+    });
+
+    test('wraps launcher errors in OpenFailedException', () async {
+      final file = File(inTmp('doc.txt'))..writeAsStringSync('x');
+      saver.launchError = const ProcessException('xdg-open', [], 'not found');
+
+      await expectLater(
+        saver.openFile(file.uri),
+        throwsA(isA<OpenFailedException>()),
       );
     });
   });
