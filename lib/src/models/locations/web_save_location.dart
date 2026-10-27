@@ -23,7 +23,9 @@ import 'save_location.dart';
 /// ```
 final class WebPickedDirectoryLocation extends PickedDirectoryLocation {
   WebPickedDirectoryLocation(this.directoryHandle)
-    : super(uri: Uri(scheme: 'web-directory', path: directoryHandle.name));
+    : super(
+        uri: Uri(scheme: 'web-directory', path: directoryHandle.name),
+      );
 
   /// The [FileSystemDirectoryHandle] obtained from `window.showDirectoryPicker()`.
   final FileSystemDirectoryHandle directoryHandle;

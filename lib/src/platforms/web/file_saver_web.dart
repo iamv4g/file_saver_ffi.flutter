@@ -230,10 +230,9 @@ class FileSaverWeb extends FileSaverPlatform {
             fileName: fileName,
             conflictResolution: conflictResolution,
           ),
-        SaveFileInput() =>
-          throw const InvalidInputException(
-            'saveFile is not supported on web.',
-          ),
+        SaveFileInput() => throw const InvalidInputException(
+          'saveFile is not supported on web.',
+        ),
       };
     }
 
@@ -256,8 +255,9 @@ class FileSaverWeb extends FileSaverPlatform {
           headers: headers,
           timeout: timeout,
         ),
-      SaveFileInput() =>
-        throw const InvalidInputException('saveFile is not supported on web.'),
+      SaveFileInput() => throw const InvalidInputException(
+        'saveFile is not supported on web.',
+      ),
     };
   }
 
@@ -311,13 +311,9 @@ class FileSaverWeb extends FileSaverPlatform {
       ).resolve(fullName, conflictResolution);
       if (resolvedName == null) return null;
 
-      final fileHandle =
-          await handle
-              .getFileHandle(
-                resolvedName,
-                FileSystemGetFileOptions(create: true),
-              )
-              .toDart;
+      final fileHandle = await handle
+          .getFileHandle(resolvedName, FileSystemGetFileOptions(create: true))
+          .toDart;
       final writable = await fileHandle.createWritable().toDart;
 
       return WebFileSaverSink.fsa(
@@ -361,13 +357,9 @@ class FileSaverWeb extends FileSaverPlatform {
         return;
       }
 
-      final fileHandle =
-          await handle
-              .getFileHandle(
-                resolvedName,
-                FileSystemGetFileOptions(create: true),
-              )
-              .toDart;
+      final fileHandle = await handle
+          .getFileHandle(resolvedName, FileSystemGetFileOptions(create: true))
+          .toDart;
 
       if (conflictResolution != ConflictResolution.overwrite) {
         token.setFileEntry(fileEntity, resolvedName);
@@ -453,13 +445,9 @@ class FileSaverWeb extends FileSaverPlatform {
         return;
       }
 
-      final fileHandle =
-          await handle
-              .getFileHandle(
-                resolvedName,
-                FileSystemGetFileOptions(create: true),
-              )
-              .toDart;
+      final fileHandle = await handle
+          .getFileHandle(resolvedName, FileSystemGetFileOptions(create: true))
+          .toDart;
 
       if (conflictResolution != ConflictResolution.overwrite) {
         token.setFileEntry(fileEntity, resolvedName);

@@ -506,35 +506,38 @@ abstract class DesktopFileSaver extends FileSaverPlatform {
     final sink = dest.openWrite();
     int downloaded = 0;
 
-    Timer? idleTimer;
+    // HttpClientRequest.abort() does not end a response stream that is
+    // already being received, so cancellation and the inactivity timeout
+    // cancel the response subscription directly instead.
+    final completer = Completer<void>();
+    final subscription = response
+        .timeout(timeout)
+        .listen(
+          (chunk) {
+            sink.add(chunk);
+            downloaded += chunk.length;
 
-    void resetIdleTimer() {
-      idleTimer?.cancel();
-      idleTimer = Timer(timeout, () {
-        token.activeRequest?.abort();
-      });
-    }
+            if (total > 0) {
+              controller.add(SaveProgressUpdate(downloaded / total));
+            }
+          },
+          onError: (Object e, StackTrace st) {
+            if (!completer.isCompleted) completer.completeError(e, st);
+          },
+          onDone: () {
+            if (!completer.isCompleted) completer.complete();
+          },
+          cancelOnError: true,
+        );
+
+    token.onCancel = () {
+      subscription.cancel();
+      if (!completer.isCompleted) completer.complete();
+    };
 
     try {
-      resetIdleTimer();
-
-      await for (final chunk in response) {
-        if (token.isCancelled) {
-          token.activeRequest?.abort();
-          break;
-        }
-
-        resetIdleTimer();
-
-        sink.add(chunk);
-        downloaded += chunk.length;
-
-        if (total > 0) {
-          controller.add(SaveProgressUpdate(downloaded / total));
-        }
-      }
-
-      idleTimer?.cancel();
+      await completer.future;
+      token.onCancel = null;
       token.activeRequest = null;
 
       if (token.isCancelled) {
@@ -546,8 +549,7 @@ abstract class DesktopFileSaver extends FileSaverPlatform {
       await sink.flush();
       await sink.close();
     } catch (e) {
-      idleTimer?.cancel();
-      token.activeRequest?.abort();
+      token.onCancel = null;
       token.activeRequest = null;
 
       await sink.close();
@@ -555,6 +557,9 @@ abstract class DesktopFileSaver extends FileSaverPlatform {
 
       if (token.isCancelled) return;
 
+      if (e is TimeoutException) {
+        throw NetworkException('No data received for ${timeout.inSeconds}s');
+      }
       throw FileIOException(e.toString());
     }
   }
@@ -624,8 +629,12 @@ class _CancellationToken {
   bool isCancelled = false;
   HttpClientRequest? activeRequest;
 
+  /// Stops an in-flight response stream; set while a download is running.
+  void Function()? onCancel;
+
   void cancel() {
     isCancelled = true;
     activeRequest?.abort();
+    onCancel?.call();
   }
 }

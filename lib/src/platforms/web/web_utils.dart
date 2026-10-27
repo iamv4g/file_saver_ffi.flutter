@@ -99,8 +99,9 @@ class WebUtils {
               return;
             }
             if (!controller.isClosed) {
-              final ex =
-                  e is FileSaverException ? e : FileSaverException.fromObj(e);
+              final ex = e is FileSaverException
+                  ? e
+                  : FileSaverException.fromObj(e);
               controller.addSync(SaveProgressError(ex));
               controller.closeSync();
             }

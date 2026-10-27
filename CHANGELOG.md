@@ -1,3 +1,10 @@
+## Unreleased
+
+### Fixed
+
+- **Windows/Linux:** save errors now surface as their specific exception (`NetworkException`, `SourceFileNotFoundException`, `FileExistsException`, …) instead of being wrapped in `NativePlatformException`.
+- **Windows/Linux:** cancelling a network download, or hitting the inactivity `timeout`, now stops the transfer and deletes the partial file even when the server stops sending data. Previously the download could hang indefinitely. A timeout is reported as `NetworkException`.
+
 ## 0.10.0
 
 ### Breaking Changes
