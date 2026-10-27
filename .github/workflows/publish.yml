@@ -5,16 +5,13 @@ name: Publish to pub.dev
 #
 #   git tag v0.10.1 && git push origin v0.10.1
 #
-# Running it manually, or from a PR that changes this file, performs a dry run:
-# the release checks and full CI (which includes `pub publish --dry-run`) run,
-# and the publish job is skipped.
-
+# pub.dev only accepts automated publishing from a workflow triggered by a tag
+# push. The tag must match the pattern set on the package admin page
+# (v{{version}}).
 on:
   push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
-  pull_request:
-    paths: ['.github/workflows/publish.yml']
-  workflow_dispatch:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
 
 permissions:
   contents: read
@@ -27,9 +24,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-
-      - name: Tag matches pubspec version and is on main
-        if: github.event_name == 'push'
+      - name: Check tag, main and CHANGELOG
         run: |
           version=$(sed -n 's/^version: *//p' pubspec.yaml)
           if [ "v$version" != "$GITHUB_REF_NAME" ]; then
@@ -40,10 +35,6 @@ jobs:
             echo "::error::Tag $GITHUB_REF_NAME points to a commit that is not on main"
             exit 1
           fi
-
-      - name: CHANGELOG has a section for the version
-        run: |
-          version=$(sed -n 's/^version: *//p' pubspec.yaml)
           if ! grep -qxF "## $version" CHANGELOG.md; then
             echo "::error::CHANGELOG.md has no '## $version' section"
             exit 1
@@ -57,12 +48,20 @@ jobs:
   publish:
     name: Publish
     needs: ci
-    # pub.dev only accepts uploads from tag pushes.
-    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    # pub.dev is configured to require this environment. Its protection rules
+    # (required reviewers, tag policy) gate every publish.
+    environment: pub.dev
     permissions:
-      id-token: write # Required for OIDC authentication with pub.dev
-    # Installs Flutter, runs `dart pub publish --dry-run`, then publishes.
-    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
-    with:
-      # Must match the environment required on the pub.dev admin page.
-      environment: pub.dev
+      contents: read
+      id-token: write # OIDC token for pub.dev
+    steps:
+      - uses: actions/checkout@v5
+      # Sets up the pub.dev OIDC token, which Flutter's pub also reads.
+      - uses: dart-lang/setup-dart@v1
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter pub publish --force
