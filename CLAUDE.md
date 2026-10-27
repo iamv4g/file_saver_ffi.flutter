@@ -1,0 +1,55 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project
+
+`file_saver_ffi` is a Flutter plugin (published on pub.dev) for saving bytes, local files, and network downloads to gallery/device storage or a user-picked directory, with progress streaming, cancellation, conflict resolution, and streaming write sessions. Platforms: Android (JNI → Kotlin), iOS/macOS (FFI → Swift, shared `darwin/` source), Windows/Linux (pure Dart + `dart:io`), Web (`package:web` / `dart:js_interop`). The `example/` app is the only test harness (its `widget_test.dart` is the default Flutter template and is stale).
+
+## Commands
+
+```bash
+flutter pub get                      # root package
+flutter analyze                      # lints: package:flutter_lints/flutter.yaml
+dart format lib tool
+
+cd example && flutter run -d <device>   # manual testing on a target platform
+
+# Regenerate Darwin FFI bindings after editing the C header
+dart run tool/ffigen.dart
+
+# Regenerate Android JNI bindings after changing the public Kotlin API of
+# FileSaver or ProgressCallback. Compiles the plugin's Kotlin via
+# example/android/gradlew first, so the example must be buildable.
+dart run tool/jnigen.dart
+```
+
+Never hand-edit `lib/src/platforms/{android,darwin}/bindings.g.dart`. Swift formatting config is `darwin/.swift-format`; Kotlin follows ktlint style.
+
+## Architecture
+
+### Dart layer
+- `lib/file_saver_ffi.dart` — the `FileSaver` static facade, the only public entry point. It dispatches on the sealed `SaveInput` (bytes / file / network) to `FileSaverPlatform.instance`.
+- `lib/src/platform_interface/file_saver_platform.dart` — abstract contract. Each platform class is wired up via `dartPluginClass`/`pluginClass` in `pubspec.yaml` and sets `FileSaverPlatform.instance` in `registerWith()`.
+- Conditional exports keep web and IO code apart: `io_platforms.dart` (real Android/Darwin/Windows/Linux classes) vs. `io_stub.dart` on web, and `web/file_saver_web.dart` vs. `web_stub.dart` on IO. **When you add or rename a platform class or a required interface method, update the matching stub too.**
+- Every operation returns `Stream<SaveProgress>` (Started → Update* → Complete | Error | Cancelled). `saveAsync` and similar wrappers sit on top of these streams.
+- `PathLocation` (a raw filesystem path) skips native code on every IO platform and goes through `shared/path_location_writer.dart`.
+- Windows and Linux share `shared/desktop_file_saver.dart`. Subclasses implement only `resolveDirectory` (Known Folder GUIDs on Windows, XDG dirs on Linux).
+- Streaming write sessions (`openWrite`/`openWriteAs`) return a `FileSaverSink`. Each platform has its own sink (`*_file_saver_sink.dart`).
+
+### Native bridges
+- **Darwin**: Dart calls the C ABI declared in `darwin/file_saver_ffi/Sources/file_saver_ffi/FFI/file_saver_ffi.h`, which is implemented in Swift (`FFI/FileSaverFFI.swift`). Progress goes back through a Dart `NativePort`, posted by the small C target `Sources/FileSaverDartApi` (`Dart_PostCObject` resolved from `NativeApi.initializeApiDLData`). Messages are arrays: `[0]` started, `[1, progress]`, `[2, code, msg]` error, `[3, uri]` success, `[4]` cancelled. The library loads via `DynamicLibrary.process()`, and a `NativeFinalizer` calls `file_saver_dispose`. Both SwiftPM (`Package.swift`) and CocoaPods (`file_saver_ffi.podspec`) are supported, so keep both working.
+- **Android**: `FileSaverAndroid` calls the jnigen-generated wrapper around `com.vanvixi.file_saver_ffi.FileSaver` (Kotlin, coroutines). Progress arrives through a Dart-implemented `ProgressCallback` interface with the same event codes 0–4. `FileSaverFfiPlugin` exists only to give `FileSaver` its application context and Activity (for permission prompts). The Dart-side `FileSaver` is created lazily because the JVM isn't ready during plugin registration.
+- Each native side has type-specific savers (`ImageSaver`, `VideoSaver`, `AudioSaver`, `CustomFileSaver`) on a shared `BaseFileSaver`, plus conflict resolvers per storage backend (MediaStore scoped/legacy and SAF on Android; Photos and FileManager on Darwin).
+
+### Cross-language contracts (keep in sync manually)
+- Dart sends `ConflictResolution.index` and the platform `SaveLocation` enum `.index` across the bridge as plain ints. The Kotlin/Swift enums must keep the same order and values.
+- Progress event codes 0–4 and the error code strings map to the Dart exceptions in `lib/src/exceptions/file_saver_exceptions.dart`.
+- Adding a native function means changing the C header, Swift `@_cdecl`, the `Functions.include` set in `tool/ffigen.dart`, and then regenerating. On Android it means changing Kotlin, then running jnigen (only the classes listed in `tool/jnigen.dart` are exposed).
+
+### Web
+The download strategy depends on the API: `saveNetwork` without headers uses an `<a download>` anchor, with headers it uses `fetch` → Blob, and `saveAs`/`openWriteAs` use the File System Access API on Chromium with a fallback to a regular download. `WEB_LIMITATIONS.md` documents what users see from this, so update it when web behaviour changes.
+
+## Conventions
+- Commit messages use Conventional Commits with a platform scope, e.g. `feat(darwin): …`, `refactor(android): …`, `chore(example): …`.
+- User-facing changes go in `CHANGELOG.md`. Version bumps update `pubspec.yaml` (the README setup sections should match the platform minimums).
