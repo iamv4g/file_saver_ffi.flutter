@@ -1,0 +1,146 @@
+name: 🐛 Bug report
+description: Something doesn't save, crashes, reports the wrong progress or behaves differently than documented.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug!
+        Before filing, please check the [README](https://github.com/iamv4g/file_saver_ffi.flutter#readme),
+        [WEB_LIMITATIONS.md](https://github.com/iamv4g/file_saver_ffi.flutter/blob/main/WEB_LIMITATIONS.md)
+        and [existing issues](https://github.com/iamv4g/file_saver_ffi.flutter/issues?q=is%3Aissue).
+
+  - type: input
+    id: version
+    attributes:
+      label: Plugin version
+      description: The `file_saver_ffi` version from your `pubspec.lock`.
+      placeholder: "0.10.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Affected platforms
+      multiple: true
+      options:
+        - Android
+        - iOS
+        - macOS
+        - Windows
+        - Linux
+        - Web
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: OS / device / browser
+      description: OS version and device model, or browser name and version for Web.
+      placeholder: "Android 14 (Pixel 7), iOS 18.1 (iPhone 15), Chrome 130, Ubuntu 24.04…"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: api
+    attributes:
+      label: API used
+      multiple: true
+      options:
+        - save / saveAsync
+        - saveAs / saveAsAsync (user-picked directory)
+        - openWrite / openWriteAs (streaming write session)
+        - pickDirectory
+        - canOpenFile / openFile
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: input
+    attributes:
+      label: Input source
+      multiple: true
+      options:
+        - SaveBytesInput
+        - SaveFileInput
+        - SaveNetworkInput
+        - Not applicable
+
+  - type: input
+    id: location
+    attributes:
+      label: Save location & conflict resolution
+      description: The `SaveLocation` (or `PathLocation`) and `ConflictResolution` you passed.
+      placeholder: "AndroidSaveLocation.pictures, ConflictResolution.autoRename"
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: A clear description of the bug.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproducible code
+      description: |
+        The smallest snippet that reproduces the problem. Please strip unrelated code.
+        If it reproduces in the `example/` app, mention which button/flow.
+      render: dart
+      placeholder: |
+        final uri = await FileSaver.saveAsync(
+          input: SaveInput.bytes(imageBytes),
+          fileName: 'photo',
+          fileType: ImageType.jpg,
+          saveLocation: AndroidSaveLocation.pictures,
+        );
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / error output
+      description: |
+        The `SaveProgress` events or exception you received (e.g. `PermissionDeniedException`, `NativePlatformException` with its code),
+        plus relevant `logcat` / Xcode console / browser console output. Stack traces are very helpful.
+      render: shell
+
+  - type: textarea
+    id: flutter-doctor
+    attributes:
+      label: Output of `flutter doctor -v`
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: setup
+    attributes:
+      label: Platform setup & additional context
+      description: |
+        Anything else that might matter: relevant `AndroidManifest.xml` permissions, `Info.plist` keys,
+        macOS entitlements / sandbox, SwiftPM vs CocoaPods, file size, whether it worked in a previous version…
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues and this hasn't been reported yet.
+          required: true
+        - label: I followed the platform setup in the README (permissions, Info.plist, entitlements).
+          required: true
+        - label: I can reproduce this with the latest published version.

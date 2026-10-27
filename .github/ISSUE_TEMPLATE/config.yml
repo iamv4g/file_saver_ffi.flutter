@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📖 Documentation
+    url: https://github.com/iamv4g/file_saver_ffi.flutter#readme
+    about: Platform setup, API reference and common use cases.
+  - name: 🌐 Web limitations
+    url: https://github.com/iamv4g/file_saver_ffi.flutter/blob/main/WEB_LIMITATIONS.md
+    about: Known browser restrictions — please check here before reporting a Web bug.
+  - name: 🤖 Ask DeepWiki
+    url: https://deepwiki.com/iamv4g/file_saver_ffi.flutter
+    about: Usage questions ("how do I…?") get answered fastest here.
