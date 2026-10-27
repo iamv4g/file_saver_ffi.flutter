@@ -1,0 +1,62 @@
+name: ✨ Feature request
+description: Suggest a new API, save location, file type or platform capability.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Please describe the problem first, then the solution you have in mind.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to do, and why can't you do it with the current API?
+      placeholder: "I need to save HEIC images to a custom album on iOS, but…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: How would you like it to work? A sketch of the Dart API is very welcome.
+      render: dart
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platforms
+    attributes:
+      label: Platforms
+      description: Which platforms should this cover?
+      multiple: true
+      options:
+        - Android
+        - iOS
+        - macOS
+        - Windows
+        - Linux
+        - Web
+        - All
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Workarounds you use today, or other packages that do this.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Links to platform docs (MediaStore, PhotoKit, File System Access API…), screenshots, etc.
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Contribution
+      options:
+        - label: I'd be willing to open a pull request for this.
