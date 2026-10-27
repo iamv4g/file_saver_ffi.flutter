@@ -75,17 +75,17 @@ class FileSaver {
         subDir: subDir,
         conflictResolution: conflictResolution,
       ),
-      SaveNetworkInput(:final url, :final headers, :final timeout) => _platform
-          .saveNetwork(
-            url: url,
-            fileType: fileType,
-            fileName: fileName,
-            headers: headers,
-            timeout: timeout,
-            saveLocation: saveLocation,
-            subDir: subDir,
-            conflictResolution: conflictResolution,
-          ),
+      SaveNetworkInput(:final url, :final headers, :final timeout) =>
+        _platform.saveNetwork(
+          url: url,
+          fileType: fileType,
+          fileName: fileName,
+          headers: headers,
+          timeout: timeout,
+          saveLocation: saveLocation,
+          subDir: subDir,
+          conflictResolution: conflictResolution,
+        ),
     };
   }
 

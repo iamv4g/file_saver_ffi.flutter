@@ -218,8 +218,9 @@ class FileSaverAndroid extends FileSaverPlatform {
       late final bindings.ProgressCallback callback;
 
       final jUrl = url.toJString();
-      final jHeadersJson =
-          headers != null ? jsonEncode(headers).toJString() : null;
+      final jHeadersJson = headers != null
+          ? jsonEncode(headers).toJString()
+          : null;
       final jTimeoutMs = timeout.inMilliseconds;
       final jFileName = fileName.toJString();
       final jExtension = fileType.ext.toJString();
@@ -444,8 +445,9 @@ class FileSaverAndroid extends FileSaverPlatform {
       late final bindings.ProgressCallback callback;
 
       final jUrl = url.toJString();
-      final jHeadersJson =
-          headers != null ? jsonEncode(headers).toJString() : null;
+      final jHeadersJson = headers != null
+          ? jsonEncode(headers).toJString()
+          : null;
       final jTimeoutMs = timeout.inMilliseconds;
       final jDirectoryUri = directoryUri.toJString();
       final jBaseFileName = baseFileName.toJString();

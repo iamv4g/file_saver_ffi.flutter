@@ -45,10 +45,9 @@ abstract final class PathLocationWriter {
             ext,
             conflictResolution,
           );
-          final uri =
-              resolved == null
-                  ? File(p.join(targetDirPath, '$baseName.$ext')).uri
-                  : (await File(resolved).writeAsBytes(fileBytes)).uri;
+          final uri = resolved == null
+              ? File(p.join(targetDirPath, '$baseName.$ext')).uri
+              : (await File(resolved).writeAsBytes(fileBytes)).uri;
           controller.addSync(SaveProgressUpdate(1.0));
           controller.addSync(SaveProgressComplete(uri));
         } catch (e) {
@@ -80,10 +79,9 @@ abstract final class PathLocationWriter {
             ext,
             conflictResolution,
           );
-          final uri =
-              resolved == null
-                  ? File(p.join(targetDirPath, '$baseName.$ext')).uri
-                  : (await File(filePath).copy(resolved)).uri;
+          final uri = resolved == null
+              ? File(p.join(targetDirPath, '$baseName.$ext')).uri
+              : (await File(filePath).copy(resolved)).uri;
           controller.addSync(SaveProgressUpdate(1.0));
           controller.addSync(SaveProgressComplete(uri));
         } catch (e) {

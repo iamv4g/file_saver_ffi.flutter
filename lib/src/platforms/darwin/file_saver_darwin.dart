@@ -51,10 +51,9 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
   late final FileSaverFFI _fileSaver;
   late final Pointer<Void> _saverInstance;
 
-  static final int _disposeAddress =
-      DynamicLibrary.process()
-          .lookup<NativeVoidFun>('file_saver_dispose')
-          .address;
+  static final int _disposeAddress = DynamicLibrary.process()
+      .lookup<NativeVoidFun>('file_saver_dispose')
+      .address;
 
   static final Pointer<NativeFinalizerFunction> _nativeFinalizerPtr =
       Pointer.fromAddress(_disposeAddress);
@@ -261,10 +260,9 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
 
       // Allocate in arena - all freed together with arena.releaseAll()
       final urlCStr = url.toNativeUtf8(allocator: arena);
-      final headersJsonCStr =
-          headers != null
-              ? jsonEncode(headers).toNativeUtf8(allocator: arena)
-              : null;
+      final headersJsonCStr = headers != null
+          ? jsonEncode(headers).toNativeUtf8(allocator: arena)
+          : null;
       final fileNameCStr = fileName.toNativeUtf8(allocator: arena);
       final extCStr = fileType.ext.toNativeUtf8(allocator: arena);
       final mimeCStr = fileType.mimeType.toNativeUtf8(allocator: arena);
@@ -466,10 +464,9 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
       }
 
       final urlCStr = url.toNativeUtf8(allocator: arena);
-      final headersJsonCStr =
-          headers != null
-              ? jsonEncode(headers).toNativeUtf8(allocator: arena)
-              : null;
+      final headersJsonCStr = headers != null
+          ? jsonEncode(headers).toNativeUtf8(allocator: arena)
+          : null;
       final dirUriCStr = directoryUri.toNativeUtf8(allocator: arena);
       final baseFileNameCStr = baseFileName.toNativeUtf8(allocator: arena);
       final extCStr = extension.toNativeUtf8(allocator: arena);
