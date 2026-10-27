@@ -6,7 +6,8 @@ name: Publish to pub.dev
 #   git tag v0.10.1 && git push origin v0.10.1
 #
 # Running it manually, or from a PR that changes this file, performs a dry run:
-# it validates and packages the archive without uploading it.
+# the release checks and full CI (which includes `pub publish --dry-run`) run,
+# and the publish job is skipped.
 
 on:
   push:
@@ -56,10 +57,12 @@ jobs:
   publish:
     name: Publish
     needs: ci
+    # pub.dev only accepts uploads from tag pushes.
+    if: github.event_name == 'push'
     permissions:
       id-token: write # Required for OIDC authentication with pub.dev
+    # Installs Flutter, runs `dart pub publish --dry-run`, then publishes.
     uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
     with:
-      # pub.dev is configured to require this environment for tag pushes.
-      environment: ${{ github.event_name == 'push' && 'pub.dev' || '' }}
-      test-run: ${{ github.event_name != 'push' }}
+      # Must match the environment required on the pub.dev admin page.
+      environment: pub.dev
