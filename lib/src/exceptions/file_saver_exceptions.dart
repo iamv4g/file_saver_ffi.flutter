@@ -5,6 +5,7 @@ sealed class FileSaverException implements Exception {
   const FileSaverException(this.message, [this.code]);
 
   factory FileSaverException.fromObj(Object e) {
+    if (e is FileSaverException) return e;
     if (e is! Exception) {
       return NativePlatformException('Unexpected error: $e', 'PLATFORM_ERROR');
     }

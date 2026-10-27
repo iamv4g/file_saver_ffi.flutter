@@ -1,3 +1,9 @@
+## Unreleased
+
+### Fixed
+
+- **Windows/Linux:** save errors now surface as their specific exception (`NetworkException`, `SourceFileNotFoundException`, `FileExistsException`, …) instead of being wrapped in `NativePlatformException`.
+
 ## 0.10.0
 
 ### Breaking Changes
