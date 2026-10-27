@@ -1,0 +1,67 @@
+name: Publish to pub.dev
+
+# Release: merge a PR that bumps `version` in pubspec.yaml and adds a matching
+# `## <version>` section to CHANGELOG.md, then push the tag from main:
+#
+#   git tag v0.10.1 && git push origin v0.10.1
+#
+# pub.dev only accepts automated publishing from a workflow triggered by a tag
+# push. The tag must match the pattern set on the package admin page
+# (v{{version}}).
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+permissions:
+  contents: read
+
+jobs:
+  check-release:
+    name: Check release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Check tag, main and CHANGELOG
+        run: |
+          version=$(sed -n 's/^version: *//p' pubspec.yaml)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match pubspec.yaml version $version"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME points to a commit that is not on main"
+            exit 1
+          fi
+          if ! grep -qxF "## $version" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## $version' section"
+            exit 1
+          fi
+
+  ci:
+    name: CI
+    needs: check-release
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish
+    needs: ci
+    runs-on: ubuntu-latest
+    # pub.dev is configured to require this environment. Its protection rules
+    # (required reviewers, tag policy) gate every publish.
+    environment: pub.dev
+    permissions:
+      contents: read
+      id-token: write # OIDC token for pub.dev
+    steps:
+      - uses: actions/checkout@v5
+      # Sets up the pub.dev OIDC token, which Flutter's pub also reads.
+      - uses: dart-lang/setup-dart@v1
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter pub publish --force
