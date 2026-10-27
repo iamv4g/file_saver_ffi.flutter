@@ -8,6 +8,8 @@ on:
   # skipped workflow would leave a docs-only PR waiting on them forever.
   pull_request:
   workflow_dispatch:
+  # Lets publish.yml run the full CI before releasing a tag.
+  workflow_call:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

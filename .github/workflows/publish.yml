@@ -1,0 +1,65 @@
+name: Publish to pub.dev
+
+# Release: merge a PR that bumps `version` in pubspec.yaml and adds a matching
+# `## <version>` section to CHANGELOG.md, then push the tag from main:
+#
+#   git tag v0.10.1 && git push origin v0.10.1
+#
+# Running it manually, or from a PR that changes this file, performs a dry run:
+# it validates and packages the archive without uploading it.
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+  pull_request:
+    paths: ['.github/workflows/publish.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-release:
+    name: Check release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Tag matches pubspec version and is on main
+        if: github.event_name == 'push'
+        run: |
+          version=$(sed -n 's/^version: *//p' pubspec.yaml)
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match pubspec.yaml version $version"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::Tag $GITHUB_REF_NAME points to a commit that is not on main"
+            exit 1
+          fi
+
+      - name: CHANGELOG has a section for the version
+        run: |
+          version=$(sed -n 's/^version: *//p' pubspec.yaml)
+          if ! grep -qxF "## $version" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## $version' section"
+            exit 1
+          fi
+
+  ci:
+    name: CI
+    needs: check-release
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: Publish
+    needs: ci
+    permissions:
+      id-token: write # Required for OIDC authentication with pub.dev
+    uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+    with:
+      # pub.dev is configured to require this environment for tag pushes.
+      environment: ${{ github.event_name == 'push' && 'pub.dev' || '' }}
+      test-run: ${{ github.event_name != 'push' }}

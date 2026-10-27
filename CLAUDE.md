@@ -53,3 +53,4 @@ The download strategy depends on the API: `saveNetwork` without headers uses an 
 ## Conventions
 - Commit messages use Conventional Commits with a platform scope, e.g. `feat(darwin): …`, `refactor(android): …`, `chore(example): …`.
 - User-facing changes go in `CHANGELOG.md`. Version bumps update `pubspec.yaml` (the README setup sections should match the platform minimums).
+- Releases are published to pub.dev by `.github/workflows/publish.yml` when a `v<version>` tag is pushed. The tag must point to a commit on `main` whose `pubspec.yaml` version matches and whose `CHANGELOG.md` has a `## <version>` section. Never run `flutter pub publish` locally.
