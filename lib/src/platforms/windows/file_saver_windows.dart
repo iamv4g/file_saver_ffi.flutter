@@ -7,6 +7,7 @@ import '../../exceptions/file_saver_exceptions.dart';
 import '../../models/locations/save_location.dart';
 import '../../platform_interface/file_saver_platform.dart';
 import '../shared/desktop_file_saver.dart';
+import 'windows_shell.dart';
 
 // Windows Known Folder GUIDs — mirrors WindowsKnownFolder from path_provider_windows.
 // Defined locally because the analyzer on non-Windows resolves the stub class
@@ -19,8 +20,9 @@ const String _kDocuments = '{FDD39AD0-238F-46AF-ADB4-6C85480369C7}';
 
 /// FileSaver implementation for Windows.
 ///
-/// Extends [DesktopFileSaver] — only [resolveDirectory] is platform-specific.
-/// Directory resolution uses [PathProviderWindows] (SHGetKnownFolderPath via dart:ffi).
+/// Extends [DesktopFileSaver] — only [resolveDirectory] and [launchFile] are
+/// platform-specific. Directory resolution uses [PathProviderWindows]
+/// (SHGetKnownFolderPath via dart:ffi); files are opened with ShellExecuteExW.
 class FileSaverWindows extends DesktopFileSaver {
   /// Registers this class as the default instance of [FileSaverPlatform].
   static void registerWith() {
@@ -61,5 +63,18 @@ class FileSaverWindows extends DesktopFileSaver {
       await dir.create(recursive: true);
     }
     return dirPath;
+  }
+
+  /// Opens [path] through `ShellExecuteExW`, never through `cmd`, so shell
+  /// metacharacters in file names (`&`, `|`, `^`, …) cannot run commands.
+  @override
+  Future<void> launchFile(String path) async {
+    final code = await shellOpen(path);
+    if (code == 0) return;
+    throw OpenFailedException(
+      code == seErrNoAssoc
+          ? 'No application is associated with this file type: $path'
+          : 'ShellExecuteEx failed (SE_ERR $code): $path',
+    );
   }
 }

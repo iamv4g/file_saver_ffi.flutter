@@ -5,6 +5,7 @@
 - **Windows/Linux:** save errors now surface as their specific exception (`NetworkException`, `SourceFileNotFoundException`, `FileExistsException`, …) instead of being wrapped in `NativePlatformException`.
 - **Windows/Linux:** cancelling a network download, or hitting the inactivity `timeout`, now stops the transfer and deletes the partial file even when the server stops sending data. Previously the download could hang indefinitely. A timeout is reported as `NetworkException`.
 - **Web:** `flutter build web --wasm` now compiles. The FFI/JNI implementations are excluded with `dart.library.js_interop` instead of `dart.library.html`, which is false under dart2wasm. The `dir_picker` constraint is raised to `^0.5.1`, which contains the matching fix. Thanks to [@coco-de-dev](https://github.com/coco-de-dev) ([#16](https://github.com/iamv4g/file_saver_ffi.flutter/pull/16)).
+- **Windows:** `openFile` now opens files with `ShellExecuteExW` instead of `cmd /c start`. File names containing characters that are special to `cmd` (such as `&`, `^` or `%`) are passed to the Shell unchanged, so these files now open correctly.
 
 ## 0.10.0
 
