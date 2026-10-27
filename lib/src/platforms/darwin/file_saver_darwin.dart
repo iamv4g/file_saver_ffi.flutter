@@ -15,6 +15,7 @@ import '../../models/locations/save_location.dart';
 import '../../models/save_input.dart';
 import '../../models/save_progress.dart';
 import '../../platform_interface/file_saver_platform.dart';
+import '../shared/native_event_parser.dart';
 import '../shared/path_location_writer.dart';
 import 'bindings.g.dart';
 import 'darwin_file_saver_sink.dart';
@@ -115,7 +116,7 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
       receivePort.listen((message) {
         if (cleanedUp || controller.isClosed) return;
 
-        final event = _parseMessage(message);
+        final event = parseDarwinMessage(message);
         controller.addSync(event);
 
         if (isTerminal(event)) cleanup();
@@ -191,7 +192,7 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
       receivePort.listen((message) {
         if (cleanedUp || controller.isClosed) return;
 
-        final event = _parseMessage(message);
+        final event = parseDarwinMessage(message);
         controller.addSync(event);
 
         if (isTerminal(event)) cleanup();
@@ -274,7 +275,7 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
       receivePort.listen((message) {
         if (cleanedUp || controller.isClosed) return;
 
-        final event = _parseMessage(message);
+        final event = parseDarwinMessage(message);
         controller.addSync(event);
 
         if (isTerminal(event)) cleanup();
@@ -368,7 +369,7 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
 
       receivePort.listen((message) {
         if (cleanedUp || controller.isClosed) return;
-        final event = _parseMessage(message);
+        final event = parseDarwinMessage(message);
         controller.addSync(event);
         if (isTerminal(event)) cleanup();
       });
@@ -419,7 +420,7 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
 
       receivePort.listen((message) {
         if (cleanedUp || controller.isClosed) return;
-        final event = _parseMessage(message);
+        final event = parseDarwinMessage(message);
         controller.addSync(event);
         if (isTerminal(event)) cleanup();
       });
@@ -475,7 +476,7 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
 
       receivePort.listen((message) {
         if (cleanedUp || controller.isClosed) return;
-        final event = _parseMessage(message);
+        final event = parseDarwinMessage(message);
         controller.addSync(event);
         if (isTerminal(event)) cleanup();
       });
@@ -678,55 +679,5 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
       MacosSaveLocation location => location.index,
       _ => 0,
     };
-  }
-
-  /// Parses message from native code according to protocol:
-  /// - Started:    [0]
-  /// - Progress:   [1, progress]    (progress is 0.0 to 1.0)
-  /// - Error:      [2, errorCode, errorMessage]
-  /// - Success:    [3, fileUri]
-  /// - Cancelled:  [4]
-  SaveProgress _parseMessage(dynamic message) {
-    if (message is! List || message.isEmpty) {
-      return SaveProgressError(
-        const NativePlatformException(
-          'Invalid message format',
-          'INVALID_MESSAGE',
-        ),
-      );
-    }
-
-    final type = message[0] as int;
-
-    switch (type) {
-      case 0: // Started
-        return const SaveProgressStarted();
-
-      case 1: // Progress
-        final progress = (message[1] as num).toDouble();
-        return SaveProgressUpdate(progress);
-
-      case 2: // Error
-        final errorCode = message[1] as String;
-        final errorMessage = message[2] as String;
-        return SaveProgressError(
-          FileSaverException.fromErrorResult(errorCode, errorMessage),
-        );
-
-      case 3: // Success
-        final fileUri = message[1] as String;
-        return SaveProgressComplete(Uri.parse(fileUri));
-
-      case 4: // Cancelled
-        return const SaveProgressCancelled();
-
-      default:
-        return SaveProgressError(
-          NativePlatformException(
-            'Unknown message type: $type',
-            'UNKNOWN_TYPE',
-          ),
-        );
-    }
   }
 }

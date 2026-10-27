@@ -12,6 +12,7 @@ import '../../models/locations/save_location.dart';
 import '../../models/save_input.dart';
 import '../../models/save_progress.dart';
 import '../../platform_interface/file_saver_platform.dart';
+import '../shared/native_event_parser.dart';
 import '../shared/path_location_writer.dart';
 import 'android_file_saver_sink.dart';
 import 'bindings.g.dart' as bindings;
@@ -662,48 +663,19 @@ class FileSaverAndroid extends FileSaverPlatform {
     };
   }
 
-  /// Parses event from native callback
-  /// - eventType 0: Started
-  /// - eventType 1: Progress (progress = 0.0-1.0)
-  /// - eventType 2: Error (data = errorCode, message = errorMessage)
-  /// - eventType 3: Success (data = fileUri)
-  /// - eventType 4: Cancelled
+  /// Converts the JNI callback arguments to Dart and delegates to
+  /// [parseNativeEvent]. See there for the event protocol.
   SaveProgress _parseEvent(
     int eventType,
     double progress,
     JString? data,
     JString? message,
   ) {
-    switch (eventType) {
-      case 0: // Started
-        return const SaveProgressStarted();
-
-      case 1: // Progress
-        return SaveProgressUpdate(progress);
-
-      case 2: // Error
-        final errorCode =
-            data?.toDartString(releaseOriginal: true) ?? 'UNKNOWN';
-        final errorMsg =
-            message?.toDartString(releaseOriginal: true) ?? 'Unknown error';
-        return SaveProgressError(
-          FileSaverException.fromErrorResult(errorCode, errorMsg),
-        );
-
-      case 3: // Success
-        final fileUri = data?.toDartString(releaseOriginal: true) ?? '';
-        return SaveProgressComplete(Uri.parse(fileUri));
-
-      case 4: // Cancelled
-        return const SaveProgressCancelled();
-
-      default:
-        return SaveProgressError(
-          NativePlatformException(
-            'Unknown event type: $eventType',
-            'UNKNOWN_TYPE',
-          ),
-        );
-    }
+    return parseNativeEvent(
+      eventType,
+      progress: progress,
+      data: data?.toDartString(releaseOriginal: true),
+      message: message?.toDartString(releaseOriginal: true),
+    );
   }
 }
