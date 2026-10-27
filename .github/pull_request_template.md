@@ -37,8 +37,12 @@ Fixes #
 
 ## Checklist
 
-- [ ] `flutter analyze` reports no issues
-- [ ] `dart format lib tool` applied (Swift follows `darwin/.swift-format`, Kotlin follows ktlint)
+<!-- CI already runs `dart format`, `flutter analyze`, `flutter test` (including the cross-language
+     contract tests in `test/contracts/`) and builds the example on every platform, with both SwiftPM
+     and CocoaPods on iOS. The items below are what it can't check. -->
+
+- [ ] Added or updated tests in `test/` for the change (or explained above why it can't be unit tested)
+- [ ] Native code formatted (Swift follows `darwin/.swift-format`, Kotlin follows ktlint)
 - [ ] Tested in the `example/` app on every platform checked above
 - [ ] `CHANGELOG.md` updated for user-facing changes
 - [ ] README / `WEB_LIMITATIONS.md` updated if behaviour or setup changed
@@ -48,9 +52,8 @@ Fixes #
 
 - [ ] Generated bindings were regenerated, not hand-edited (`dart run tool/ffigen.dart` / `dart run tool/jnigen.dart`)
 - [ ] New Darwin functions are in the C header, the Swift `@_cdecl`, and `Functions.include` in `tool/ffigen.dart`
-- [ ] Enum order still matches across Dart / Kotlin / Swift (`ConflictResolution`, `SaveLocation`)
-- [ ] Progress event codes (0–4) and error codes still map to the Dart exceptions
-- [ ] Both SwiftPM (`Package.swift`) and CocoaPods (`file_saver_ffi.podspec`) still build
+- [ ] Progress event codes (0–4) sent by Kotlin/Swift still match `lib/src/platforms/shared/native_event_parser.dart`
+- [ ] New error codes are declared in Kotlin `utils/Constants.kt` / Swift `Utils/Constants.swift`, not inline (the contract tests only read those files)
 - [ ] Web/IO stubs (`io_stub.dart`, `web_stub.dart`) updated for new/renamed platform classes or interface methods
 
 </details>
