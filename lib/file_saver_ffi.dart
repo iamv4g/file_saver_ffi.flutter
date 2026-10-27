@@ -20,7 +20,7 @@ export 'src/models/locations/save_location.dart';
 export 'src/models/save_input.dart';
 export 'src/models/save_progress.dart';
 export 'src/platforms/io_platforms.dart'
-    if (dart.library.html) 'src/platforms/io_stub.dart';
+    if (dart.library.js_interop) 'src/platforms/io_stub.dart';
 export 'src/platforms/web/file_saver_web.dart'
     if (dart.library.io) 'src/platforms/web_stub.dart';
 
