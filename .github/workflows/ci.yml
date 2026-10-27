@@ -4,8 +4,9 @@ on:
   push:
     branches: [main]
     paths-ignore: ['**.md', 'screenshots/**']
+  # No paths-ignore here: the jobs are required status checks, and a
+  # skipped workflow would leave a docs-only PR waiting on them forever.
   pull_request:
-    paths-ignore: ['**.md', 'screenshots/**']
   workflow_dispatch:
 
 concurrency:
