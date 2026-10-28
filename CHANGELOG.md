@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Changed
+
+- **Android:** the plugin now declares `minSdk 24` (Android 7.0), and the README says so. This matches what apps already needed: the `dir_picker` dependency requires API 24, so an app with a lower `minSdk` failed at manifest merge. The README previously claimed API 21+.
+
 ### Fixed
 
 - **Android:** `ConflictResolution.skip` no longer writes anything when the file exists. It completes with the existing file's URI on every backend. Previously it created a duplicate (`photo (1).jpg`) on Android 10+, overwrote the file on Android 9 and below, and wrote into the existing document for user-picked (SAF) directories, which could delete that document if the write then failed.
