@@ -9,8 +9,29 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 object ScopedStoreConflictResolver {
+    /** Outcome of resolving a MediaStore name conflict. */
+    sealed class Resolution {
+        /**
+         * Insert a new row named [displayName]. [replaces] is the existing row to
+         * delete once the new content is written (OVERWRITE only).
+         */
+        data class Create(
+            val displayName: String,
+            val replaces: Uri? = null,
+        ) : Resolution()
+
+        /** Keep the existing row and write nothing (SKIP). */
+        data class Existing(
+            val uri: Uri,
+        ) : Resolution()
+    }
+
     /**
      * Resolve file name conflict for MediaStore (Android 10+)
+     *
+     * Nothing is deleted here: OVERWRITE returns the existing row as
+     * [Resolution.Create.replaces], and the caller deletes it after a
+     * successful write.
      *
      * @param context Application context
      * @param contentUri MediaStore collection (Images / Video / Audio / Files)
@@ -19,7 +40,7 @@ object ScopedStoreConflictResolver {
      * @param extension File extension WITHOUT dot
      * @param conflictResolution Strategy
      *
-     * @return Resolved display name (WITH extension) or null if FAIL
+     * @throws FileExistsException if the file exists and [conflictResolution] is FAIL
      */
     suspend fun resolve(
         context: Context,
@@ -28,32 +49,32 @@ object ScopedStoreConflictResolver {
         baseFileName: String,
         extension: String,
         conflictResolution: ConflictResolution,
-    ): String =
+    ): Resolution =
         withContext(Dispatchers.IO) {
             val originalName = FileHelper.buildFileName(baseFileName, extension)
             val existingUri =
                 findExistingFileUri(context, contentUri, dirPath, originalName)
-                    ?: return@withContext originalName
+                    ?: return@withContext Resolution.Create(originalName)
 
             when (conflictResolution) {
                 // MediaStore automatically handles conflicts by appending numbers
                 // photo.jpg → photo (1).jpg → photo (2).jpg
                 ConflictResolution.AUTO_RENAME -> {
-                    originalName
+                    Resolution.Create(originalName)
                 }
 
-                // Delete existing file and reuse the name
+                // The new row is auto-renamed while the old one exists; the
+                // commit deletes the old row and renames the new one back.
                 ConflictResolution.OVERWRITE -> {
-                    context.contentResolver.delete(existingUri, null, null)
-                    originalName
+                    Resolution.Create(originalName, replaces = existingUri)
                 }
 
                 ConflictResolution.SKIP -> {
-                    originalName
+                    Resolution.Existing(existingUri)
                 }
 
                 ConflictResolution.FAIL -> {
-                    throw FileExistsException("File already exists: $baseFileName.$extension")
+                    throw FileExistsException("File already exists: $originalName")
                 }
             }
         }

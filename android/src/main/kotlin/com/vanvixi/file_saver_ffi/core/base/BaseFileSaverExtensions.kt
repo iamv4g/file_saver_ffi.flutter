@@ -46,3 +46,13 @@ internal fun ProducerScope<SaveProgressEvent>.sendCancelled() {
 internal fun ProducerScope<SaveProgressEvent>.sendSuccess(uri: String) {
     trySend(SaveProgressEvent.Success(uri))
 }
+
+/**
+ * Completes a save that was skipped because the file already exists
+ * ([com.vanvixi.file_saver_ffi.models.ConflictResolution.SKIP]): reports the
+ * existing file without writing anything.
+ */
+internal fun ProducerScope<SaveProgressEvent>.sendExisting(entry: SaveEntry.Existing) {
+    sendProgress(1.0)
+    sendSuccess(entry.uri.toString())
+}
