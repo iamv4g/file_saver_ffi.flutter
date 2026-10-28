@@ -72,4 +72,7 @@ dependencies {
     testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2"
     testImplementation "org.robolectric:robolectric:4.17"
     testImplementation "androidx.test:core:1.7.0"
+    // HttpURLConnection backed by OkHttp in network tests, as on Android (the
+    // JDK implementation behaves differently, e.g. on disconnect()).
+    testImplementation "com.squareup.okhttp3:okhttp-urlconnection:3.12.13"
 }
