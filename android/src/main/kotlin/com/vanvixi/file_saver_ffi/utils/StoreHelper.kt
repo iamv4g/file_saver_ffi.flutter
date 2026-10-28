@@ -2,6 +2,7 @@ package com.vanvixi.file_saver_ffi.utils
 
 import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -177,11 +178,14 @@ object StoreHelper {
      *   If the old row cannot be deleted (for example a row the app does not
      *   own throws `RecoverableSecurityException`), the new file keeps its
      *   auto-renamed name.
-     * - Android ≤ 9: for OVERWRITE, renames the temporary file over the original.
+     * - Android ≤ 9: for OVERWRITE, renames the temporary file over the original,
+     *   then asks the media scanner to index the file so it shows up in gallery
+     *   and music apps (MediaStore is not updated by plain file writes there).
      *
      * The stream of [entry] must already be closed.
      *
      * @param displayName The requested file name WITH extension
+     * @param mimeType MIME type passed to the media scanner on Android ≤ 9
      * @throws IOException if the entry cannot be finalized; the replaced file
      *   is still intact in that case
      */
@@ -189,10 +193,17 @@ object StoreHelper {
         context: Context,
         entry: SaveEntry.Created,
         displayName: String,
+        mimeType: String,
     ): Uri =
         withContext(Dispatchers.IO) {
             if (entry.uri.scheme == "file") {
-                return@withContext commitLegacyEntry(entry)
+                val uri = commitLegacyEntry(entry)
+                // Fire-and-forget: the file is saved either way, the scan only
+                // makes it visible to other apps.
+                uri.path?.let { path ->
+                    MediaScannerConnection.scanFile(context, arrayOf(path), arrayOf(mimeType), null)
+                }
+                return@withContext uri
             }
 
             val resolver = context.contentResolver

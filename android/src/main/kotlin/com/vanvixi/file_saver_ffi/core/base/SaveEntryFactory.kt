@@ -162,6 +162,7 @@ sealed class SaveEntryFactory {
                 context,
                 entry,
                 FileHelper.buildFileName(baseFileName, fileType.ext),
+                fileType.mimeType,
             )
     }
 
