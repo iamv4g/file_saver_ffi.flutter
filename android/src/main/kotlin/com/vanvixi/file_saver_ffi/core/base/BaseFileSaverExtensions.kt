@@ -16,6 +16,11 @@ internal fun mapProgress(
 // Event Sending Extensions
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Progress events use trySend and may be dropped when the buffer is full; a
+// later progress event replaces them. Terminal events (Error, Success) use the
+// suspending send so they are never dropped, otherwise the Dart stream would
+// never end.
+
 /**
  * Sends a progress event.
  */
@@ -26,15 +31,18 @@ internal fun ProducerScope<SaveProgressEvent>.sendProgress(progress: Double) {
 /**
  * Sends an error event.
  */
-internal fun ProducerScope<SaveProgressEvent>.sendError(
+internal suspend fun ProducerScope<SaveProgressEvent>.sendError(
     code: String,
     message: String,
 ) {
-    trySend(SaveProgressEvent.Error(code, message))
+    send(SaveProgressEvent.Error(code, message))
 }
 
 /**
  * Sends a cancelled event.
+ *
+ * Best effort: the caller is already cancelled, so a suspending send would
+ * throw. The Dart side ends the stream on cancel anyway.
  */
 internal fun ProducerScope<SaveProgressEvent>.sendCancelled() {
     trySend(SaveProgressEvent.Cancelled)
@@ -43,8 +51,8 @@ internal fun ProducerScope<SaveProgressEvent>.sendCancelled() {
 /**
  * Sends a success event.
  */
-internal fun ProducerScope<SaveProgressEvent>.sendSuccess(uri: String) {
-    trySend(SaveProgressEvent.Success(uri))
+internal suspend fun ProducerScope<SaveProgressEvent>.sendSuccess(uri: String) {
+    send(SaveProgressEvent.Success(uri))
 }
 
 /**
@@ -52,7 +60,7 @@ internal fun ProducerScope<SaveProgressEvent>.sendSuccess(uri: String) {
  * ([com.vanvixi.file_saver_ffi.models.ConflictResolution.SKIP]): reports the
  * existing file without writing anything.
  */
-internal fun ProducerScope<SaveProgressEvent>.sendExisting(entry: SaveEntry.Existing) {
+internal suspend fun ProducerScope<SaveProgressEvent>.sendExisting(entry: SaveEntry.Existing) {
     sendProgress(1.0)
     sendSuccess(entry.uri.toString())
 }
