@@ -4,21 +4,47 @@ on:
   push:
     branches: [main]
     paths-ignore: ['**.md', 'screenshots/**']
-  # No paths-ignore here: the jobs are required status checks, and a
-  # skipped workflow would leave a docs-only PR waiting on them forever.
+  # No paths-ignore here: `CI result` is a required status check, and a
+  # skipped workflow would leave a docs-only PR waiting for it forever.
   pull_request:
   workflow_dispatch:
   # Lets publish.yml run the full CI before releasing a tag.
   workflow_call:
 
+# Cancel superseded runs on PRs only. Every commit on main gets a full run.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
+  # Pull requests only run the platform jobs their changes need (see
+  # tool/ci_changes.sh). Pushes to main, manual runs and the release run
+  # everything. Analyze and the Ubuntu tests always run.
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    outputs:
+      android: ${{ steps.scope.outputs.android }}
+      test: ${{ steps.scope.outputs.test }}
+      build: ${{ steps.scope.outputs.build }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - id: scope
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ -n "$BASE" ]; then
+            git diff --name-only "$BASE...$HEAD" | tee /dev/stderr | bash tool/ci_changes.sh
+          else
+            bash tool/ci_changes.sh --all
+          fi | tee -a "$GITHUB_OUTPUT"
+
   analyze:
     name: Analyze
     runs-on: ubuntu-latest
@@ -47,17 +73,16 @@ jobs:
 
   test:
     name: Test (${{ matrix.os }}, Flutter ${{ matrix.flutter }})
-    needs: analyze
+    needs: [changes, analyze]
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        flutter: [stable]
-        include:
-          # Minimum version from pubspec.yaml `environment.flutter`.
-          - os: ubuntu-latest
-            flutter: 3.44.0
+        # Ubuntu on stable and on the minimum Flutter version, always. macOS
+        # and Windows when the change touches dart:io code whose behaviour
+        # depends on the file system or OS, e.g.
+        # [{"os": "ubuntu-latest", "flutter": "stable"}, ...].
+        include: ${{ fromJSON(needs.changes.outputs.test) }}
     steps:
       - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
@@ -68,22 +93,50 @@ jobs:
       - run: flutter pub get
       - run: flutter test
 
+  android-unit-test:
+    name: Android unit tests
+    needs: [changes, analyze]
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # The plugin's Gradle module is only buildable through the example app.
+      - name: Generate the example's Gradle project
+        working-directory: example
+        run: |
+          flutter pub get
+          flutter build apk --config-only
+
+      - name: Run Kotlin unit tests (Robolectric)
+        working-directory: example/android
+        run: ./gradlew :file_saver_ffi:testDebugUnitTest
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-unit-test-report
+          path: example/build/file_saver_ffi/reports/tests/testDebugUnitTest
+
   build:
     name: Build example (${{ matrix.target }}${{ matrix.ios-deps && format(', {0}', matrix.ios-deps) || '' }})
-    needs: analyze
+    needs: [changes, analyze]
+    if: needs.changes.outputs.build != '[]'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { os: ubuntu-latest, target: apk }
-          - { os: ubuntu-latest, target: linux }
-          - { os: ubuntu-latest, target: web }
-          - { os: windows-latest, target: windows }
-          - { os: macos-latest, target: macos }
-          # The plugin ships both Package.swift and a podspec; build both.
-          - { os: macos-latest, target: ios, ios-deps: swiftpm }
-          - { os: macos-latest, target: ios, ios-deps: cocoapods }
+        # The targets whose native code the change touches, e.g.
+        # [{"os": "ubuntu-latest", "target": "apk"}].
+        include: ${{ fromJSON(needs.changes.outputs.build) }}
     steps:
       - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
@@ -117,3 +170,22 @@ jobs:
             ios) flutter build ios --debug --no-codesign ;;
             *)   flutter build ${{ matrix.target }} --debug ;;
           esac
+
+  # The only check the main branch ruleset requires. Skipped jobs don't fail
+  # it, so a pull request isn't blocked waiting for jobs it didn't need. A
+  # skipped matrix job reports under its unexpanded name, so the ruleset
+  # can't require the per-job names.
+  result:
+    name: CI result
+    if: always()
+    needs:
+      - changes
+      - analyze
+      - test
+      - android-unit-test
+      - build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if a job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
