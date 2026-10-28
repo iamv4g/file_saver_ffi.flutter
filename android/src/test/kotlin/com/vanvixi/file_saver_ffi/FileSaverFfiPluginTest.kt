@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.core.app.ActivityCompat
 import com.vanvixi.file_saver_ffi.models.ConflictResolution
 import com.vanvixi.file_saver_ffi.models.SaveLocation
+import com.vanvixi.file_saver_ffi.testing.Event
 import com.vanvixi.file_saver_ffi.testing.FakeActivityBinding
 import com.vanvixi.file_saver_ffi.testing.FileSaverTestBase
 import com.vanvixi.file_saver_ffi.testing.RecordingCallback
@@ -22,7 +23,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.withTimeout
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -120,8 +120,8 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
 
         answer(dialogs.single(), granted = true)
 
-        assertEquals(3, first.awaitTerminal().type)
-        assertEquals(3, second.awaitTerminal().type)
+        assertEquals(3, first.awaitSave().type)
+        assertEquals(3, second.awaitSave().type)
         assertEquals(1, dialogs.size)
     }
 
@@ -207,7 +207,7 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
     fun `a save without any activity reports PERMISSION_DENIED`() {
         Engine()
 
-        val event = startSave("photo").awaitTerminal()
+        val event = startSave("photo").awaitSave()
 
         assertEquals(2, event.type)
         assertEquals(Constants.ERROR_PERMISSION_DENIED, event.data)
@@ -230,7 +230,7 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
         assertSame(mainActivity, dialogs[0].activity)
         answer(dialogs[0], granted = true)
 
-        assertEquals(3, save.awaitTerminal().type)
+        assertEquals(3, save.awaitSave().type)
     }
 
     @Test
@@ -277,13 +277,23 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
         dialog.activity.onRequestPermissionsResult(dialog.requestCode, arrayOf(WRITE), intArrayOf(result))
     }
 
-    private fun Deferred<Boolean>.awaitResult(): Boolean = runBlocking { withTimeout(5_000) { await() } }
+    /** Waits for the request, running main-looper tasks meanwhile. */
+    private fun Deferred<Boolean>.awaitResult(): Boolean {
+        runMainUntil { isCompleted }
+        return runBlocking { await() }
+    }
+
+    /** Waits for the save's terminal event, running main-looper tasks meanwhile. */
+    private fun RecordingCallback.awaitSave(): Event {
+        runMainUntil { events.any { it.isTerminal } }
+        return awaitTerminal()
+    }
 
     /** Runs main-looper tasks (the test runs on the main thread) until [condition] holds. */
     private fun runMainUntil(condition: () -> Boolean) {
         val deadline = System.currentTimeMillis() + 5_000
         while (!condition()) {
-            check(System.currentTimeMillis() < deadline) { "Timed out; dialogs so far: $dialogs" }
+            if (System.currentTimeMillis() >= deadline) throw AssertionError("Timed out; dialogs so far: $dialogs")
             idleMain(10)
         }
     }
