@@ -7,7 +7,6 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.annotation.RequiresApi
 import androidx.core.net.toUri
-import androidx.documentfile.provider.DocumentFile
 import com.vanvixi.file_saver_ffi.models.SaveLocation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -151,46 +150,6 @@ object FileHelper {
 
         val publicDir = Environment.getExternalStoragePublicDirectory(baseDir)
         return File(publicDir, subDir ?: "")
-    }
-
-    fun findExistingWriteTargetUriOrNull(
-        context: Context,
-        saveLocation: SaveLocation,
-        subDir: String?,
-        baseFileName: String,
-        extension: String,
-    ): Uri? {
-        val fullName = buildFileName(baseFileName, extension)
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val (contentUri, relativePath) = scopedStoreTargetFor(saveLocation, subDir)
-            ScopedStoreConflictResolver.findExistingFileUri(
-                context = context,
-                contentUri = contentUri,
-                dirPath = relativePath,
-                displayName = fullName,
-            )
-        } else {
-            val directory = legacyStoreDirectoryFor(saveLocation, subDir)
-            val existing =
-                LegacyStoreConflictResolver.findExistingFile(
-                    directory = directory,
-                    baseFileName = baseFileName,
-                    extension = extension,
-                )
-            if (existing != null) Uri.fromFile(existing) else null
-        }
-    }
-
-    fun findExistingSafFileUriOrNull(
-        context: Context,
-        directoryUri: String,
-        baseFileName: String,
-        extension: String,
-    ): Uri? {
-        val fullName = buildFileName(baseFileName, extension)
-        val docDir = DocumentFile.fromTreeUri(context, directoryUri.toUri())
-        val existing = docDir?.findFile(fullName)
-        return if (existing != null && existing.exists()) existing.uri else null
     }
 
     /**
