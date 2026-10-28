@@ -42,6 +42,17 @@ class _TestDesktopFileSaver extends DesktopFileSaver {
   }
 }
 
+/// Polls [condition] until it holds or [timeout] passes.
+Future<void> _waitUntil(
+  bool Function() condition, {
+  Duration timeout = const Duration(seconds: 5),
+}) async {
+  final deadline = DateTime.now().add(timeout);
+  while (!condition() && DateTime.now().isBefore(deadline)) {
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+  }
+}
+
 T _last<T>(List<SaveProgress> events) {
   expect(events.last, isA<T>(), reason: '$events');
   return events.last as T;
@@ -271,16 +282,17 @@ void main() {
       });
 
       await firstChunk.future.timeout(const Duration(seconds: 5));
-      expect(File(inTmp('download.bin')).existsSync(), isTrue);
+
+      // IOSink creates the file asynchronously, so it can appear after the
+      // first progress event on a slow runner.
+      final partial = File(inTmp('download.bin'));
+      await _waitUntil(partial.existsSync);
+      expect(partial.existsSync(), isTrue);
 
       await subscription.cancel();
 
-      final deadline = DateTime.now().add(const Duration(seconds: 5));
-      while (File(inTmp('download.bin')).existsSync() &&
-          DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(milliseconds: 20));
-      }
-      expect(File(inTmp('download.bin')).existsSync(), isFalse);
+      await _waitUntil(() => !partial.existsSync());
+      expect(partial.existsSync(), isFalse);
     });
   });
 
