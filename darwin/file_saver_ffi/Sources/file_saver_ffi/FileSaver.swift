@@ -215,12 +215,17 @@ class FileSaver {
 
     /// Opens a FileHandle for incremental writing.
     ///
-    /// - On iOS + photos: writes to a temp file and returns a `photosCommit` closure.
-    ///   The caller must invoke `photosCommit()` on close to add the file to the Photos
-    ///   Library and delete the temp file. The closure captures all needed context.
-    /// - On iOS + documents / macOS: writes directly to the resolved path; `photosCommit` is nil.
+    /// Returns `(writeURL, fileHandle, commit)`. Chunks go to `writeURL`; the caller
+    /// invokes `commit()` on close, which makes the written file the saved file and
+    /// returns its URI, and deletes `writeURL` on cancel. `writeURL` is never an
+    /// existing file, so a cancelled `overwrite` keeps the original.
     ///
-    /// Returns `(tempOrFinalURL, fileHandle, photosCommit)`.
+    /// - On iOS + photos: `writeURL` is a temp file and `commit()` adds it to the
+    ///   Photos Library (then deletes a replaced asset for `overwrite`).
+    /// - On iOS + documents / macOS: `writeURL` is the new file, or a temp file next
+    ///   to the original for `overwrite`, which `commit()` replaces.
+    ///
+    /// - Throws: `FileSaverError.writeSessionSkipped` for `skip` when the file exists.
     func openWriteSession(
         baseFileName: String,
         extension ext: String,
@@ -228,7 +233,7 @@ class FileSaver {
         subDir: String?,
         saveLocationValue: Int,
         conflictMode: Int
-    ) throws -> (fileURL: URL, fileHandle: FileHandle, photosCommit: (() throws -> String)?) {
+    ) throws -> (fileURL: URL, fileHandle: FileHandle, commit: () throws -> String) {
         let saveLocation = SaveLocation.fromInt(saveLocationValue)
 
         #if os(iOS)
@@ -252,24 +257,40 @@ class FileSaver {
         try FileHelper.ensureDirectoryExists(at: targetDir)
 
         let fullFileName = FileHelper.buildFileName(fileName: baseFileName, extension: ext)
-        let conflictResolution = ConflictResolution.fromInt(conflictMode)
-
-        if conflictResolution == .skip {
-            let targetURL = targetDir.appendingPathComponent(fullFileName)
-            if FileManager.default.fileExists(atPath: targetURL.path) {
-                throw FileSaverError.writeSessionSkipped
-            }
-        }
-
-        let fileURL = try FileManagerConflictResolver.resolveConflict(
+        return try openFileManagerWriteSession(
             directory: targetDir,
             fileName: fullFileName,
+            conflictResolution: ConflictResolution.fromInt(conflictMode)
+        )
+    }
+
+    /// Resolves the conflict in `directory` and opens a handle on the file to write.
+    /// Shared by `openWriteSession` (non-Photos) and `openWriteSessionAs`.
+    private func openFileManagerWriteSession(
+        directory: URL,
+        fileName: String,
+        conflictResolution: ConflictResolution
+    ) throws -> (fileURL: URL, fileHandle: FileHandle, commit: () throws -> String) {
+        let target = try FileManagerConflictResolver.resolveConflict(
+            directory: directory,
+            fileName: fileName,
             conflictResolution: conflictResolution
         )
 
-        FileManager.default.createFile(atPath: fileURL.path, contents: nil)
-        let fileHandle = try FileHandle(forWritingTo: fileURL)
-        return (fileURL, fileHandle, nil)
+        if case .existing = target {
+            throw FileSaverError.writeSessionSkipped
+        }
+
+        let writeURL = target.writeURL
+        FileManager.default.createFile(atPath: writeURL.path, contents: nil)
+        let fileHandle: FileHandle
+        do {
+            fileHandle = try FileHandle(forWritingTo: writeURL)
+        } catch {
+            target.discard()
+            throw error
+        }
+        return (writeURL, fileHandle, { try target.commit().absoluteString })
     }
 
     #if os(iOS)
@@ -283,7 +304,7 @@ class FileSaver {
         mimeType: String,
         subDir: String?,
         conflictMode: Int
-    ) throws -> (fileURL: URL, fileHandle: FileHandle, photosCommit: (() throws -> String)?) {
+    ) throws -> (fileURL: URL, fileHandle: FileHandle, commit: () throws -> String) {
         let fileType = FileHelper.getFileType(ext: ext, mimeType: mimeType)
         let saver = getSaver(for: fileType)
 
@@ -298,18 +319,15 @@ class FileSaver {
         let conflictResolution = ConflictResolution.fromInt(conflictMode)
 
         let hasReadAccess = try PhotosHelper.requestPermission(needAlbum: subDir != nil)
-        let existingUri = try PhotosHelper.handleConflictResolution(
+        let outcome = try PhotosHelper.handleConflictResolution(
             fileName: fullFileName,
             subDir: subDir,
             conflictResolution: conflictResolution,
             hasReadAccess: hasReadAccess
         )
 
-        if existingUri != nil {
-            if conflictResolution == .skip {
-                throw FileSaverError.writeSessionSkipped
-            }
-            throw FileSaverError.fileExists(fullFileName)
+        if case .existing = outcome {
+            throw FileSaverError.writeSessionSkipped
         }
 
         let albumName: String? = hasReadAccess ? subDir : nil
@@ -324,12 +342,14 @@ class FileSaver {
         // Closure captures everything needed for commit; caller invokes on closeWrite.
         let photosCommit: () throws -> String = {
             defer { try? FileManager.default.removeItem(at: tmpURL) }
-            return try saver.saveFileToPhotos(
+            let uri = try saver.saveFileToPhotos(
                 sourceURL: tmpURL,
                 fileName: fullFileName,
                 albumName: albumName,
                 onProgress: nil
             )
+            PhotosHelper.deleteReplacedAsset(outcome)
+            return uri
         }
 
         return (tmpURL, fileHandle, photosCommit)
@@ -342,29 +362,15 @@ class FileSaver {
         baseFileName: String,
         extension ext: String,
         conflictMode: Int
-    ) throws -> (URL, FileHandle) {
+    ) throws -> (fileURL: URL, fileHandle: FileHandle, commit: () throws -> String) {
         guard let dirURL = URL(string: directoryUri) else {
             throw FileSaverError.fileIO("Invalid directory URI: \(directoryUri)")
         }
-        let fullFileName = FileHelper.buildFileName(fileName: baseFileName, extension: ext)
-        let conflictResolution = ConflictResolution.fromInt(conflictMode)
-
-        if conflictResolution == .skip {
-            let targetURL = dirURL.appendingPathComponent(fullFileName)
-            if FileManager.default.fileExists(atPath: targetURL.path) {
-                throw FileSaverError.writeSessionSkipped
-            }
-        }
-
-        let fileURL = try FileManagerConflictResolver.resolveConflict(
+        return try openFileManagerWriteSession(
             directory: dirURL,
-            fileName: fullFileName,
-            conflictResolution: conflictResolution
+            fileName: FileHelper.buildFileName(fileName: baseFileName, extension: ext),
+            conflictResolution: ConflictResolution.fromInt(conflictMode)
         )
-
-        FileManager.default.createFile(atPath: fileURL.path, contents: nil)
-        let fileHandle = try FileHandle(forWritingTo: fileURL)
-        return (fileURL, fileHandle)
     }
 
     // MARK: - Private Helpers

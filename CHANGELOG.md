@@ -10,6 +10,13 @@
 - **Android:** `ConflictResolution.overwrite` replaces the existing file only after the new content has been written. A failed or cancelled save now keeps the original. Previously the original was deleted before writing. If the original cannot be deleted (for example a MediaStore file owned by another app), the new file is kept under its auto-renamed name.
 - **Android:** images, videos and audio saved on Android 9 and below are now passed to the media scanner, so they appear in gallery and music apps right away instead of after the next system scan.
 - **Android:** a cancelled or failed save on Android 9 and below now deletes the partial file, and a MediaStore entry or SAF document is no longer left behind when its output stream cannot be opened.
+- **iOS/macOS:** `ConflictResolution.skip` no longer writes anything when the file exists, and completes with the existing file's URI. Previously it truncated and rewrote the existing file, and a failed or cancelled network download then deleted it.
+- **iOS/macOS:** `ConflictResolution.overwrite` replaces the existing file only after the new content has been written: the content goes to a temporary file in the same directory, which replaces the original on success. A failed or cancelled save, including a cancelled `openWrite` session, now keeps the original. Previously it was deleted before writing started.
+- **iOS:** `overwrite` to the Photos Library saves the new asset first and deletes the old one afterwards. If the user declines the deletion prompt, both are kept.
+- **iOS:** conflict lookup for a Photos album that doesn't exist yet no longer searches the whole library, so `skip`, `fail` and `overwrite` can't match (or delete) a same-named asset outside the album.
+- **iOS/macOS:** a failed save no longer leaves a partial file behind. Previously only cancellation removed it.
+- **iOS:** concurrent network or video saves with the same file name no longer share a temporary file.
+
 
 ## 0.10.1
 
