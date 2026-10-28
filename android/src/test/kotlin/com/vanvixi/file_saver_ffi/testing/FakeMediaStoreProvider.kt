@@ -20,8 +20,13 @@ import java.nio.file.Files
  * It reproduces the MediaProvider behaviour the plugin relies on:
  * - `insert` rejects a MIME type that doesn't belong to the collection
  *   (`video/mp4` into Images throws [IllegalArgumentException]).
+ * - `insert` rejects a `RELATIVE_PATH` whose top-level directory the
+ *   collection doesn't allow (an image in `Movies/`), like MediaProvider's
+ *   "Primary directory … not allowed" check.
  * - `insert` auto-renames a duplicate `DISPLAY_NAME` in the same
  *   `RELATIVE_PATH` to `name (1).ext`.
+ * - `insert` stores `RELATIVE_PATH` with a trailing slash (`Pictures/album/`),
+ *   as MediaProvider does, so queries must match that form.
  * - `query` supports `col=?` selections joined with `AND`.
  *
  * Install with [install] inside a Robolectric test.
@@ -39,6 +44,9 @@ class FakeMediaStoreProvider : ContentProvider() {
     }
 
     val rows = linkedMapOf<Long, Row>()
+
+    /** Overrides the number of rows `update` reports, e.g. 0 to simulate a failed IS_PENDING clear. */
+    var updateResult: ((Row, ContentValues) -> Int)? = null
     private var nextId = 1L
     private val storageDir: File by lazy { Files.createTempDirectory("fake-media").toFile() }
 
@@ -65,6 +73,17 @@ class FakeMediaStoreProvider : ContentProvider() {
         if (expectedPrefix != null && !mimeType.startsWith(expectedPrefix)) {
             throw IllegalArgumentException(
                 "MIME type $mimeType cannot be inserted into $uri; expected MIME type under $expectedPrefix*",
+            )
+        }
+
+        row.getAsString(MediaColumns.RELATIVE_PATH)?.let { path ->
+            row.put(MediaColumns.RELATIVE_PATH, if (path.endsWith("/")) path else "$path/")
+        }
+        val primaryDir = row.getAsString(MediaColumns.RELATIVE_PATH).orEmpty().substringBefore('/')
+        val allowedDirs = ALLOWED_DIRECTORIES[collection]
+        if (allowedDirs != null && primaryDir !in allowedDirs) {
+            throw IllegalArgumentException(
+                "Primary directory $primaryDir not allowed for $uri; allowed directories are $allowedDirs",
             )
         }
 
@@ -108,7 +127,9 @@ class FakeMediaStoreProvider : ContentProvider() {
         selectionArgs: Array<out String>?,
     ): Int {
         val row = rowFor(uri) ?: return 0
-        values?.let { row.values.putAll(it) }
+        val changes = values ?: ContentValues()
+        updateResult?.let { override -> return override(row, changes) }
+        row.values.putAll(changes)
         return 1
     }
 
@@ -150,6 +171,15 @@ class FakeMediaStoreProvider : ContentProvider() {
     }
 
     companion object {
+        /** Top-level directories MediaProvider accepts per collection (Android 10+). */
+        private val ALLOWED_DIRECTORIES =
+            mapOf(
+                "images" to listOf("DCIM", "Pictures"),
+                "video" to listOf("DCIM", "Movies", "Pictures"),
+                "audio" to listOf("Alarms", "Audiobooks", "Music", "Notifications", "Podcasts", "Recordings", "Ringtones"),
+                "downloads" to listOf("Download"),
+            )
+
         fun install(): FakeMediaStoreProvider = Robolectric.setupContentProvider(FakeMediaStoreProvider::class.java, "media")
 
         /** `images`, `video`, `audio`, `downloads` or `file`, from `content://media/<volume>/<collection>/…`. */

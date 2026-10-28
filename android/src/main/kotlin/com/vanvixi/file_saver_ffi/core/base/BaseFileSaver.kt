@@ -67,6 +67,11 @@ abstract class BaseFileSaver(
                 entryFactory.deleteEntry(context, entry.uri)
                 sendError(Constants.ERROR_FILE_IO, "Failed to write file data: ${e.message}")
                 return@saveFlow
+            } catch (e: Exception) {
+                // Anything else (e.g. a SecurityException from a revoked grant):
+                // remove the new entry, then let saveFlow report it.
+                entryFactory.deleteEntry(context, entry.uri)
+                throw e
             }
 
             entryFactory.finishSave(this, context, entry)
@@ -131,6 +136,9 @@ abstract class BaseFileSaver(
                 entryFactory.deleteEntry(context, entry.uri)
                 sendError(Constants.ERROR_FILE_IO, "Failed to copy file: ${e.message}")
                 return@saveFlow
+            } catch (e: Exception) {
+                entryFactory.deleteEntry(context, entry.uri)
+                throw e
             }
 
             entryFactory.finishSave(this, context, entry)
@@ -200,6 +208,9 @@ abstract class BaseFileSaver(
                     entryFactory.deleteEntry(context, entry.uri)
                     sendError(Constants.ERROR_FILE_IO, "Failed to stream network data: ${e.message}")
                     return@saveFlow
+                } catch (e: Exception) {
+                    entryFactory.deleteEntry(context, entry.uri)
+                    throw e
                 }
 
                 entryFactory.finishSave(this, context, entry)

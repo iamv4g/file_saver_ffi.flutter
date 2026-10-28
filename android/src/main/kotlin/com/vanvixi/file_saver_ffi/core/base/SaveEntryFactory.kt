@@ -132,6 +132,11 @@ sealed class SaveEntryFactory {
             } catch (e: FileExistsException) {
                 scope.sendError(Constants.ERROR_FILE_EXISTS, e.message ?: "File already exists")
                 null
+            } catch (e: IllegalArgumentException) {
+                // A target the input can't be saved to: a file type the location
+                // rejects, a `..` in subDir, or a URI that isn't a directory tree.
+                scope.sendError(Constants.ERROR_INVALID_INPUT, e.message ?: "Invalid save target")
+                null
             }
 
         override suspend fun createEntryDirect(
@@ -194,6 +199,11 @@ sealed class SaveEntryFactory {
                 null
             } catch (e: FileExistsException) {
                 scope.sendError(Constants.ERROR_FILE_EXISTS, e.message ?: "File already exists")
+                null
+            } catch (e: IllegalArgumentException) {
+                // A target the input can't be saved to: a file type the location
+                // rejects, a `..` in subDir, or a URI that isn't a directory tree.
+                scope.sendError(Constants.ERROR_INVALID_INPUT, e.message ?: "Invalid save target")
                 null
             }
 

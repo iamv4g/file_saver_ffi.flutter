@@ -29,6 +29,8 @@ object StoreHelper {
      * @return [SaveEntry.Created] to write to, or [SaveEntry.Existing] for SKIP
      * @throws IOException if MediaStore entry creation fails
      * @throws FileExistsException if the file exists and [conflictResolution] is FAIL
+     * @throws IllegalArgumentException if [fileType] can't be saved to [saveLocation]
+     *   on Android 10+, or [subDir] contains `..`
      *
      * Example:
      * ```kotlin
@@ -83,7 +85,7 @@ object StoreHelper {
         conflictResolution: ConflictResolution,
     ): SaveEntry =
         withContext(Dispatchers.IO) {
-            val (contentUri, dirPath) = FileHelper.scopedStoreTargetFor(saveLocation, subDir)
+            val (contentUri, dirPath) = FileHelper.scopedStoreTargetFor(saveLocation, subDir, fileType)
 
             val resolution =
                 ScopedStoreConflictResolver.resolve(
@@ -208,7 +210,11 @@ object StoreHelper {
 
             val resolver = context.contentResolver
             val pending = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
-            resolver.update(entry.uri, pending, null, null)
+            // A row that stays pending is invisible to other apps and purged by
+            // MediaStore after about a week, so this is a failed save.
+            if (resolver.update(entry.uri, pending, null, null) != 1) {
+                throw IOException("Failed to publish ${entry.uri}: MediaStore did not clear IS_PENDING")
+            }
 
             val replaces = entry.replaces ?: return@withContext entry.uri
 
