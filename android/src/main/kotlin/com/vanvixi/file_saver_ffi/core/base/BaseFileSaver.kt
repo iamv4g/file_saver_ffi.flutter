@@ -13,6 +13,13 @@ import kotlinx.coroutines.flow.Flow
 import java.io.FileNotFoundException
 import java.io.IOException
 
+/**
+ * Shared save flows. Each one asks [SaveEntryFactory.createEntry] for the
+ * target: [SaveEntry.Existing] (SKIP) completes immediately with the existing
+ * file, and [SaveEntry.Created] is written and then committed by
+ * [SaveEntryFactory.finishSave]. A failed or cancelled write deletes only the
+ * new entry, never the file it would replace.
+ */
 abstract class BaseFileSaver(
     protected val context: Context,
 ) {
@@ -36,27 +43,33 @@ abstract class BaseFileSaver(
 
             sendProgress(0.05)
 
-            val (uri, outputStream) =
-                entryFactory.createEntry(this, context, conflictResolution)
-                    ?: return@saveFlow
+            val entry =
+                when (val result = entryFactory.createEntry(this, context, conflictResolution)) {
+                    null -> return@saveFlow
+                    is SaveEntry.Existing -> {
+                        sendExisting(result)
+                        return@saveFlow
+                    }
+                    is SaveEntry.Created -> result
+                }
 
             sendProgress(0.1)
 
             try {
-                FileHelper.writeStream(outputStream, fileData) { writeProgress ->
+                FileHelper.writeStream(entry.outputStream, fileData) { writeProgress ->
                     sendProgress(mapProgress(writeProgress, 0.1, 0.9))
                 }
             } catch (e: CancellationException) {
-                entryFactory.deleteEntry(context, uri)
+                entryFactory.deleteEntry(context, entry.uri)
                 sendCancelled()
                 throw e
             } catch (e: IOException) {
-                entryFactory.deleteEntry(context, uri)
+                entryFactory.deleteEntry(context, entry.uri)
                 sendError(Constants.ERROR_FILE_IO, "Failed to write file data: ${e.message}")
                 return@saveFlow
             }
 
-            entryFactory.finishSave(this, context, uri)
+            entryFactory.finishSave(this, context, entry)
         }
 
     /**
@@ -90,30 +103,37 @@ abstract class BaseFileSaver(
 
             sendProgress(0.1)
 
-            val (uri, outputStream) =
-                entryFactory.createEntry(this, context, conflictResolution)
-                    ?: run {
+            val entry =
+                when (val result = entryFactory.createEntry(this, context, conflictResolution)) {
+                    null -> {
                         sourceFile.inputStream.close()
                         return@saveFlow
                     }
+                    is SaveEntry.Existing -> {
+                        sourceFile.inputStream.close()
+                        sendExisting(result)
+                        return@saveFlow
+                    }
+                    is SaveEntry.Created -> result
+                }
 
             sendProgress(0.15)
 
             try {
-                FileHelper.copyStream(sourceFile.inputStream, outputStream, sourceFile.totalSize) { copyProgress ->
+                FileHelper.copyStream(sourceFile.inputStream, entry.outputStream, sourceFile.totalSize) { copyProgress ->
                     sendProgress(mapProgress(copyProgress, 0.15, 0.9))
                 }
             } catch (e: CancellationException) {
-                entryFactory.deleteEntry(context, uri)
+                entryFactory.deleteEntry(context, entry.uri)
                 sendCancelled()
                 throw e
             } catch (e: IOException) {
-                entryFactory.deleteEntry(context, uri)
+                entryFactory.deleteEntry(context, entry.uri)
                 sendError(Constants.ERROR_FILE_IO, "Failed to copy file: ${e.message}")
                 return@saveFlow
             }
 
-            entryFactory.finishSave(this, context, uri)
+            entryFactory.finishSave(this, context, entry)
         }
 
     /**
@@ -152,31 +172,37 @@ abstract class BaseFileSaver(
             try {
                 sendProgress(0.05)
 
-                val (uri, outputStream) =
-                    entryFactory.createEntry(this, context, conflictResolution)
-                        ?: return@saveFlow
+                val entry =
+                    when (val result = entryFactory.createEntry(this, context, conflictResolution)) {
+                        null -> return@saveFlow
+                        is SaveEntry.Existing -> {
+                            sendExisting(result)
+                            return@saveFlow
+                        }
+                        is SaveEntry.Created -> result
+                    }
 
                 sendProgress(0.1)
 
                 try {
                     FileHelper.copyStream(
                         connectionResult.inputStream,
-                        outputStream,
+                        entry.outputStream,
                         connectionResult.contentLength,
                     ) { copyProgress ->
                         sendProgress(mapProgress(copyProgress, 0.1, 0.9))
                     }
                 } catch (e: CancellationException) {
-                    entryFactory.deleteEntry(context, uri)
+                    entryFactory.deleteEntry(context, entry.uri)
                     sendCancelled()
                     throw e
                 } catch (e: IOException) {
-                    entryFactory.deleteEntry(context, uri)
+                    entryFactory.deleteEntry(context, entry.uri)
                     sendError(Constants.ERROR_FILE_IO, "Failed to stream network data: ${e.message}")
                     return@saveFlow
                 }
 
-                entryFactory.finishSave(this, context, uri)
+                entryFactory.finishSave(this, context, entry)
             } finally {
                 try {
                     connectionResult.connection.disconnect()

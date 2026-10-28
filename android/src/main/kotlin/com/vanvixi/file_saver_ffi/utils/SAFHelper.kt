@@ -2,14 +2,15 @@ package com.vanvixi.file_saver_ffi.utils
 
 import android.content.Context
 import android.net.Uri
+import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
+import com.vanvixi.file_saver_ffi.core.base.SaveEntry
 import com.vanvixi.file_saver_ffi.exception.FileExistsException
 import com.vanvixi.file_saver_ffi.models.ConflictResolution
 import com.vanvixi.file_saver_ffi.models.FileType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.IOException
-import java.io.OutputStream
 
 /**
  * Helper for Storage Access Framework (SAF) operations.
@@ -26,7 +27,7 @@ object SAFHelper {
      * @param fileType File type information (extension, mimeType)
      * @param baseFileName File name WITHOUT extension
      * @param conflictResolution How to handle existing files
-     * @return Pair of (Uri, OutputStream) for writing data
+     * @return [SaveEntry.Created] to write to, or [SaveEntry.Existing] for SKIP
      * @throws IOException if file creation fails
      * @throws FileExistsException if file exists and conflictResolution is FAIL
      */
@@ -36,7 +37,7 @@ object SAFHelper {
         fileType: FileType,
         baseFileName: String,
         conflictResolution: ConflictResolution,
-    ): Pair<Uri, OutputStream> =
+    ): SaveEntry =
         withContext(Dispatchers.IO) {
             val fileName = FileHelper.buildFileName(baseFileName, fileType.ext)
             val mimeType = fileType.mimeType
@@ -64,18 +65,15 @@ object SAFHelper {
                     }
 
                     ConflictResolution.OVERWRITE -> {
-                        // Delete existing and create new
-                        existingFile.delete()
-                        return@withContext createNewFile(context, docDir, fileName, mimeType)
+                        // Write a new document next to the existing one (the
+                        // provider gives it a unique name). commitFile deletes
+                        // the existing document only after the write succeeds.
+                        return@withContext createNewFile(context, docDir, fileName, mimeType, replaces = existingFile.uri)
                     }
 
                     ConflictResolution.SKIP -> {
-                        // Return existing file's URI with a dummy output stream that does nothing
-                        val uri = existingFile.uri
-                        val outputStream =
-                            context.contentResolver.openOutputStream(uri, "w")
-                                ?: throw IOException("Cannot open existing file: $fileName")
-                        return@withContext Pair(uri, outputStream)
+                        // Keep the existing document; nothing is written.
+                        return@withContext SaveEntry.Existing(existingFile.uri)
                     }
 
                     ConflictResolution.FAIL -> {
@@ -89,6 +87,40 @@ object SAFHelper {
         }
 
     /**
+     * Makes a fully written [entry] the saved file and returns its final URI.
+     *
+     * For OVERWRITE, deletes the replaced document and renames the new one
+     * (created with a provider-chosen unique name) to [displayName]. If the old
+     * document cannot be deleted or the new one cannot be renamed, the new file
+     * keeps its unique name, so no data is lost.
+     *
+     * @param displayName The requested file name WITH extension
+     */
+    suspend fun commitFile(
+        context: Context,
+        entry: SaveEntry.Created,
+        displayName: String,
+    ): Uri =
+        withContext(Dispatchers.IO) {
+            val replaces = entry.replaces ?: return@withContext entry.uri
+            val resolver = context.contentResolver
+
+            val deleted =
+                try {
+                    DocumentsContract.deleteDocument(resolver, replaces)
+                } catch (_: Exception) {
+                    false
+                }
+            if (!deleted) return@withContext entry.uri
+
+            try {
+                DocumentsContract.renameDocument(resolver, entry.uri, displayName) ?: entry.uri
+            } catch (_: Exception) {
+                entry.uri
+            }
+        }
+
+    /**
      * Creates a new file in the directory.
      */
     private fun createNewFile(
@@ -96,16 +128,23 @@ object SAFHelper {
         docDir: DocumentFile,
         fileName: String,
         mimeType: String,
-    ): Pair<Uri, OutputStream> {
+        replaces: Uri? = null,
+    ): SaveEntry.Created {
         val newFile =
             docDir.createFile(mimeType, fileName)
                 ?: throw IOException("Failed to create file: $fileName")
 
+        // Don't leave an empty document behind if the stream can't be opened.
         val outputStream =
-            context.contentResolver.openOutputStream(newFile.uri)
-                ?: throw IOException("Failed to open output stream: $fileName")
+            try {
+                context.contentResolver.openOutputStream(newFile.uri)
+                    ?: throw IOException("Failed to open output stream: $fileName")
+            } catch (e: Exception) {
+                newFile.delete()
+                throw e as? IOException ?: IOException("Failed to open output stream: $fileName", e)
+            }
 
-        return Pair(newFile.uri, outputStream)
+        return SaveEntry.Created(newFile.uri, outputStream, replaces = replaces)
     }
 
     /**

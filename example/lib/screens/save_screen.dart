@@ -171,7 +171,7 @@ class _SaveScreenState extends State<SaveScreen> with DemoSaveScreenMixin {
         fileName: fileName,
         saveLocation: saveLocation,
         subDir: demoConfig.subDir,
-        conflictResolution: ConflictResolution.autoRename,
+        conflictResolution: demoConflictResolution,
         onProgress: (p) => setState(() => progress = p * 100),
       ),
     );
@@ -189,7 +189,7 @@ class _SaveScreenState extends State<SaveScreen> with DemoSaveScreenMixin {
       fileName: fileName,
       saveLocation: saveLocation,
       subDir: demoConfig.subDir,
-      conflictResolution: ConflictResolution.autoRename,
+      conflictResolution: demoConflictResolution,
     );
     listenDemoSaveStream(stream, cancelledMessage: 'Operation cancelled');
   }
@@ -226,6 +226,7 @@ class _SaveScreenState extends State<SaveScreen> with DemoSaveScreenMixin {
               onChanged: (v) => setState(() => _useStreamApi = v),
               enabled: !isLoading,
             ),
+            buildConflictResolutionSelector(),
             InfoCard(
               description:
                   '${_describeDestination()}\n'

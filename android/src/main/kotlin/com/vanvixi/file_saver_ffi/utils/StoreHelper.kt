@@ -2,10 +2,12 @@ package com.vanvixi.file_saver_ffi.utils
 
 import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
 import androidx.annotation.RequiresApi
+import com.vanvixi.file_saver_ffi.core.base.SaveEntry
 import com.vanvixi.file_saver_ffi.exception.FileExistsException
 import com.vanvixi.file_saver_ffi.models.ConflictResolution
 import com.vanvixi.file_saver_ffi.models.FileType
@@ -15,7 +17,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
-import java.io.OutputStream
 
 object StoreHelper {
     /**
@@ -25,19 +26,20 @@ object StoreHelper {
      * @param fileType File type (e.g., ImageType, VideoType, AudioType, CustomFileType)
      * @param baseFileName Base file name WITHOUT extension (e.g., "photo")
      * @param subDir Subdirectory within Pictures (e.g., "MyAlbum"), null for Pictures root
-     * @return Pair of (Uri, OutputStream) for writing data
+     * @return [SaveEntry.Created] to write to, or [SaveEntry.Existing] for SKIP
      * @throws IOException if MediaStore entry creation fails
+     * @throws FileExistsException if the file exists and [conflictResolution] is FAIL
      *
      * Example:
      * ```kotlin
-     * val (uri, outputStream) = StoreHelper.createEntry(
+     * val entry = StoreHelper.createEntry(
      *     context = context,
      *     fileType = fileType,
      *     baseFileName = "photo",
      *     subDir = "MyAlbum"
-     * )
-     * outputStream.use { it.write(imageData) }
-     * StoreHelper.markEntryComplete(context, uri)
+     * ) as SaveEntry.Created
+     * entry.outputStream.use { it.write(imageData) }
+     * val uri = StoreHelper.commitEntry(context, entry, "photo.jpg")
      * ```
      */
     suspend fun createEntry(
@@ -47,7 +49,7 @@ object StoreHelper {
         saveLocation: SaveLocation,
         subDir: String? = null,
         conflictResolution: ConflictResolution,
-    ): Pair<Uri, OutputStream> =
+    ): SaveEntry =
         withContext(Dispatchers.IO) {
             val isVersionQPlus = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
 
@@ -79,11 +81,11 @@ object StoreHelper {
         saveLocation: SaveLocation,
         subDir: String? = null,
         conflictResolution: ConflictResolution,
-    ): Pair<Uri, OutputStream> =
+    ): SaveEntry =
         withContext(Dispatchers.IO) {
             val (contentUri, dirPath) = FileHelper.scopedStoreTargetFor(saveLocation, subDir)
 
-            val fileName =
+            val resolution =
                 ScopedStoreConflictResolver.resolve(
                     context,
                     contentUri,
@@ -93,11 +95,22 @@ object StoreHelper {
                     conflictResolution,
                 )
 
+            val target =
+                when (resolution) {
+                    is ScopedStoreConflictResolver.Resolution.Existing -> {
+                        return@withContext SaveEntry.Existing(resolution.uri)
+                    }
+
+                    is ScopedStoreConflictResolver.Resolution.Create -> {
+                        resolution
+                    }
+                }
+
             val resolver = context.contentResolver
 
             val contentValues =
                 ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                    put(MediaStore.MediaColumns.DISPLAY_NAME, target.displayName)
                     put(MediaStore.MediaColumns.MIME_TYPE, fileType.mimeType)
                     put(MediaStore.MediaColumns.RELATIVE_PATH, dirPath)
                     put(MediaStore.MediaColumns.IS_PENDING, 1)
@@ -105,13 +118,19 @@ object StoreHelper {
 
             val uri =
                 resolver.insert(contentUri, contentValues)
-                    ?: throw IOException("Failed to create MediaStore entry: $fileName")
+                    ?: throw IOException("Failed to create MediaStore entry: ${target.displayName}")
 
+            // Don't leave an empty pending row behind if the stream can't be opened.
             val outputStream =
-                resolver.openOutputStream(uri)
-                    ?: throw IOException("Failed to open OutputStream: $fileName")
+                try {
+                    resolver.openOutputStream(uri)
+                        ?: throw IOException("Failed to open OutputStream: ${target.displayName}")
+                } catch (e: Exception) {
+                    resolver.delete(uri, null, null)
+                    throw e as? IOException ?: IOException("Failed to open OutputStream: ${target.displayName}", e)
+                }
 
-            Pair(uri, outputStream)
+            SaveEntry.Created(uri, outputStream, replaces = target.replaces)
         }
 
     private suspend fun createEntryForLegacyStorage(
@@ -120,52 +139,104 @@ object StoreHelper {
         saveLocation: SaveLocation,
         subDir: String? = null,
         conflictResolution: ConflictResolution,
-    ): Pair<Uri, OutputStream> =
+    ): SaveEntry =
         withContext(Dispatchers.IO) {
             val directory = FileHelper.legacyStoreDirectoryFor(saveLocation, subDir)
             FileHelper.ensureDirectoryExists(directory).getOrElse { error ->
                 throw IOException("Failed to create directory: ${error.message}")
             }
 
-            val file =
-                LegacyStoreConflictResolver.resolve(
-                    directory,
-                    baseFileName,
-                    fileType.ext,
-                    conflictResolution,
-                ) ?: throw FileExistsException("File already exists: $baseFileName.${fileType.ext}")
+            when (
+                val resolution =
+                    LegacyStoreConflictResolver.resolve(
+                        directory,
+                        baseFileName,
+                        fileType.ext,
+                        conflictResolution,
+                    )
+            ) {
+                is LegacyStoreConflictResolver.Resolution.Existing -> {
+                    SaveEntry.Existing(Uri.fromFile(resolution.file))
+                }
 
-            val uri = Uri.fromFile(file)
-
-            Pair(uri, FileOutputStream(file))
+                is LegacyStoreConflictResolver.Resolution.Create -> {
+                    SaveEntry.Created(
+                        uri = Uri.fromFile(resolution.file),
+                        outputStream = FileOutputStream(resolution.file),
+                        replaces = resolution.replaces?.let(Uri::fromFile),
+                    )
+                }
+            }
         }
 
     /**
-     * Marks MediaStore entry as complete (removes IS_PENDING flag)
+     * Makes a fully written [entry] the saved file and returns its final URI.
      *
-     * @param context Application context
-     * @param uri URI of the MediaStore entry
+     * - Android 10+: clears IS_PENDING so the file becomes visible. For
+     *   OVERWRITE it then deletes the replaced row and renames the new row
+     *   (auto-renamed to e.g. `photo (1).jpg` on insert) back to [displayName].
+     *   If the old row cannot be deleted (for example a row the app does not
+     *   own throws `RecoverableSecurityException`), the new file keeps its
+     *   auto-renamed name.
+     * - Android ≤ 9: for OVERWRITE, renames the temporary file over the original,
+     *   then asks the media scanner to index the file so it shows up in gallery
+     *   and music apps (MediaStore is not updated by plain file writes there).
      *
-     * Example:
-     * ```kotlin
-     * val (uri, outputStream) = createImageEntry(...)
-     * outputStream.use { it.write(data) }
-     * markEntryComplete(context, uri)  // CRITICAL: Makes file visible
-     * ```
+     * The stream of [entry] must already be closed.
+     *
+     * @param displayName The requested file name WITH extension
+     * @param mimeType MIME type passed to the media scanner on Android ≤ 9
+     * @throws IOException if the entry cannot be finalized; the replaced file
+     *   is still intact in that case
      */
-    suspend fun markEntryComplete(
+    suspend fun commitEntry(
         context: Context,
-        uri: Uri,
-    ) = withContext(Dispatchers.IO) {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-            return@withContext
+        entry: SaveEntry.Created,
+        displayName: String,
+        mimeType: String,
+    ): Uri =
+        withContext(Dispatchers.IO) {
+            if (entry.uri.scheme == "file") {
+                val uri = commitLegacyEntry(entry)
+                // Fire-and-forget: the file is saved either way, the scan only
+                // makes it visible to other apps.
+                uri.path?.let { path ->
+                    MediaScannerConnection.scanFile(context, arrayOf(path), arrayOf(mimeType), null)
+                }
+                return@withContext uri
+            }
+
+            val resolver = context.contentResolver
+            val pending = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
+            resolver.update(entry.uri, pending, null, null)
+
+            val replaces = entry.replaces ?: return@withContext entry.uri
+
+            val deleted =
+                try {
+                    resolver.delete(replaces, null, null) > 0
+                } catch (_: SecurityException) {
+                    false
+                }
+            if (deleted) {
+                try {
+                    val rename = ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, displayName) }
+                    resolver.update(entry.uri, rename, null, null)
+                } catch (_: Exception) {
+                    // The content is saved; only the name stays auto-renamed.
+                }
+            }
+            entry.uri
         }
 
-        val contentValues =
-            ContentValues().apply {
-                put(MediaStore.Images.Media.IS_PENDING, 0)
-            }
-        context.contentResolver.update(uri, contentValues, null, null)
+    private fun commitLegacyEntry(entry: SaveEntry.Created): Uri {
+        val replaces = entry.replaces ?: return entry.uri
+        val temp = File(requireNotNull(entry.uri.path))
+        val target = File(requireNotNull(replaces.path))
+        if (!temp.renameTo(target)) {
+            throw IOException("Failed to replace ${target.name}")
+        }
+        return replaces
     }
 
     /**
