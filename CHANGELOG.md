@@ -1,3 +1,9 @@
+## Unreleased
+
+### Changed
+
+- **Android:** the plugin now declares `minSdk 24` (Android 7.0), and the README says so. This matches what apps already needed: the `dir_picker` dependency requires API 24, so an app with a lower `minSdk` failed at manifest merge. The README previously claimed API 21+.
+
 ## 0.10.1
 
 ### Fixed

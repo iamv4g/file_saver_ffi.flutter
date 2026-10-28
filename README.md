@@ -51,7 +51,7 @@ First, follow the [package installation instructions](https://pub.dev/packages/f
 <details>
 <summary><b>Android Configuration</b></summary>
 
-**Supported:** API 21+ (Android 5.0+)
+**Supported:** API 24+ (Android 7.0+)
 
 For **Standard Save Locations** (Downloads, Pictures, etc.), no configuration is needed. The plugin automatically:
 - Declares `WRITE_EXTERNAL_STORAGE` permission (merged via manifest merger, only applies to API ≤ 28)
