@@ -150,6 +150,9 @@ class _OpenWriteScreenState extends State<OpenWriteScreen> {
       final savedUri = await _sink?.result;
       _sink = null;
 
+      // Cancel button pressed while streaming: _cancel already reported it.
+      if (savedUri == null) return;
+
       if (mounted) {
         setState(() => _savedUri = savedUri.toString());
         showAppSnackBar(
