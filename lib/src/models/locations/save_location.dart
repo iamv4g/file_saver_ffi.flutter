@@ -1,3 +1,6 @@
+/// @docImport '../../exceptions/file_saver_exceptions.dart';
+library;
+
 /// Base sealed class for all save locations.
 ///
 /// This class provides a type-safe way to specify where files should be saved
@@ -9,28 +12,40 @@ sealed class SaveLocation {
 
 /// Android-specific save locations.
 ///
-/// These locations map to Android's MediaStore collections and storage directories.
+/// Each value is a public top-level directory. On Android 10 and later, files
+/// go through MediaStore: the collection is picked from the file's MIME type
+/// (Images, Video or Audio, and Downloads for everything else, or for any type
+/// saved to [downloads]). Android decides which types a directory accepts, and
+/// a rejected combination fails with an [InvalidInputException]. Measured on
+/// Android 10 and 16:
 ///
-/// Platform mappings:
-/// - [pictures]: MediaStore.Images.Media (Pictures/ directory)
-/// - [movies]: MediaStore.Video.Media (Movies/ directory)
-/// - [music]: MediaStore.Audio.Media (Music/ directory)
-/// - [downloads]: MediaStore.Downloads (Downloads/ directory)
-/// - [dcim]: MediaStore.Images.Media (DCIM/ directory - camera photos)
+/// | Location      | Images | Videos                 | Audio | Other files |
+/// | ------------- | ------ | ---------------------- | ----- | ----------- |
+/// | [downloads]   | yes    | yes                    | yes   | yes         |
+/// | [pictures]    | yes    | Android 16 yes, 10 no  | no    | no          |
+/// | [dcim]        | yes    | yes                    | no    | no          |
+/// | [movies]      | no     | yes                    | no    | no          |
+/// | [music]       | no     | no                     | yes   | no          |
+///
+/// On Android 9 and below, files are written directly to the directory, so
+/// any type works in any location.
+///
+/// A `subDir` with a `..` segment is rejected with an [InvalidInputException].
 enum AndroidSaveLocation implements SaveLocation {
-  /// Save to Pictures/ directory via MediaStore.Images
+  /// Pictures/: images, and videos on newer Android versions (accepted on
+  /// Android 16, rejected on Android 10).
   pictures,
 
-  /// Save to Movies/ directory via MediaStore.Video
+  /// Movies/: videos.
   movies,
 
-  /// Save to Music/ directory via MediaStore.Audio
+  /// Music/: audio.
   music,
 
-  /// Save to Downloads/ directory via MediaStore.Downloads (default)
+  /// Download/: any file type (default).
   downloads,
 
-  /// Save to DCIM/ directory (camera photos) via MediaStore.Images
+  /// DCIM/: camera images and videos.
   dcim;
 
   const AndroidSaveLocation();

@@ -6,6 +6,7 @@ import android.content.ContentValues
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.provider.MediaStore.MediaColumns
 import org.robolectric.Robolectric
@@ -80,7 +81,7 @@ class FakeMediaStoreProvider : ContentProvider() {
             row.put(MediaColumns.RELATIVE_PATH, if (path.endsWith("/")) path else "$path/")
         }
         val primaryDir = row.getAsString(MediaColumns.RELATIVE_PATH).orEmpty().substringBefore('/')
-        val allowedDirs = ALLOWED_DIRECTORIES[collection]
+        val allowedDirs = allowedDirectories(collection)
         if (allowedDirs != null && primaryDir !in allowedDirs) {
             throw IllegalArgumentException(
                 "Primary directory $primaryDir not allowed for $uri; allowed directories are $allowedDirs",
@@ -171,14 +172,21 @@ class FakeMediaStoreProvider : ContentProvider() {
     }
 
     companion object {
-        /** Top-level directories MediaProvider accepts per collection (Android 10+). */
-        private val ALLOWED_DIRECTORIES =
-            mapOf(
-                "images" to listOf("DCIM", "Pictures"),
-                "video" to listOf("DCIM", "Movies", "Pictures"),
-                "audio" to listOf("Alarms", "Audiobooks", "Music", "Notifications", "Podcasts", "Recordings", "Ringtones"),
-                "downloads" to listOf("Download"),
-            )
+        /**
+         * Top-level directories MediaProvider accepts per collection, as
+         * measured on a Galaxy Note 9 (Android 10) and a Galaxy S22
+         * (Android 16). Android 10 rejects a video in Pictures/ and Android 16
+         * accepts it. Versions in between weren't measured; the fake accepts
+         * it from Android 11.
+         */
+        private fun allowedDirectories(collection: String): List<String>? =
+            when (collection) {
+                "images" -> listOf("DCIM", "Pictures")
+                "video" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) listOf("DCIM", "Movies", "Pictures") else listOf("DCIM", "Movies")
+                "audio" -> listOf("Alarms", "Audiobooks", "Music", "Notifications", "Podcasts", "Recordings", "Ringtones")
+                "downloads" -> listOf("Download")
+                else -> null
+            }
 
         fun install(): FakeMediaStoreProvider = Robolectric.setupContentProvider(FakeMediaStoreProvider::class.java, "media")
 

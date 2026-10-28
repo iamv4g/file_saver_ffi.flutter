@@ -86,15 +86,17 @@ object FileHelper {
     /**
      * The MediaStore collection and `RELATIVE_PATH` for a save on Android 10+.
      *
-     * The collection follows the MIME type, not the location. MediaProvider
-     * rejects a MIME type that doesn't belong to the collection (a video in
-     * Images), and each collection only accepts some top-level directories.
-     * [SaveLocation.DOWNLOADS] uses the Downloads collection, which takes any
-     * type, so a video in DCIM goes to the Video collection and a PDF can only
-     * go to Downloads.
+     * The collection follows the MIME type, not the location: MediaProvider
+     * rejects a MIME type that doesn't belong to the collection, so a video
+     * saved to DCIM must go to the Video collection, not Images. Other files
+     * use the Downloads collection.
      *
-     * @throws IllegalArgumentException if [fileType] can't be stored in
-     *   [saveLocation], or [subDir] has a `..` segment
+     * Which top-level directories a collection accepts is left to
+     * MediaProvider, because it differs between Android versions (Android 10
+     * rejects a video in Pictures/, Android 16 accepts it). A rejected
+     * combination fails the insert with an [IllegalArgumentException].
+     *
+     * @throws IllegalArgumentException if [subDir] has a `..` segment
      */
     @RequiresApi(Build.VERSION_CODES.Q)
     fun scopedStoreTargetFor(
@@ -107,39 +109,17 @@ object FileHelper {
         val dirPath = if (subDir.isNullOrBlank()) baseDir else "$baseDir/$subDir"
         val volume = MediaStore.VOLUME_EXTERNAL_PRIMARY
 
-        if (saveLocation == SaveLocation.DOWNLOADS) {
-            return MediaStore.Downloads.getContentUri(volume) to dirPath
-        }
-
-        val allowed = scopedStoreLocationsFor(fileType)
-        if (saveLocation !in allowed) {
-            throw IllegalArgumentException(
-                "${fileType.mimeType} files can't be saved to $baseDir on Android 10+. " +
-                    "Use ${allowed.joinToString(" or ") { directoryNameFor(it) }}.",
-            )
-        }
-
         val collection =
-            when (fileType.category) {
-                FileType.Category.IMAGE -> MediaStore.Images.Media.getContentUri(volume)
-                FileType.Category.VIDEO -> MediaStore.Video.Media.getContentUri(volume)
-                FileType.Category.AUDIO -> MediaStore.Audio.Media.getContentUri(volume)
-                FileType.Category.CUSTOM -> MediaStore.Downloads.getContentUri(volume)
+            when {
+                // Downloads takes any file type.
+                saveLocation == SaveLocation.DOWNLOADS -> MediaStore.Downloads.getContentUri(volume)
+                fileType.isImage -> MediaStore.Images.Media.getContentUri(volume)
+                fileType.isVideo -> MediaStore.Video.Media.getContentUri(volume)
+                fileType.isAudio -> MediaStore.Audio.Media.getContentUri(volume)
+                else -> MediaStore.Downloads.getContentUri(volume)
             }
         return collection to dirPath
     }
-
-    /**
-     * The locations MediaProvider accepts for [fileType] on Android 10+: the
-     * top-level directories its collection allows, plus Downloads.
-     */
-    fun scopedStoreLocationsFor(fileType: FileType): List<SaveLocation> =
-        when (fileType.category) {
-            FileType.Category.IMAGE -> listOf(SaveLocation.PICTURES, SaveLocation.DCIM)
-            FileType.Category.VIDEO -> listOf(SaveLocation.MOVIES, SaveLocation.DCIM, SaveLocation.PICTURES)
-            FileType.Category.AUDIO -> listOf(SaveLocation.MUSIC)
-            FileType.Category.CUSTOM -> emptyList()
-        } + SaveLocation.DOWNLOADS
 
     /**
      * The public directory for a save on Android 9 and below.

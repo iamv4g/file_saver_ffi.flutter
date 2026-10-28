@@ -29,8 +29,8 @@ object StoreHelper {
      * @return [SaveEntry.Created] to write to, or [SaveEntry.Existing] for SKIP
      * @throws IOException if MediaStore entry creation fails
      * @throws FileExistsException if the file exists and [conflictResolution] is FAIL
-     * @throws IllegalArgumentException if [fileType] can't be saved to [saveLocation]
-     *   on Android 10+, or [subDir] contains `..`
+     * @throws IllegalArgumentException if MediaProvider rejects [fileType] in
+     *   [saveLocation] on Android 10+, or [subDir] contains `..`
      *
      * Example:
      * ```kotlin
@@ -119,8 +119,16 @@ object StoreHelper {
                 }
 
             val uri =
-                resolver.insert(contentUri, contentValues)
-                    ?: throw IOException("Failed to create MediaStore entry: ${target.displayName}")
+                try {
+                    resolver.insert(contentUri, contentValues)
+                } catch (e: IllegalArgumentException) {
+                    // MediaProvider rejects a top-level directory the collection
+                    // doesn't allow, e.g. an image in Movies/.
+                    throw IllegalArgumentException(
+                        "Android rejected saving ${fileType.mimeType} to ${dirPath.substringBefore('/')}/: ${e.message}",
+                        e,
+                    )
+                } ?: throw IOException("Failed to create MediaStore entry: ${target.displayName}")
 
             // Don't leave an empty pending row behind if the stream can't be opened.
             val outputStream =

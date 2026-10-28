@@ -63,6 +63,12 @@ class StorageTargetTest : FileSaverTestBase() {
     }
 
     @Test
+    @Config(sdk = [29])
+    fun `a video saved to Pictures on Android 10, which rejects it, is reported as INVALID_INPUT`() {
+        assertInvalidInput(saveBytes(byteArrayOf(1), "clip", "mp4", "video/mp4", SaveLocation.PICTURES), "video/mp4 to Pictures/")
+    }
+
+    @Test
     fun `an image saved to DCIM goes to the Images collection`() {
         assertSavedTo(saveBytes(byteArrayOf(1), "photo", "jpg", "image/jpeg", SaveLocation.DCIM), "images", "DCIM/probe/")
     }
@@ -87,13 +93,13 @@ class StorageTargetTest : FileSaverTestBase() {
     }
 
     @Test
-    fun `an image saved to Movies is rejected with INVALID_INPUT naming the allowed locations`() {
-        assertInvalidInput(saveBytes(byteArrayOf(1), "photo", "png", "image/png", SaveLocation.MOVIES), "Pictures or DCIM or Download")
+    fun `an image saved to Movies is rejected by MediaProvider and reported as INVALID_INPUT`() {
+        assertInvalidInput(saveBytes(byteArrayOf(1), "photo", "png", "image/png", SaveLocation.MOVIES), "Android rejected saving image/png to Movies/")
     }
 
     @Test
     fun `a PDF saved to Pictures is rejected with INVALID_INPUT`() {
-        assertInvalidInput(saveBytes(byteArrayOf(1), "report", "pdf", "application/pdf", SaveLocation.PICTURES), "Use Download")
+        assertInvalidInput(saveBytes(byteArrayOf(1), "report", "pdf", "application/pdf", SaveLocation.PICTURES), "application/pdf to Pictures/")
     }
 
     // ── subDir ─────────────────────────────────────────────────────────────
