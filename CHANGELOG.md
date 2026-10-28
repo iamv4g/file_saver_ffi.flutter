@@ -1,3 +1,14 @@
+## Unreleased
+
+### Fixed
+
+- **iOS/macOS:** `ConflictResolution.skip` no longer writes anything when the file exists, and completes with the existing file's URI. Previously it truncated and rewrote the existing file, and a failed or cancelled network download then deleted it.
+- **iOS/macOS:** `ConflictResolution.overwrite` replaces the existing file only after the new content has been written: the content goes to a temporary file in the same directory, which replaces the original on success. A failed or cancelled save, including a cancelled `openWrite` session, now keeps the original. Previously it was deleted before writing started.
+- **iOS:** `overwrite` to the Photos Library saves the new asset first and deletes the old one afterwards. If the user declines the deletion prompt, both are kept.
+- **iOS:** conflict lookup for a Photos album that doesn't exist yet no longer searches the whole library, so `skip`, `fail` and `overwrite` can't match (or delete) a same-named asset outside the album.
+- **iOS/macOS:** a failed save no longer leaves a partial file behind. Previously only cancellation removed it.
+- **iOS:** concurrent network or video saves with the same file name no longer share a temporary file.
+
 ## 0.10.1
 
 ### Fixed

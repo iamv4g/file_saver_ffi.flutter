@@ -99,10 +99,10 @@ extension BaseFileSaver {
         onComplete: @escaping () -> Void,
         cancellationToken: CancellationToken?
     ) {
-        let finalURL: URL
+        let target: FileSaveTarget
         do {
             let targetDir = try resolveTargetDirectory(saveLocation: saveLocation, subDir: subDir)
-            finalURL = try FileManagerConflictResolver.resolveConflict(
+            target = try FileManagerConflictResolver.resolveConflict(
                 directory: targetDir,
                 fileName: fileName,
                 conflictResolution: conflictResolution
@@ -117,17 +117,25 @@ extension BaseFileSaver {
             return
         }
 
+        if case .existing(let existingURL) = target {
+            onProgress?(1.0)
+            onSuccess(existingURL.absoluteString)
+            onComplete()
+            return
+        }
+
         if let token = cancellationToken, token.isCancelled {
             onCancelled()
             onComplete()
             return
         }
 
+        // Download to the new file (a temp file for overwrite); commit on success
         NetworkHelper.downloadToFile(
             urlString: urlString,
             headers: headers,
             timeoutSeconds: timeoutSeconds,
-            destinationURL: finalURL,
+            destinationURL: target.writeURL,
             onProgress: { [weak cancellationToken] progress in
                 if let token = cancellationToken, token.isCancelled { return }
                 onProgress?(progress)
@@ -140,12 +148,19 @@ extension BaseFileSaver {
                 switch result {
                 case .success:
                     if let token = cancellationToken, token.isCancelled {
-                        try? FileManager.default.removeItem(at: finalURL)
+                        target.discard()
                         onCancelled()
                         return
                     }
-                    onSuccess(finalURL.absoluteString)
+                    do {
+                        onSuccess(try target.commit().absoluteString)
+                    } catch let error as FileSaverError {
+                        onError(error.code, error.message)
+                    } catch {
+                        onError(Constants.errorFileIO, error.localizedDescription)
+                    }
                 case .failure(let error):
+                    target.discard()
                     if case .cancelled = error {
                         onCancelled()
                     } else {
@@ -182,6 +197,7 @@ extension BaseFileSaver {
 
         // Check permission + conflict BEFORE downloading
         let hasReadAccess: Bool
+        let outcome: PhotosConflictOutcome
         do {
             let result = try handlePhotosSetup(
                 fileName: fileName,
@@ -189,8 +205,9 @@ extension BaseFileSaver {
                 conflictResolution: conflictResolution
             )
             hasReadAccess = result.hasReadAccess
+            outcome = result.outcome
 
-            if let existingUri = result.existingUri {
+            if case .existing(let existingUri) = outcome {
                 onProgress?(1.0)
                 onSuccess(existingUri)
                 onComplete()
@@ -244,6 +261,7 @@ extension BaseFileSaver {
                     self.saveDownloadedFileToPhotosImpl(
                         tmpURL: tmpURL,
                         hasReadAccess: hasReadAccess,
+                        outcome: outcome,
                         fileType: fileType,
                         baseFileName: baseFileName,
                         subDir: subDir,
@@ -270,6 +288,7 @@ extension BaseFileSaver {
     private func saveDownloadedFileToPhotosImpl(
         tmpURL: URL,
         hasReadAccess: Bool,
+        outcome: PhotosConflictOutcome,
         fileType: FileType,
         baseFileName: String,
         subDir: String?,
@@ -304,6 +323,7 @@ extension BaseFileSaver {
             )
 
             cleanup()
+            PhotosHelper.deleteReplacedAsset(outcome)
             onProgress?(1.0)
             onSuccess(uri)
             onComplete()

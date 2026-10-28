@@ -22,26 +22,33 @@ extension BaseFileSaver {
         defer { directoryURL.stopAccessingSecurityScopedResource() }
 
         // Resolve conflict
-        let finalURL = try FileManagerConflictResolver.resolveConflict(
+        let target = try FileManagerConflictResolver.resolveConflict(
             directory: directoryURL,
             fileName: fileName,
             conflictResolution: conflictResolution
         )
 
+        if case .existing(let existingURL) = target {
+            onProgress?(1.0)
+            onSuccess(existingURL.absoluteString)
+            return
+        }
+
         // Write with progress
         do {
             try FileHelper.writeFileWithProgress(
                 data: fileData,
-                to: finalURL,
+                to: target.writeURL,
                 onProgress: onProgress,
                 cancellationToken: cancellationToken
             )
-        } catch FileSaverError.cancelled {
-            try? FileManager.default.removeItem(at: finalURL)
-            throw FileSaverError.cancelled
+        } catch {
+            target.discard()
+            throw error
         }
 
-        onSuccess(finalURL.absoluteString)
+        // Commit inside the security scope: replacing a file needs access to it.
+        onSuccess(try target.commit().absoluteString)
     }
 
     /// Save file to user-selected directory
@@ -60,6 +67,19 @@ extension BaseFileSaver {
         }
         defer { directoryURL.stopAccessingSecurityScopedResource() }
 
+        // Resolve conflict before opening the source so a skip never reads it
+        let target = try FileManagerConflictResolver.resolveConflict(
+            directory: directoryURL,
+            fileName: fileName,
+            conflictResolution: conflictResolution
+        )
+
+        if case .existing(let existingURL) = target {
+            onProgress?(1.0)
+            onSuccess(existingURL.absoluteString)
+            return
+        }
+
         let downloadProgressHandler = progressMapper(from: onProgress, startProgress: 0.0, endProgress: 0.8)
 
         let sourceFile = try FileHelper.openSourceFile(
@@ -68,29 +88,22 @@ extension BaseFileSaver {
         )
         defer { sourceFile.close() }
 
-        // Resolve conflict
-        let finalURL = try FileManagerConflictResolver.resolveConflict(
-            directory: directoryURL,
-            fileName: fileName,
-            conflictResolution: conflictResolution
-        )
-
         let copyProgressHandler = progressMapper(from: onProgress, startProgress: 0.8, endProgress: 1.0)
 
         do {
             try FileHelper.copyFileWithProgress(
                 from: sourceFile.handle,
-                to: finalURL,
+                to: target.writeURL,
                 totalSize: sourceFile.totalSize,
                 onProgress: copyProgressHandler,
                 cancellationToken: cancellationToken
             )
-        } catch FileSaverError.cancelled {
-            try? FileManager.default.removeItem(at: finalURL)
-            throw FileSaverError.cancelled
+        } catch {
+            target.discard()
+            throw error
         }
 
-        onSuccess(finalURL.absoluteString)
+        onSuccess(try target.commit().absoluteString)
     }
 
     /// Save network file to user-selected directory
@@ -117,9 +130,9 @@ extension BaseFileSaver {
         }
 
         // Resolve conflict first
-        let finalURL: URL
+        let target: FileSaveTarget
         do {
-            finalURL = try FileManagerConflictResolver.resolveConflict(
+            target = try FileManagerConflictResolver.resolveConflict(
                 directory: directoryURL,
                 fileName: fileName,
                 conflictResolution: conflictResolution
@@ -136,6 +149,14 @@ extension BaseFileSaver {
             return
         }
 
+        if case .existing(let existingURL) = target {
+            directoryURL.stopAccessingSecurityScopedResource()
+            onProgress?(1.0)
+            onSuccess(existingURL.absoluteString)
+            onComplete()
+            return
+        }
+
         if let token = cancellationToken, token.isCancelled {
             directoryURL.stopAccessingSecurityScopedResource()
             onCancelled()
@@ -143,12 +164,12 @@ extension BaseFileSaver {
             return
         }
 
-        // Download directly to final URL
+        // Download to the new file (a temp file for overwrite); commit on success
         NetworkHelper.downloadToFile(
             urlString: urlString,
             headers: headers,
             timeoutSeconds: timeoutSeconds,
-            destinationURL: finalURL,
+            destinationURL: target.writeURL,
             onProgress: { [weak cancellationToken] progress in
                 if let token = cancellationToken, token.isCancelled { return }
                 onProgress?(progress)
@@ -164,12 +185,19 @@ extension BaseFileSaver {
                 switch result {
                 case .success:
                     if let token = cancellationToken, token.isCancelled {
-                        try? FileManager.default.removeItem(at: finalURL)
+                        target.discard()
                         onCancelled()
                         return
                     }
-                    onSuccess(finalURL.absoluteString)
+                    do {
+                        onSuccess(try target.commit().absoluteString)
+                    } catch let error as FileSaverError {
+                        onError(error.code, error.message)
+                    } catch {
+                        onError(Constants.errorFileIO, error.localizedDescription)
+                    }
                 case .failure(let error):
+                    target.discard()
                     if case .cancelled = error {
                         onCancelled()
                     } else {

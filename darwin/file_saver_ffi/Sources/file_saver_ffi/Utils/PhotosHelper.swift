@@ -84,34 +84,46 @@ class PhotosHelper {
         return album
     }
 
-    /// Handle conflict resolution for Photos Library
-    /// Returns existing asset URI if skip/already exists, nil otherwise
+    /// Handle conflict resolution for Photos Library.
+    ///
+    /// Nothing is deleted here. For `overwrite` the outcome carries the existing
+    /// asset, which `deleteReplacedAsset(_:)` removes after the new asset is saved.
+    ///
+    /// - Throws: `FileSaverError.fileExists` if the asset exists and
+    ///   `conflictResolution` is `.fail`.
     static func handleConflictResolution(
         fileName: String,
         subDir: String?,
         conflictResolution: ConflictResolution,
         hasReadAccess: Bool
-    ) throws -> String? {
-        guard hasReadAccess else {
-            return nil
+    ) throws -> PhotosConflictOutcome {
+        // Without read access existing assets can't be looked up.
+        guard hasReadAccess, conflictResolution != .autoRename,
+              let existing = PhotosConflictResolver.findExistingAsset(fileName: fileName, inAlbum: subDir)
+        else {
+            return .save(replacing: nil)
         }
 
-        if conflictResolution == .skip || conflictResolution == .fail {
-            if let existing = PhotosConflictResolver.findExistingAsset(fileName: fileName, inAlbum: subDir) {
-                if conflictResolution == .fail {
-                    throw FileSaverError.fileExists(fileName)
-                }
-                return "ph://\(existing.localIdentifier)"
-            }
+        switch conflictResolution {
+        case .fail:
+            throw FileSaverError.fileExists(fileName)
+        case .skip:
+            return .existing(uri: "ph://\(existing.localIdentifier)")
+        case .overwrite:
+            return .save(replacing: existing)
+        case .autoRename:
+            return .save(replacing: nil)
         }
+    }
 
-        if conflictResolution == .overwrite {
-            if let existing = PhotosConflictResolver.findExistingAsset(fileName: fileName, inAlbum: subDir) {
-                try PhotosConflictResolver.overwriteAsset(existing)
-            }
-        }
-
-        return nil
+    /// Deletes the asset an `overwrite` replaces, after the new asset was saved.
+    ///
+    /// Best effort: iOS asks the user to confirm the deletion, and if they decline
+    /// (or it fails) both assets are kept. The save itself has already succeeded,
+    /// so this never reports an error.
+    static func deleteReplacedAsset(_ outcome: PhotosConflictOutcome) {
+        guard case .save(let replacing?) = outcome else { return }
+        try? PhotosConflictResolver.deleteAsset(replacing)
     }
 }
 #endif

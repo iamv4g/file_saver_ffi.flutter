@@ -2,7 +2,19 @@
 import Foundation
 import Photos
 
+/// Result of resolving a Photos Library name conflict.
+enum PhotosConflictOutcome {
+    /// Save a new asset. `replacing` (overwrite only) is deleted after the new
+    /// asset has been saved.
+    case save(replacing: PHAsset?)
+
+    /// `skip`: the asset exists, so nothing is saved and the save reports `uri`.
+    case existing(uri: String)
+}
+
 enum PhotosConflictResolver {
+    /// Finds an asset with `fileName` as its original file name, in `albumName`
+    /// when given, otherwise anywhere in the library.
     static func findExistingAsset(fileName: String, inAlbum albumName: String?) -> PHAsset? {
         let options = PHFetchOptions()
 
@@ -15,6 +27,12 @@ enum PhotosConflictResolver {
                 subtype: .any,
                 options: collectionOptions
             ).firstObject
+
+            // The album doesn't exist yet, so it can't contain the asset. Don't
+            // fall back to searching (and possibly overwriting) the whole library.
+            if collection == nil {
+                return nil
+            }
         }
 
         let assets = collection != nil
@@ -32,7 +50,7 @@ enum PhotosConflictResolver {
         return nil
     }
 
-    static func overwriteAsset(_ asset: PHAsset) throws {
+    static func deleteAsset(_ asset: PHAsset) throws {
         try PHPhotoLibrary.shared().performChangesAndWait {
             PHAssetChangeRequest.deleteAssets([asset] as NSArray)
         }

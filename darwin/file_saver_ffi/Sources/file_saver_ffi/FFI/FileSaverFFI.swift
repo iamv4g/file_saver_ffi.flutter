@@ -107,31 +107,30 @@ private func unregisterDownload(_ id: UInt) {
 
 private final class WriteSession {
     let fileHandle: FileHandle
+    /// File the chunks are written to. Never an existing file: for `overwrite` it
+    /// is a temp file, so `cancelWrite` can always delete it.
     let fileURL: URL
     let totalSize: Int64  // -1 if unknown
     let serialQueue: DispatchQueue
     let securityScopedURL: URL?  // non-nil for openWriteAs
     var bytesWritten: Int64 = 0
-    #if os(iOS)
-    /// Non-nil when writing to Photos Library (iOS only).
-    /// Invoked on closeWrite to commit the temp file and return `ph://` URI.
-    let photosCommit: (() throws -> String)?
-    #endif
+    /// Invoked on closeWrite: makes `fileURL` the saved file (replacing the
+    /// original for `overwrite`, or adding it to the Photos Library) and returns
+    /// the URI to report.
+    let commit: () throws -> String
 
     init(
         fileHandle: FileHandle,
         fileURL: URL,
         totalSize: Int64,
         securityScopedURL: URL?,
-        photosCommit: (() throws -> String)? = nil
+        commit: @escaping () throws -> String
     ) {
         self.fileHandle = fileHandle
         self.fileURL = fileURL
         self.totalSize = totalSize
         self.securityScopedURL = securityScopedURL
-        #if os(iOS)
-        self.photosCommit = photosCommit
-        #endif
+        self.commit = commit
         self.serialQueue = DispatchQueue(
             label: "com.vanvixi.file_saver.ws.\(fileURL.lastPathComponent)",
             qos: .userInitiated
@@ -808,7 +807,7 @@ public func fileSaverOpenWrite(
                     fileURL: result.fileURL,
                     totalSize: totalSize,
                     securityScopedURL: nil,
-                    photosCommit: result.photosCommit
+                    commit: result.commit
                 ))
             reporter.sendSuccess(uri: String(sessionId))
         } catch let fsError as FileSaverError {
@@ -855,7 +854,7 @@ public func fileSaverOpenWriteAs(
         instanceLock.unlock()
 
         do {
-            let (fileURL, fileHandle) = try saver.openWriteSessionAs(
+            let (fileURL, fileHandle, commit) = try saver.openWriteSessionAs(
                 directoryUri: dirUri,
                 baseFileName: fileName,
                 extension: extStr,
@@ -868,7 +867,8 @@ public func fileSaverOpenWriteAs(
                     fileHandle: fileHandle,
                     fileURL: fileURL,
                     totalSize: totalSize,
-                    securityScopedURL: isScoped ? dirURL : nil
+                    securityScopedURL: isScoped ? dirURL : nil,
+                    commit: commit
                 ))
             reporter.sendSuccess(uri: String(sessionId))
         } catch let fsError as FileSaverError {
@@ -948,23 +948,17 @@ public func fileSaverCloseWrite(_ sessionId: UInt, _ nativePort: Int64) {
             session.fileHandle.synchronizeFile()
             session.fileHandle.closeFile()
         }
-        session.securityScopedURL?.stopAccessingSecurityScopedResource()
+        // Commit while the security scope is still held: replacing a file in a
+        // user-picked directory needs access to it.
+        defer { session.securityScopedURL?.stopAccessingSecurityScopedResource() }
 
-        #if os(iOS)
-        if let commit = session.photosCommit {
-            do {
-                let uri = try commit()
-                reporter.sendSuccess(uri: uri)
-            } catch let fsError as FileSaverError {
-                reporter.sendError(code: fsError.code, message: fsError.message)
-            } catch {
-                reporter.sendError(code: Constants.errorFileIO, message: error.localizedDescription)
-            }
-            return
+        do {
+            reporter.sendSuccess(uri: try session.commit())
+        } catch let fsError as FileSaverError {
+            reporter.sendError(code: fsError.code, message: fsError.message)
+        } catch {
+            reporter.sendError(code: Constants.errorFileIO, message: error.localizedDescription)
         }
-        #endif
-
-        reporter.sendSuccess(uri: session.fileURL.absoluteString)
     }
 }
 

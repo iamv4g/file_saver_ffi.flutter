@@ -24,8 +24,11 @@ class VideoSaver: BaseFileSaver {
         albumName: String?,
         onProgress: ((Double) -> Void)?
     ) throws -> String {
-        // Videos must be saved from a file URL (not directly from data)
-        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+        // Videos must be saved from a file URL (not directly from data). The UUID
+        // keeps concurrent saves of the same name from overwriting each other's
+        // temp file; Photos uses `originalFilename`, not this name.
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(UUID().uuidString)-\(fileName)")
         try fileData.write(to: tempURL)
         defer { try? FileManager.default.removeItem(at: tempURL) }
 

@@ -156,21 +156,22 @@ extension BaseFileSaver {
     }
 
     #if os(iOS)
-    /// Handles Photos permission and conflict resolution
-    /// Returns (hasReadAccess, existingUri) where existingUri is non-nil if file should be skipped
+    /// Handles Photos permission and conflict resolution.
+    /// Nothing is deleted here: for `overwrite` the outcome carries the asset to
+    /// delete after the new one has been saved.
     func handlePhotosSetup(
         fileName: String,
         subDir: String?,
         conflictResolution: ConflictResolution
-    ) throws -> (hasReadAccess: Bool, existingUri: String?) {
+    ) throws -> (hasReadAccess: Bool, outcome: PhotosConflictOutcome) {
         let hasReadAccess = try PhotosHelper.requestPermission(needAlbum: subDir != nil)
-        let existingUri = try PhotosHelper.handleConflictResolution(
+        let outcome = try PhotosHelper.handleConflictResolution(
             fileName: fileName,
             subDir: subDir,
             conflictResolution: conflictResolution,
             hasReadAccess: hasReadAccess
         )
-        return (hasReadAccess, existingUri)
+        return (hasReadAccess, outcome)
     }
     #endif
 }
@@ -213,13 +214,13 @@ extension BaseFileSaver {
         case .photos:
             onProgress?(0.0)
 
-            let (hasReadAccess, existingUri) = try handlePhotosSetup(
+            let (hasReadAccess, outcome) = try handlePhotosSetup(
                 fileName: fileName,
                 subDir: subDir,
                 conflictResolution: conflictResolution
             )
 
-            if let existingUri = existingUri {
+            if case .existing(let existingUri) = outcome {
                 onProgress?(1.0)
                 onSuccess(existingUri)
                 return
@@ -231,6 +232,7 @@ extension BaseFileSaver {
                 albumName: hasReadAccess ? subDir : nil,
                 onProgress: onProgress
             )
+            PhotosHelper.deleteReplacedAsset(outcome)
             onProgress?(1.0)
             onSuccess(uri)
         }
@@ -259,25 +261,31 @@ extension BaseFileSaver {
         cancellationToken: CancellationToken?
     ) throws {
         let targetDir = try resolveTargetDirectory(saveLocation: saveLocation, subDir: subDir)
-        let finalURL = try FileManagerConflictResolver.resolveConflict(
+        let target = try FileManagerConflictResolver.resolveConflict(
             directory: targetDir,
             fileName: fileName,
             conflictResolution: conflictResolution
         )
 
+        if case .existing(let existingURL) = target {
+            onProgress?(1.0)
+            onSuccess(existingURL.absoluteString)
+            return
+        }
+
         do {
             try FileHelper.writeFileWithProgress(
                 data: fileData,
-                to: finalURL,
+                to: target.writeURL,
                 onProgress: onProgress,
                 cancellationToken: cancellationToken
             )
-        } catch FileSaverError.cancelled {
-            try? FileManager.default.removeItem(at: finalURL)
-            throw FileSaverError.cancelled
+        } catch {
+            target.discard()
+            throw error
         }
 
-        onSuccess(finalURL.absoluteString)
+        onSuccess(try target.commit().absoluteString)
     }
 }
 
@@ -318,13 +326,13 @@ extension BaseFileSaver {
         case .photos:
             let downloadProgressHandler = progressMapper(from: onProgress, startProgress: 0.0, endProgress: 0.8)
 
-            let (hasReadAccess, existingUri) = try handlePhotosSetup(
+            let (hasReadAccess, outcome) = try handlePhotosSetup(
                 fileName: fileName,
                 subDir: subDir,
                 conflictResolution: conflictResolution
             )
 
-            if let existingUri = existingUri {
+            if case .existing(let existingUri) = outcome {
                 onProgress?(1.0)
                 onSuccess(existingUri)
                 return
@@ -344,6 +352,7 @@ extension BaseFileSaver {
                 albumName: hasReadAccess ? subDir : nil,
                 onProgress: onProgress
             )
+            PhotosHelper.deleteReplacedAsset(outcome)
             onProgress?(1.0)
             onSuccess(uri)
         }
@@ -371,6 +380,21 @@ extension BaseFileSaver {
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
+        let targetDir = try resolveTargetDirectory(saveLocation: saveLocation, subDir: subDir)
+        let target = try FileManagerConflictResolver.resolveConflict(
+            directory: targetDir,
+            fileName: fileName,
+            conflictResolution: conflictResolution
+        )
+
+        // Resolve before opening the source so a skip never reads it (or waits
+        // for an iCloud download).
+        if case .existing(let existingURL) = target {
+            onProgress?(1.0)
+            onSuccess(existingURL.absoluteString)
+            return
+        }
+
         let downloadProgressHandler = progressMapper(from: onProgress, startProgress: 0.0, endProgress: 0.8)
 
         let sourceFile = try FileHelper.openSourceFile(
@@ -379,28 +403,21 @@ extension BaseFileSaver {
         )
         defer { sourceFile.close() }
 
-        let targetDir = try resolveTargetDirectory(saveLocation: saveLocation, subDir: subDir)
-        let finalURL = try FileManagerConflictResolver.resolveConflict(
-            directory: targetDir,
-            fileName: fileName,
-            conflictResolution: conflictResolution
-        )
-
         let copyProgressHandler = progressMapper(from: onProgress, startProgress: 0.8, endProgress: 1.0)
 
         do {
             try FileHelper.copyFileWithProgress(
                 from: sourceFile.handle,
-                to: finalURL,
+                to: target.writeURL,
                 totalSize: sourceFile.totalSize,
                 onProgress: copyProgressHandler,
                 cancellationToken: cancellationToken
             )
-        } catch FileSaverError.cancelled {
-            try? FileManager.default.removeItem(at: finalURL)
-            throw FileSaverError.cancelled
+        } catch {
+            target.discard()
+            throw error
         }
 
-        onSuccess(finalURL.absoluteString)
+        onSuccess(try target.commit().absoluteString)
     }
 }

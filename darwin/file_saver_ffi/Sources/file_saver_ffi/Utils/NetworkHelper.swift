@@ -183,8 +183,10 @@ enum NetworkHelper {
         onCancelHandlerReady: @escaping (@escaping () -> Void) -> Void,
         completion: @escaping (Result<(URL, Int64), FileSaverError>) -> Void
     ) {
+        // Unique per download so concurrent saves of the same name don't clobber
+        // each other (the delegate removes an existing destination before moving).
         let tmpDir = FileManager.default.temporaryDirectory
-        let tmpURL = tmpDir.appendingPathComponent(fileName)
+        let tmpURL = tmpDir.appendingPathComponent("\(UUID().uuidString)-\(fileName)")
 
         performDownload(
             urlString: urlString,
