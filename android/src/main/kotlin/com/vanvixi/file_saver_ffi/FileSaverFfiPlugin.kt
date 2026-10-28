@@ -14,11 +14,11 @@ import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.PluginRegistry.RequestPermissionsResultListener
-import kotlinx.coroutines.CancellableContinuation
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
-import kotlin.coroutines.resume
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Flutter plugin for file_saver_ffi.
@@ -27,6 +27,11 @@ import kotlin.coroutines.resume
  * - WRITE_EXTERNAL_STORAGE runtime permission for Android 9 and below
  *
  * Directory picking is handled by the dir_picker package.
+ *
+ * Every engine in the process (add-to-app, background engines) gets its own
+ * instance, while [FileSaver] state is static. So an instance never clears
+ * state another engine still uses, and the permission dialog is shown by
+ * whichever engine has an Activity.
  */
 class FileSaverFfiPlugin :
     FlutterPlugin,
@@ -36,16 +41,87 @@ class FileSaverFfiPlugin :
         private const val TAG = "FileSaverFfi"
         private const val REQUEST_CODE_STORAGE_PERMISSION = 43892
 
-        // Unique key for ActivityResultRegistry
+        // Prefix of the ActivityResultRegistry key. Each instance appends its
+        // own id, so two engines in one Activity don't replace each other.
         private const val PERMISSION_REGISTRY_KEY = "com.vanvixi.file_saver_ffi.storage_perm"
+
+        private val nextInstanceId = AtomicInteger()
+
+        // The state below is shared by all instances and guarded by [hosts].
+
+        /** Instances whose engine has an Activity, most recently attached last. */
+        private val hosts = mutableListOf<FileSaverFfiPlugin>()
+
+        /** The answer of the dialog being shown, awaited by every save that needs it. */
+        private var pendingRequest: CompletableDeferred<Boolean>? = null
+
+        /** The instance whose Activity shows the dialog of [pendingRequest]. */
+        private var pendingHost: FileSaverFfiPlugin? = null
+
+        private val permissionHandler = StoragePermissionHandler { requestStoragePermission() }
+
+        /**
+         * Asks for WRITE_EXTERNAL_STORAGE in the most recently attached Activity
+         * and waits for the answer. A save that needs the permission while the
+         * dialog is showing waits for the same answer instead of opening a
+         * second dialog.
+         *
+         * @throws SecurityException if no engine has an Activity to ask in
+         */
+        private suspend fun requestStoragePermission(): Boolean {
+            // Might have been granted since FileSaver checked
+            val context = FileSaver.appContext
+            if (context != null &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.WRITE_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED
+            ) {
+                return true
+            }
+
+            var host: FileSaverFfiPlugin? = null
+            val request =
+                synchronized(hosts) {
+                    pendingRequest ?: CompletableDeferred<Boolean>().also {
+                        host = hosts.lastOrNull()
+                            ?: throw SecurityException("Storage permission required but no Activity available to request it")
+                        pendingRequest = it
+                        pendingHost = host
+                    }
+                }
+            // The dialog must be launched on the Main thread. It is launched even
+            // if this save is cancelled meanwhile, because others may be waiting.
+            host?.let { withContext(NonCancellable + Dispatchers.Main) { it.launchPermissionRequest(request) } }
+            return request.await()
+        }
+
+        /**
+         * Completes the pending request with [granted] if [host] shows it (and,
+         * when given, if it is still [request]).
+         */
+        private fun finishPermissionRequest(
+            host: FileSaverFfiPlugin,
+            granted: Boolean,
+            request: CompletableDeferred<Boolean>? = null,
+        ) {
+            val finished =
+                synchronized(hosts) {
+                    if (pendingHost !== host || (request != null && pendingRequest !== request)) return
+                    pendingRequest.also {
+                        pendingRequest = null
+                        pendingHost = null
+                    }
+                }
+            finished?.complete(granted)
+        }
     }
+
+    private val permissionRegistryKey = "$PERMISSION_REGISTRY_KEY.${nextInstanceId.incrementAndGet()}"
 
     private var activity: Activity? = null
     private var activityBinding: ActivityPluginBinding? = null
 
     // Storage permission handling
     private var permissionLauncher: ActivityResultLauncher<String>? = null
-    private var pendingPermissionContinuation: CancellableContinuation<Boolean>? = null
 
     // ─────────────────────────────────────────────────────────────────────────
     // FlutterPlugin
@@ -53,10 +129,13 @@ class FileSaverFfiPlugin :
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         FileSaver.appContext = binding.applicationContext
+        FileSaver.storagePermissionHandler = permissionHandler
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        FileSaver.appContext = null
+        // FileSaver.appContext stays set: it is the application context, which
+        // lives as long as the process, and other engines may still save.
+        detachActivity(changingConfigurations = false)
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -65,21 +144,24 @@ class FileSaverFfiPlugin :
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) = attachActivity(binding)
 
-    override fun onDetachedFromActivityForConfigChanges() = detachActivity()
+    override fun onDetachedFromActivityForConfigChanges() = detachActivity(changingConfigurations = true)
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) = attachActivity(binding)
 
-    override fun onDetachedFromActivity() = detachActivity()
+    override fun onDetachedFromActivity() = detachActivity(changingConfigurations = false)
 
     private fun attachActivity(binding: ActivityPluginBinding) {
         activity = binding.activity
         activityBinding = binding
         binding.addRequestPermissionsResultListener(this)
         setupPermissionLauncher(binding.activity)
-        setupStoragePermissionHandler()
+        synchronized(hosts) {
+            hosts.remove(this)
+            hosts.add(this)
+        }
     }
 
-    private fun detachActivity() {
+    private fun detachActivity(changingConfigurations: Boolean) {
         activityBinding?.removeRequestPermissionsResultListener(this)
         activityBinding = null
         activity = null
@@ -87,9 +169,10 @@ class FileSaverFfiPlugin :
         permissionLauncher?.unregister()
         permissionLauncher = null
 
-        FileSaver.storagePermissionHandler = null
-        pendingPermissionContinuation?.let { if (it.isActive) it.resume(false) }
-        pendingPermissionContinuation = null
+        synchronized(hosts) { hosts.remove(this) }
+        // After a configuration change the dialog's answer goes to the recreated
+        // Activity, where the launcher is registered again under the same key.
+        if (!changingConfigurations) finishPermissionRequest(this, false)
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -98,85 +181,44 @@ class FileSaverFfiPlugin :
 
     /**
      * Sets up ActivityResultLauncher for WRITE_EXTERNAL_STORAGE permission request.
-     * Only registers on ComponentActivity (AndroidX).
+     * Only registers on ComponentActivity (AndroidX). Registering after a
+     * configuration change delivers an answer that arrived in between.
      */
     private fun setupPermissionLauncher(activity: Activity) {
         if (activity !is ComponentActivity) return
 
         permissionLauncher =
             activity.activityResultRegistry.register(
-                PERMISSION_REGISTRY_KEY,
+                permissionRegistryKey,
                 ActivityResultContracts.RequestPermission(),
             ) { isGranted: Boolean ->
-                handlePermissionResult(isGranted)
+                finishPermissionRequest(this, isGranted)
             }
     }
 
-    /**
-     * Registers a [StoragePermissionHandler] on [FileSaver] that transparently
-     * requests WRITE_EXTERNAL_STORAGE when needed (API < 29).
-     *
-     * The handler:
-     * 1. Checks if permission is already granted (early return)
-     * 2. Switches to Main thread to show permission dialog
-     * 3. Suspends until user responds via [suspendCancellableCoroutine]
-     */
-    private fun setupStoragePermissionHandler() {
-        FileSaver.storagePermissionHandler =
-            StoragePermissionHandler {
-                val currentActivity = activity ?: return@StoragePermissionHandler false
-
-                // Double-check: might have been granted since FileSaver checked
-                if (ContextCompat.checkSelfPermission(
-                        currentActivity,
-                        Manifest.permission.WRITE_EXTERNAL_STORAGE,
-                    ) == PackageManager.PERMISSION_GRANTED
-                ) {
-                    return@StoragePermissionHandler true
-                }
-
-                // Must launch permission dialog on Main thread
-                withContext(Dispatchers.Main) {
-                    suspendCancellableCoroutine { continuation ->
-                        pendingPermissionContinuation = continuation
-
-                        continuation.invokeOnCancellation {
-                            pendingPermissionContinuation = null
-                        }
-
-                        // Try modern launcher first (ComponentActivity)
-                        val launcher = permissionLauncher
-                        if (launcher != null) {
-                            try {
-                                launcher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
-                                return@suspendCancellableCoroutine
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Permission launcher failed, falling back: ${e.message}")
-                            }
-                        }
-
-                        // Fallback: ActivityCompat for non-ComponentActivity
-                        val act = activity
-                        if (act != null) {
-                            ActivityCompat.requestPermissions(
-                                act,
-                                arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
-                                REQUEST_CODE_STORAGE_PERMISSION,
-                            )
-                        } else {
-                            pendingPermissionContinuation = null
-                            continuation.resume(false)
-                        }
-                    }
-                }
+    /** Shows the permission dialog for [request]. Runs on the Main thread. */
+    private fun launchPermissionRequest(request: CompletableDeferred<Boolean>) {
+        // Try modern launcher first (ComponentActivity)
+        val launcher = permissionLauncher
+        if (launcher != null) {
+            try {
+                launcher.launch(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                return
+            } catch (e: Exception) {
+                Log.w(TAG, "Permission launcher failed, falling back: ${e.message}")
             }
-    }
+        }
 
-    private fun handlePermissionResult(isGranted: Boolean) {
-        val continuation = pendingPermissionContinuation
-        pendingPermissionContinuation = null
-        if (continuation != null && continuation.isActive) {
-            continuation.resume(isGranted)
+        // Fallback: ActivityCompat for non-ComponentActivity
+        val act = activity
+        if (act != null) {
+            ActivityCompat.requestPermissions(
+                act,
+                arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                REQUEST_CODE_STORAGE_PERMISSION,
+            )
+        } else {
+            finishPermissionRequest(this, false, request)
         }
     }
 
@@ -194,7 +236,7 @@ class FileSaverFfiPlugin :
         val granted =
             grantResults.isNotEmpty() &&
                 grantResults[0] == PackageManager.PERMISSION_GRANTED
-        handlePermissionResult(granted)
+        finishPermissionRequest(this, granted)
         return true
     }
 }

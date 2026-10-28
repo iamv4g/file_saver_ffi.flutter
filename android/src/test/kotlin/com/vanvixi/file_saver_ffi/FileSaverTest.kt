@@ -141,6 +141,27 @@ class FileSaverTest : FileSaverTestBase() {
         assertNoCrash()
     }
 
+    @Test
+    fun `saveBytesAs before the plugin is attached ends with an error event instead of throwing`() {
+        FileSaver.appContext = null
+        val callback = RecordingCallback()
+
+        fileSaver.saveBytesAs(
+            byteArrayOf(1),
+            "content://com.android.externalstorage.documents/tree/primary%3ADownload",
+            "photo",
+            "png",
+            "image/png",
+            ConflictResolution.AUTO_RENAME.value,
+            callback,
+        )
+
+        val event = callback.awaitTerminal()
+        assertEquals(2, event.type)
+        assertEquals(Constants.ERROR_PLATFORM, event.data)
+        assertTrue(event.message!!.contains("not initialized"))
+    }
+
     // ── Android 9 and below ────────────────────────────────────────────────
 
     @Test
