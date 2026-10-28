@@ -152,7 +152,7 @@ class _SaveAsScreenState extends State<SaveAsScreen> with DemoSaveScreenMixin {
         fileType: fileType,
         fileName: fileName,
         saveLocation: _pickedDirectory,
-        conflictResolution: ConflictResolution.autoRename,
+        conflictResolution: demoConflictResolution,
         onProgress: (p) => setState(() => progress = p * 100),
       );
 
@@ -188,7 +188,7 @@ class _SaveAsScreenState extends State<SaveAsScreen> with DemoSaveScreenMixin {
       fileType: fileType,
       fileName: fileName,
       saveLocation: _pickedDirectory,
-      conflictResolution: ConflictResolution.autoRename,
+      conflictResolution: demoConflictResolution,
     );
     listenDemoSaveStream(stream, cancelledMessage: 'Picker cancelled');
   }
@@ -226,6 +226,7 @@ class _SaveAsScreenState extends State<SaveAsScreen> with DemoSaveScreenMixin {
               onChanged: (v) => setState(() => _useStreamApi = v),
               enabled: !isLoading,
             ),
+            buildConflictResolutionSelector(),
             InfoCard(
               description:
                   'Save to a user-selected directory via system picker.\n'

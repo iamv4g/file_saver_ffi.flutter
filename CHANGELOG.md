@@ -4,6 +4,13 @@
 
 - **Android:** the plugin now declares `minSdk 24` (Android 7.0), and the README says so. This matches what apps already needed: the `dir_picker` dependency requires API 24, so an app with a lower `minSdk` failed at manifest merge. The README previously claimed API 21+.
 
+### Fixed
+
+- **Android:** `ConflictResolution.skip` no longer writes anything when the file exists. It completes with the existing file's URI on every backend. Previously it created a duplicate (`photo (1).jpg`) on Android 10+, overwrote the file on Android 9 and below, and wrote into the existing document for user-picked (SAF) directories, which could delete that document if the write then failed.
+- **Android:** `ConflictResolution.overwrite` replaces the existing file only after the new content has been written. A failed or cancelled save now keeps the original. Previously the original was deleted before writing. If the original cannot be deleted (for example a MediaStore file owned by another app), the new file is kept under its auto-renamed name.
+- **Android:** images, videos and audio saved on Android 9 and below are now passed to the media scanner, so they appear in gallery and music apps right away instead of after the next system scan.
+- **Android:** a cancelled or failed save on Android 9 and below now deletes the partial file, and a MediaStore entry or SAF document is no longer left behind when its output stream cannot be opened.
+
 ## 0.10.1
 
 ### Fixed

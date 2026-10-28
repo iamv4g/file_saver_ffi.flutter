@@ -1,3 +1,7 @@
+/// @docImport '../exceptions/file_saver_exceptions.dart';
+/// @docImport 'save_progress.dart';
+library;
+
 /// Strategy for handling file name conflicts when saving files.
 ///
 /// Defines how to handle the case when a file with the same name
@@ -33,12 +37,13 @@ enum ConflictResolution {
 
   /// Fail the save operation if a file with the same name exists.
   ///
-  /// Returns [SaveFailure] with error code "FILE_EXISTS".
+  /// Emits [SaveProgressError] with a [FileExistsException]
+  /// (error code "FILE_EXISTS").
   fail,
 
   /// Skip the save operation if a file with the same name exists.
   ///
-  /// Returns [SaveSuccess] with the path of the existing file.
+  /// Emits [SaveProgressComplete] with the URI of the existing file.
   /// No actual file writing occurs.
   skip,
 }

@@ -1,8 +1,8 @@
 package com.vanvixi.file_saver_ffi.utils
 
 import android.content.Context
-import android.net.Uri
 import androidx.core.net.toUri
+import com.vanvixi.file_saver_ffi.core.base.SaveEntry
 import com.vanvixi.file_saver_ffi.core.base.SaveEntryFactory
 import com.vanvixi.file_saver_ffi.exception.FileExistsException
 import com.vanvixi.file_saver_ffi.models.ConflictResolution
@@ -13,14 +13,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.IOException
-import java.io.OutputStream
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
 internal class WriteSessionManager {
     private data class WriteSession(
-        val outputStream: OutputStream,
-        val uri: Uri,
+        val entry: SaveEntry.Created,
         val entryFactory: SaveEntryFactory,
         val totalSize: Long, // -1 if unknown
         val sessionScope: CoroutineScope, // limited(1) → guarantees chunk ordering
@@ -55,20 +53,6 @@ internal class WriteSessionManager {
                 val conflictResolution = ConflictResolution.fromInt(conflictMode)
                 val saveLocation = SaveLocation.fromInt(saveLocationIndex)
 
-                if (conflictResolution == ConflictResolution.SKIP) {
-                    val existingUri =
-                        FileHelper.findExistingWriteTargetUriOrNull(
-                            context = context,
-                            saveLocation = saveLocation,
-                            subDir = subDir,
-                            baseFileName = baseFileName,
-                            extension = extension,
-                        )
-                    if (existingUri != null) {
-                        callback.onEvent(3, 0.0, "0", existingUri.toString())
-                        return@launch
-                    }
-                }
                 val entryFactory =
                     SaveEntryFactory.MediaStore(
                         fileType = fileType,
@@ -76,11 +60,7 @@ internal class WriteSessionManager {
                         saveLocation = saveLocation,
                         subDir = subDir,
                     )
-                val (uri, outputStream) = entryFactory.createEntryDirect(context, conflictResolution)
-                val sessionId = sessionIdCounter.incrementAndGet()
-                val scope = CoroutineScope(Dispatchers.IO.limitedParallelism(1))
-                writeSessions[sessionId] = WriteSession(outputStream, uri, entryFactory, totalSize, scope)
-                callback.onEvent(3, 0.0, sessionId.toString(), null)
+                startSession(context, entryFactory, conflictResolution, totalSize, callback)
             } catch (e: FileExistsException) {
                 callback.onEvent(2, 0.0, Constants.ERROR_FILE_EXISTS, e.message)
             } catch (e: IOException) {
@@ -112,34 +92,44 @@ internal class WriteSessionManager {
                 val fileType = FileType(extension, mimeType)
                 val conflictResolution = ConflictResolution.fromInt(conflictMode)
 
-                if (conflictResolution == ConflictResolution.SKIP) {
-                    val existingUri =
-                        FileHelper.findExistingSafFileUriOrNull(
-                            context = context,
-                            directoryUri = directoryUri,
-                            baseFileName = baseFileName,
-                            extension = extension,
-                        )
-                    if (existingUri != null) {
-                        callback.onEvent(3, 0.0, "0", existingUri.toString())
-                        return@launch
-                    }
-                }
                 val entryFactory =
                     SaveEntryFactory.SAF(
                         treeUri = directoryUri.toUri(),
                         fileType = fileType,
                         baseFileName = baseFileName,
                     )
-                val (uri, outputStream) = entryFactory.createEntryDirect(context, conflictResolution)
-                val sessionId = sessionIdCounter.incrementAndGet()
-                val scope = CoroutineScope(Dispatchers.IO.limitedParallelism(1))
-                writeSessions[sessionId] = WriteSession(outputStream, uri, entryFactory, totalSize, scope)
-                callback.onEvent(3, 0.0, sessionId.toString(), null)
+                startSession(context, entryFactory, conflictResolution, totalSize, callback)
             } catch (e: FileExistsException) {
                 callback.onEvent(2, 0.0, Constants.ERROR_FILE_EXISTS, e.message)
             } catch (e: IOException) {
                 callback.onEvent(2, 0.0, Constants.ERROR_FILE_IO, e.message)
+            }
+        }
+    }
+
+    /**
+     * Resolves the target through [entryFactory] and registers a session for it.
+     *
+     * SKIP with an existing file reports `callback(3, 0.0, "0", existingUri)`
+     * (session id 0 means "no session"), and nothing is written.
+     */
+    private suspend fun startSession(
+        context: Context,
+        entryFactory: SaveEntryFactory,
+        conflictResolution: ConflictResolution,
+        totalSize: Long,
+        callback: ProgressCallback,
+    ) {
+        when (val entry = entryFactory.createEntryDirect(context, conflictResolution)) {
+            is SaveEntry.Existing -> {
+                callback.onEvent(3, 0.0, "0", entry.uri.toString())
+            }
+
+            is SaveEntry.Created -> {
+                val sessionId = sessionIdCounter.incrementAndGet()
+                val scope = CoroutineScope(Dispatchers.IO.limitedParallelism(1))
+                writeSessions[sessionId] = WriteSession(entry, entryFactory, totalSize, scope)
+                callback.onEvent(3, 0.0, sessionId.toString(), null)
             }
         }
     }
@@ -161,7 +151,7 @@ internal class WriteSessionManager {
 
         session.sessionScope.launch {
             try {
-                session.outputStream.write(data)
+                session.entry.outputStream.write(data)
                 session.bytesWritten += data.size
                 callback.onEvent(1, session.bytesWritten.toDouble(), null, null)
             } catch (e: IOException) {
@@ -186,7 +176,7 @@ internal class WriteSessionManager {
 
         session.sessionScope.launch {
             try {
-                session.outputStream.flush()
+                session.entry.outputStream.flush()
                 callback.onEvent(1, session.bytesWritten.toDouble(), null, null)
             } catch (e: IOException) {
                 callback.onEvent(2, 0.0, Constants.ERROR_FILE_IO, e.message)
@@ -212,12 +202,12 @@ internal class WriteSessionManager {
 
         session.sessionScope.launch {
             try {
-                session.outputStream.close()
-                if (session.entryFactory is SaveEntryFactory.MediaStore) {
-                    StoreHelper.markEntryComplete(context, session.uri)
-                }
-                callback.onEvent(3, 1.0, session.uri.toString(), null)
-            } catch (e: IOException) {
+                session.entry.outputStream.close()
+                val uri = session.entryFactory.commitEntry(context, session.entry)
+                callback.onEvent(3, 1.0, uri.toString(), null)
+            } catch (e: Exception) {
+                // Only the new entry is removed; a file being overwritten stays intact.
+                session.entryFactory.deleteEntry(context, session.entry.uri)
                 callback.onEvent(2, 0.0, Constants.ERROR_FILE_IO, e.message)
             }
         }
@@ -234,10 +224,10 @@ internal class WriteSessionManager {
         val session = writeSessions.remove(sessionId) ?: return
         session.sessionScope.launch {
             try {
-                session.outputStream.close()
+                session.entry.outputStream.close()
             } catch (_: Exception) {
             }
-            session.entryFactory.deleteEntry(context, session.uri)
+            session.entryFactory.deleteEntry(context, session.entry.uri)
         }
     }
 }
