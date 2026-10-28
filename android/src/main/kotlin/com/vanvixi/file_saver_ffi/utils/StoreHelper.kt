@@ -29,6 +29,8 @@ object StoreHelper {
      * @return [SaveEntry.Created] to write to, or [SaveEntry.Existing] for SKIP
      * @throws IOException if MediaStore entry creation fails
      * @throws FileExistsException if the file exists and [conflictResolution] is FAIL
+     * @throws IllegalArgumentException if MediaProvider rejects [fileType] in
+     *   [saveLocation] on Android 10+, or [subDir] contains `..`
      *
      * Example:
      * ```kotlin
@@ -83,7 +85,7 @@ object StoreHelper {
         conflictResolution: ConflictResolution,
     ): SaveEntry =
         withContext(Dispatchers.IO) {
-            val (contentUri, dirPath) = FileHelper.scopedStoreTargetFor(saveLocation, subDir)
+            val (contentUri, dirPath) = FileHelper.scopedStoreTargetFor(saveLocation, subDir, fileType)
 
             val resolution =
                 ScopedStoreConflictResolver.resolve(
@@ -117,8 +119,16 @@ object StoreHelper {
                 }
 
             val uri =
-                resolver.insert(contentUri, contentValues)
-                    ?: throw IOException("Failed to create MediaStore entry: ${target.displayName}")
+                try {
+                    resolver.insert(contentUri, contentValues)
+                } catch (e: IllegalArgumentException) {
+                    // MediaProvider rejects a top-level directory the collection
+                    // doesn't allow, e.g. an image in Movies/.
+                    throw IllegalArgumentException(
+                        "Android rejected saving ${fileType.mimeType} to ${dirPath.substringBefore('/')}/: ${e.message}",
+                        e,
+                    )
+                } ?: throw IOException("Failed to create MediaStore entry: ${target.displayName}")
 
             // Don't leave an empty pending row behind if the stream can't be opened.
             val outputStream =
@@ -208,7 +218,11 @@ object StoreHelper {
 
             val resolver = context.contentResolver
             val pending = ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }
-            resolver.update(entry.uri, pending, null, null)
+            // A row that stays pending is invisible to other apps and purged by
+            // MediaStore after about a week, so this is a failed save.
+            if (resolver.update(entry.uri, pending, null, null) != 1) {
+                throw IOException("Failed to publish ${entry.uri}: MediaStore did not clear IS_PENDING")
+            }
 
             val replaces = entry.replaces ?: return@withContext entry.uri
 

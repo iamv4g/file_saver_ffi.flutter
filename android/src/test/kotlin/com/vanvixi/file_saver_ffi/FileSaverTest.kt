@@ -1,29 +1,25 @@
 package com.vanvixi.file_saver_ffi
 
 import android.Manifest
-import android.app.Application
 import android.net.Uri
 import android.os.Environment
-import androidx.test.core.app.ApplicationProvider
 import com.vanvixi.file_saver_ffi.models.ConflictResolution
 import com.vanvixi.file_saver_ffi.models.SaveLocation
 import com.vanvixi.file_saver_ffi.testing.FakeMediaStoreProvider
+import com.vanvixi.file_saver_ffi.testing.FileSaverTestBase
 import com.vanvixi.file_saver_ffi.testing.RecordingCallback
 import com.vanvixi.file_saver_ffi.utils.Constants
 import kotlinx.coroutines.CompletableDeferred
-import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.File
-import java.util.Collections
 
 /**
  * Drives [FileSaver] through the same entry points the Dart side calls over
@@ -32,67 +28,20 @@ import java.util.Collections
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [34])
-class FileSaverTest {
-    private val context = ApplicationProvider.getApplicationContext<Application>()
-    private lateinit var mediaStore: FakeMediaStoreProvider
-    private lateinit var fileSaver: FileSaver
-
-    /** Exceptions that reached a thread's uncaught-exception handler, i.e. would crash the app. */
-    private val uncaught = Collections.synchronizedList(mutableListOf<Throwable>())
-    private var previousHandler: Thread.UncaughtExceptionHandler? = null
-
-    @Before
-    fun setUp() {
-        previousHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { _, e -> uncaught += e }
-        FileSaver.appContext = context
-        mediaStore = FakeMediaStoreProvider.install()
-        fileSaver = FileSaver()
-    }
-
-    @After
-    fun tearDown() {
-        Thread.setDefaultUncaughtExceptionHandler(previousHandler)
-        FileSaver.appContext = null
-        FileSaver.storagePermissionHandler = null
-    }
-
-    private fun assertNoCrash() {
-        // Give a crashing coroutine time to reach the handler.
-        Thread.sleep(100)
-        assertTrue("Uncaught exceptions: $uncaught", uncaught.isEmpty())
-    }
-
-    private fun openWriteSession(
-        fileName: String,
-        extension: String,
-        mimeType: String,
-        location: SaveLocation,
-        callback: RecordingCallback,
-    ) = fileSaver.openWriteSession(
-        fileName,
-        extension,
-        mimeType,
-        location.ordinal,
-        "probe",
-        ConflictResolution.AUTO_RENAME.value,
-        -1,
-        callback,
-    )
-
+class FileSaverTest : FileSaverTestBase() {
     // ── write sessions ──────────────────────────────────────────────────────
 
     @Test
-    fun `openWriteSession reports INVALID_INPUT for a MIME type the collection rejects, without crashing`() {
+    fun `openWriteSession reports INVALID_INPUT for a location the file type can't go to, without crashing`() {
         val callback = RecordingCallback()
 
-        // DCIM maps to the Images collection, which rejects video/mp4.
-        openWriteSession("clip", "mp4", "video/mp4", SaveLocation.DCIM, callback)
+        // MediaProvider only accepts images in Pictures/ and DCIM/.
+        openWriteSession("photo", "png", "image/png", SaveLocation.MOVIES, callback)
 
         val event = callback.awaitTerminal()
         assertEquals(2, event.type)
         assertEquals(Constants.ERROR_INVALID_INPUT, event.data)
-        assertTrue(event.message!!.contains("video/mp4"))
+        assertTrue(event.message!!.contains("image/png"))
         assertTrue(mediaStore.rows.isEmpty())
         assertNoCrash()
     }
@@ -137,7 +86,7 @@ class FileSaverTest {
 
         val row = mediaStore.rowNamed("photo.png")!!
         assertEquals("content://media/external_primary/images/media/${row.id}", closed.data)
-        assertEquals("Pictures/probe", row.relativePath)
+        assertEquals("Pictures/probe/", row.relativePath)
         assertFalse(row.isPending)
         assertArrayEquals(byteArrayOf(1, 2, 3, 4, 5), row.file.readBytes())
         assertNoCrash()
@@ -174,10 +123,8 @@ class FileSaverTest {
     }
 
     @Test
-    fun `saveBytes into a collection that rejects the MIME type ends with an error event`() {
-        val callback = RecordingCallback()
-
-        fileSaver.saveBytes(byteArrayOf(1), "clip", "mp4", "video/mp4", SaveLocation.DCIM.ordinal, null, ConflictResolution.AUTO_RENAME.value, callback)
+    fun `saveBytes to a location the file type can't go to ends with an error event`() {
+        val callback = saveBytes(byteArrayOf(1), "photo", "png", "image/png", SaveLocation.MOVIES)
 
         assertEquals(2, callback.awaitTerminal().type)
         assertNoCrash()

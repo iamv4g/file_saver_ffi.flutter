@@ -312,6 +312,8 @@ Control where files are saved using platform-specific enum values:
 | `.documents` | -                               | **Documents/** (default) | **Documents/**              | **Documents/**                  | **~/Documents/**            |
 | `.photos`    | -                               | **Photos Library**       | -                           | -                               | -                           |
 
+> **Android 10+ file types per location:** Android decides which file types a directory accepts. Images go to Pictures/ or DCIM/, videos to Movies/ or DCIM/ (Pictures/ too on newer versions: Android 16 accepts it, Android 10 doesn't), audio to Music/, and any type to Downloads/. Other combinations, such as a PDF in Pictures/, fail with `InvalidInputException`. Android 9 and below accept any type anywhere. A `subDir` containing `..` is rejected.
+
 > **Custom Paths (`PathLocation`):** You can also pass `PathLocation('/your/custom/path')` anywhere a `SaveLocation` is expected, to save files directly to specific filesystem directory paths across all platforms (except Web). **Note: On iOS, `PathLocation` only supports the app's document sandbox due to iOS system limitations.**
 
 > **Web:** Platform-specific `SaveLocation` enums are not available. The `saveLocation` parameter in `save`/`saveAsync` is ignored — the browser controls the download destination (usually the Downloads folder). To save to a specific directory, use `saveAs` with `pickDirectory()` (requires Chrome / Edge 86+).

@@ -7,6 +7,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import androidx.annotation.RequiresApi
 import androidx.core.net.toUri
+import com.vanvixi.file_saver_ffi.models.FileType
 import com.vanvixi.file_saver_ffi.models.SaveLocation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -82,74 +83,72 @@ object FileHelper {
         }
     }
 
+    /**
+     * The MediaStore collection and `RELATIVE_PATH` for a save on Android 10+.
+     *
+     * The collection follows the MIME type, not the location: MediaProvider
+     * rejects a MIME type that doesn't belong to the collection, so a video
+     * saved to DCIM must go to the Video collection, not Images. Other files
+     * use the Downloads collection.
+     *
+     * Which top-level directories a collection accepts is left to
+     * MediaProvider, because it differs between Android versions (Android 10
+     * rejects a video in Pictures/, Android 16 accepts it). A rejected
+     * combination fails the insert with an [IllegalArgumentException].
+     *
+     * @throws IllegalArgumentException if [subDir] has a `..` segment
+     */
     @RequiresApi(Build.VERSION_CODES.Q)
     fun scopedStoreTargetFor(
         saveLocation: SaveLocation,
         subDir: String?,
+        fileType: FileType,
     ): Pair<Uri, String> {
-        fun buildDir(
-            defaultDir: String,
-            subDir: String?,
-        ) = if (subDir.isNullOrBlank()) defaultDir else "$defaultDir/$subDir"
+        validateSubDir(subDir)
+        val baseDir = directoryNameFor(saveLocation)
+        val dirPath = if (subDir.isNullOrBlank()) baseDir else "$baseDir/$subDir"
+        val volume = MediaStore.VOLUME_EXTERNAL_PRIMARY
 
-        return when (saveLocation) {
-            SaveLocation.PICTURES -> {
-                val uri =
-                    MediaStore.Images.Media.getContentUri(
-                        MediaStore.VOLUME_EXTERNAL_PRIMARY,
-                    )
-                uri to buildDir(Environment.DIRECTORY_PICTURES, subDir)
+        val collection =
+            when {
+                // Downloads takes any file type.
+                saveLocation == SaveLocation.DOWNLOADS -> MediaStore.Downloads.getContentUri(volume)
+                fileType.isImage -> MediaStore.Images.Media.getContentUri(volume)
+                fileType.isVideo -> MediaStore.Video.Media.getContentUri(volume)
+                fileType.isAudio -> MediaStore.Audio.Media.getContentUri(volume)
+                else -> MediaStore.Downloads.getContentUri(volume)
             }
-
-            SaveLocation.MOVIES -> {
-                val uri =
-                    MediaStore.Video.Media.getContentUri(
-                        MediaStore.VOLUME_EXTERNAL_PRIMARY,
-                    )
-                uri to buildDir(Environment.DIRECTORY_MOVIES, subDir)
-            }
-
-            SaveLocation.MUSIC -> {
-                val uri =
-                    MediaStore.Audio.Media.getContentUri(
-                        MediaStore.VOLUME_EXTERNAL_PRIMARY,
-                    )
-                uri to buildDir(Environment.DIRECTORY_MUSIC, subDir)
-            }
-
-            SaveLocation.DOWNLOADS -> {
-                val uri =
-                    MediaStore.Downloads.getContentUri(
-                        MediaStore.VOLUME_EXTERNAL_PRIMARY,
-                    )
-                uri to buildDir(Environment.DIRECTORY_DOWNLOADS, subDir)
-            }
-
-            SaveLocation.DCIM -> {
-                val uri =
-                    MediaStore.Images.Media.getContentUri(
-                        MediaStore.VOLUME_EXTERNAL_PRIMARY,
-                    )
-                uri to buildDir(Environment.DIRECTORY_DCIM, subDir)
-            }
-        }
+        return collection to dirPath
     }
 
+    /**
+     * The public directory for a save on Android 9 and below.
+     *
+     * @throws IllegalArgumentException if [subDir] has a `..` segment
+     */
     fun legacyStoreDirectoryFor(
         saveLocation: SaveLocation,
         subDir: String?,
     ): File {
-        val baseDir =
-            when (saveLocation) {
-                SaveLocation.PICTURES -> Environment.DIRECTORY_PICTURES
-                SaveLocation.MOVIES -> Environment.DIRECTORY_MOVIES
-                SaveLocation.MUSIC -> Environment.DIRECTORY_MUSIC
-                SaveLocation.DOWNLOADS -> Environment.DIRECTORY_DOWNLOADS
-                SaveLocation.DCIM -> Environment.DIRECTORY_DCIM
-            }
-
-        val publicDir = Environment.getExternalStoragePublicDirectory(baseDir)
+        validateSubDir(subDir)
+        val publicDir = Environment.getExternalStoragePublicDirectory(directoryNameFor(saveLocation))
         return File(publicDir, subDir ?: "")
+    }
+
+    private fun directoryNameFor(saveLocation: SaveLocation): String =
+        when (saveLocation) {
+            SaveLocation.PICTURES -> Environment.DIRECTORY_PICTURES
+            SaveLocation.MOVIES -> Environment.DIRECTORY_MOVIES
+            SaveLocation.MUSIC -> Environment.DIRECTORY_MUSIC
+            SaveLocation.DOWNLOADS -> Environment.DIRECTORY_DOWNLOADS
+            SaveLocation.DCIM -> Environment.DIRECTORY_DCIM
+        }
+
+    /** Rejects a [subDir] that could point outside its public directory. */
+    private fun validateSubDir(subDir: String?) {
+        if (subDir != null && subDir.split('/', '\\').any { it == ".." }) {
+            throw IllegalArgumentException("subDir must not contain '..': $subDir")
+        }
     }
 
     /**

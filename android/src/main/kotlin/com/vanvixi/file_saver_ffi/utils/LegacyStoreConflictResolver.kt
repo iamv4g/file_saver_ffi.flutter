@@ -86,7 +86,7 @@ object LegacyStoreConflictResolver {
             val candidate =
                 File(
                     directory,
-                    "$baseFileName ($index).$extension",
+                    FileHelper.buildFileName("$baseFileName ($index)", extension),
                 )
 
             if (!candidate.exists()) {
