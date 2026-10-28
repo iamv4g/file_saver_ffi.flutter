@@ -22,13 +22,18 @@ cd example/android && ./gradlew :file_saver_ffi:testDebugUnitTest
 # Regenerate Darwin FFI bindings after editing the C header
 dart run tool/ffigen.dart
 
+# Check that R8 kept every class and member the JNI bindings look up (CI runs
+# this on the release APK of every Android change)
+(cd example && flutter build apk --release)
+dart run tool/check_jni_keeps.dart example/build/app/outputs/flutter-apk/app-release.apk
+
 # Regenerate Android JNI bindings after changing the public Kotlin API of
 # FileSaver or ProgressCallback. Compiles the plugin's Kotlin via
 # example/android/gradlew first, so the example must be buildable.
 dart run tool/jnigen.dart
 ```
 
-Never hand-edit `lib/src/platforms/{android,darwin}/bindings.g.dart`. Swift formatting config is `darwin/.swift-format`; Kotlin follows ktlint style.
+Never hand-edit `lib/src/platforms/{android,darwin}/bindings.g.dart`. `android/proguard-rules.pro` is merged into every consuming app, so it only keeps what the bindings look up by name. When the bindings gain a type in a signature (a new class, interface or Kotlin synthetic), keep its name there, or `check_jni_keeps.dart` fails. Swift formatting config is `darwin/.swift-format`; Kotlin follows ktlint style.
 
 ## Architecture
 
