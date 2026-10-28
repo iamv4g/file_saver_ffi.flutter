@@ -149,7 +149,7 @@ abstract class BaseFileSaver(
      *
      * @param url Network URL to download from
      * @param headersJson Optional JSON string of HTTP headers
-     * @param timeoutMs Connection timeout in milliseconds
+     * @param timeoutMs Timeout in milliseconds for connecting and for each read
      * @param entryFactory Factory for creating save entry (MediaStore or SAF)
      * @param conflictResolution Strategy for handling existing files
      */
@@ -163,62 +163,55 @@ abstract class BaseFileSaver(
         saveFlow {
             sendProgress(0.02)
 
-            val connectionResult =
-                try {
-                    NetworkHelper.openConnection(url, headersJson, timeoutMs)
-                } catch (e: NetworkDownloadException) {
-                    val message =
-                        if (e.statusCode != null) {
-                            "Network download failed (HTTP ${e.statusCode}): ${e.message}"
-                        } else {
-                            "Network download failed: ${e.message}"
-                        }
-                    sendError(Constants.ERROR_NETWORK, message)
-                    return@saveFlow
-                }
-
             try {
-                sendProgress(0.05)
+                NetworkHelper.download(url, headersJson, timeoutMs) { response ->
+                    sendProgress(0.05)
 
-                val entry =
-                    when (val result = entryFactory.createEntry(this, context, conflictResolution)) {
-                        null -> return@saveFlow
-                        is SaveEntry.Existing -> {
-                            sendExisting(result)
-                            return@saveFlow
+                    val entry =
+                        when (val result = entryFactory.createEntry(this, context, conflictResolution)) {
+                            null -> return@download
+                            is SaveEntry.Existing -> {
+                                sendExisting(result)
+                                return@download
+                            }
+                            is SaveEntry.Created -> result
                         }
-                        is SaveEntry.Created -> result
+
+                    sendProgress(0.1)
+
+                    try {
+                        FileHelper.copyStream(response.body, entry.outputStream, response.contentLength) { copyProgress ->
+                            sendProgress(mapProgress(copyProgress, 0.1, 0.9))
+                        }
+                    } catch (e: CancellationException) {
+                        entryFactory.deleteEntry(context, entry.uri)
+                        sendCancelled()
+                        throw e
+                    } catch (e: NetworkDownloadException) {
+                        // Reading the body failed: reported as a network error below.
+                        entryFactory.deleteEntry(context, entry.uri)
+                        throw e
+                    } catch (e: IOException) {
+                        entryFactory.deleteEntry(context, entry.uri)
+                        sendError(Constants.ERROR_FILE_IO, "Failed to write the downloaded data: ${e.message}")
+                        return@download
+                    } catch (e: Exception) {
+                        entryFactory.deleteEntry(context, entry.uri)
+                        throw e
                     }
 
-                sendProgress(0.1)
-
-                try {
-                    FileHelper.copyStream(
-                        connectionResult.inputStream,
-                        entry.outputStream,
-                        connectionResult.contentLength,
-                    ) { copyProgress ->
-                        sendProgress(mapProgress(copyProgress, 0.1, 0.9))
+                    entryFactory.finishSave(this, context, entry)
+                }
+            } catch (e: NetworkDownloadException) {
+                val message =
+                    if (e.statusCode != null) {
+                        "Network download failed (HTTP ${e.statusCode}): ${e.message}"
+                    } else {
+                        "Network download failed: ${e.message}"
                     }
-                } catch (e: CancellationException) {
-                    entryFactory.deleteEntry(context, entry.uri)
-                    sendCancelled()
-                    throw e
-                } catch (e: IOException) {
-                    entryFactory.deleteEntry(context, entry.uri)
-                    sendError(Constants.ERROR_FILE_IO, "Failed to stream network data: ${e.message}")
-                    return@saveFlow
-                } catch (e: Exception) {
-                    entryFactory.deleteEntry(context, entry.uri)
-                    throw e
-                }
-
-                entryFactory.finishSave(this, context, entry)
-            } finally {
-                try {
-                    connectionResult.connection.disconnect()
-                } catch (_: Exception) {
-                }
+                sendError(Constants.ERROR_NETWORK, message)
+            } catch (e: IllegalArgumentException) {
+                sendError(Constants.ERROR_INVALID_INPUT, e.message ?: "Invalid request headers")
             }
         }
 }
