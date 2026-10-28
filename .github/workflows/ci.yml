@@ -168,8 +168,17 @@ jobs:
           case "${{ matrix.target }}" in
             web) flutter build web ;;
             ios) flutter build ios --debug --no-codesign ;;
+            # A release build, so R8 shrinks and renames the plugin with its
+            # consumer rules, as it does in apps that use it.
+            apk) flutter build apk --release ;;
             *)   flutter build ${{ matrix.target }} --debug ;;
           esac
+
+      - name: Check R8 kept every JNI lookup
+        if: matrix.target == 'apk'
+        run: |
+          flutter pub get
+          dart run tool/check_jni_keeps.dart example/build/app/outputs/flutter-apk/app-release.apk
 
   # The only check the main branch ruleset requires. Skipped jobs don't fail
   # it, so a pull request isn't blocked waiting for jobs it didn't need. A
