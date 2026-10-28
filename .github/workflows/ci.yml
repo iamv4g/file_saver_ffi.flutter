@@ -68,6 +68,38 @@ jobs:
       - run: flutter pub get
       - run: flutter test
 
+  android-unit-test:
+    name: Android unit tests
+    needs: analyze
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # The plugin's Gradle module is only buildable through the example app.
+      - name: Generate the example's Gradle project
+        working-directory: example
+        run: |
+          flutter pub get
+          flutter build apk --config-only
+
+      - name: Run Kotlin unit tests (Robolectric)
+        working-directory: example/android
+        run: ./gradlew :file_saver_ffi:testDebugUnitTest
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-unit-test-report
+          path: example/build/file_saver_ffi/reports/tests/testDebugUnitTest
+
   build:
     name: Build example (${{ matrix.target }}${{ matrix.ios-deps && format(', {0}', matrix.ios-deps) || '' }})
     needs: analyze
