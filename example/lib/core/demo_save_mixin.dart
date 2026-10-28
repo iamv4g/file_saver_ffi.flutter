@@ -12,6 +12,7 @@ import 'file_type_config.dart';
 import 'file_utils.dart';
 import 'types.dart';
 import 'utils.dart';
+import 'widgets.dart';
 
 typedef DemoResolvedSaveParams = ({
   SaveInput input,
@@ -31,6 +32,12 @@ mixin DemoSaveScreenMixin<T extends StatefulWidget> on State<T> {
   String? savedFilePath;
   double progress = 0.0;
   int mediaSize = 0;
+
+  /// Chosen with [ConflictResolutionSelector].
+  ConflictResolution demoConflictResolution = ConflictResolution.autoRename;
+
+  /// When true, [buildDemoFileNamePrefix] returns the same name every time.
+  bool demoReuseFileName = false;
 
   /// Downloads file from URL (used for bytes-mode demos).
   Future<Uint8List> downloadFromUrl(String url) async {
@@ -135,7 +142,20 @@ mixin DemoSaveScreenMixin<T extends StatefulWidget> on State<T> {
       SaveDemoConfig.forCategory(demoSelectedCategory);
 
   String buildDemoFileNamePrefix(SaveDemoConfig config) {
+    if (demoReuseFileName) return config.fileNamePrefix;
     return '${config.fileNamePrefix}_${DateTime.now().millisecondsSinceEpoch}';
+  }
+
+  /// [ConflictResolutionSelector] wired to [demoConflictResolution] and
+  /// [demoReuseFileName].
+  Widget buildConflictResolutionSelector() {
+    return ConflictResolutionSelector(
+      value: demoConflictResolution,
+      onChanged: (v) => setState(() => demoConflictResolution = v),
+      reuseFileName: demoReuseFileName,
+      onReuseFileNameChanged: (v) => setState(() => demoReuseFileName = v),
+      enabled: !isLoading,
+    );
   }
 
   Future<String?> pickDemoFilePath() async {

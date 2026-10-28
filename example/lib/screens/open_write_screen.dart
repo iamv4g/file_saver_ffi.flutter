@@ -17,6 +17,8 @@ class _OpenWriteScreenState extends State<OpenWriteScreen> {
   MediaCategory _selectedCategory = MediaCategory.video;
   bool _pickDirFirst = false;
   bool _isRunning = false;
+  ConflictResolution _conflictResolution = ConflictResolution.autoRename;
+  bool _reuseFileName = false;
 
   FileSaverSink? _sink;
   StreamSubscription<int>? _bytesSub;
@@ -56,8 +58,9 @@ class _OpenWriteScreenState extends State<OpenWriteScreen> {
 
     final config = _config;
     final url = Uri.parse(config.downloadUrl);
-    final fileName =
-        '${config.fileNamePrefix}_${DateTime.now().millisecondsSinceEpoch}';
+    final fileName = _reuseFileName
+        ? config.fileNamePrefix
+        : '${config.fileNamePrefix}_${DateTime.now().millisecondsSinceEpoch}';
     final client = http.Client();
 
     try {
@@ -97,7 +100,7 @@ class _OpenWriteScreenState extends State<OpenWriteScreen> {
           fileType: config.fileType,
           saveLocation: saveLocation,
           totalSize: totalSize,
-          conflictResolution: ConflictResolution.autoRename,
+          conflictResolution: _conflictResolution,
         );
       } else {
         _sink = await FileSaver.openWrite(
@@ -106,8 +109,20 @@ class _OpenWriteScreenState extends State<OpenWriteScreen> {
           saveLocation: saveLocation,
           subDir: subDir,
           totalSize: totalSize,
-          conflictResolution: ConflictResolution.autoRename,
+          conflictResolution: _conflictResolution,
         );
+      }
+
+      // No sink: ConflictResolution.skip found an existing file.
+      if (_sink == null) {
+        if (mounted) {
+          showAppSnackBar(
+            context,
+            'Skipped: file already exists',
+            isSuccess: true,
+          );
+        }
+        return;
       }
 
       // ── Step 4: Wire progress streams ─────────────────────────────────────
@@ -219,6 +234,13 @@ class _OpenWriteScreenState extends State<OpenWriteScreen> {
                     ? null
                     : (v) => setState(() => _pickDirFirst = v),
               ),
+            ),
+            ConflictResolutionSelector(
+              value: _conflictResolution,
+              onChanged: (v) => setState(() => _conflictResolution = v),
+              reuseFileName: _reuseFileName,
+              onReuseFileNameChanged: (v) => setState(() => _reuseFileName = v),
+              enabled: !_isRunning,
             ),
             const SizedBox(height: 8),
             InfoCard(

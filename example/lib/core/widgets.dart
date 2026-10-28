@@ -266,6 +266,75 @@ class ApiModeSelector extends StatelessWidget {
   }
 }
 
+/// Picks the [ConflictResolution] for the next save, and whether to reuse a
+/// fixed file name so that repeated saves collide with the previous one.
+class ConflictResolutionSelector extends StatelessWidget {
+  const ConflictResolutionSelector({
+    super.key,
+    required this.value,
+    required this.onChanged,
+    required this.reuseFileName,
+    required this.onReuseFileNameChanged,
+    this.enabled = true,
+  });
+
+  final ConflictResolution value;
+  final ValueChanged<ConflictResolution> onChanged;
+  final bool reuseFileName;
+  final ValueChanged<bool> onReuseFileNameChanged;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              child: SegmentedButton<ConflictResolution>(
+                segments: const [
+                  ButtonSegment(
+                    value: ConflictResolution.autoRename,
+                    label: Text('Rename'),
+                  ),
+                  ButtonSegment(
+                    value: ConflictResolution.overwrite,
+                    label: Text('Overwrite'),
+                  ),
+                  ButtonSegment(
+                    value: ConflictResolution.fail,
+                    label: Text('Fail'),
+                  ),
+                  ButtonSegment(
+                    value: ConflictResolution.skip,
+                    label: Text('Skip'),
+                  ),
+                ],
+                selected: {value},
+                onSelectionChanged: enabled ? (s) => onChanged(s.first) : null,
+                showSelectedIcon: false,
+              ),
+            ),
+            SwitchListTile(
+              title: const Text('Reuse file name'),
+              subtitle: Text(
+                reuseFileName
+                    ? 'Every save uses the same name, so it collides'
+                    : 'Each save gets a unique timestamped name',
+              ),
+              value: reuseFileName,
+              onChanged: enabled ? onReuseFileNameChanged : null,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// Button to open the saved file with the system's default app
 class OpenFileButton extends StatelessWidget {
   const OpenFileButton({super.key, required this.uri, required this.onError});
