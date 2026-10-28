@@ -37,9 +37,11 @@ Fixes #
 
 ## Checklist
 
-<!-- CI already runs `dart format`, `flutter analyze`, `flutter test` (including the cross-language
-     contract tests in `test/contracts/`) and builds the example on every platform, with both SwiftPM
-     and CocoaPods on iOS. The items below are what it can't check. -->
+<!-- CI always runs `dart format`, `flutter analyze` and `flutter test` on Ubuntu (including the
+     cross-language contract tests in `test/contracts/`). It runs the platform jobs (example builds,
+     with both SwiftPM and CocoaPods on iOS; Kotlin unit tests; tests on macOS and Windows) only for
+     the platforms your change touches, as decided by `tool/ci_changes.sh`. Shared code runs
+     everything. The items below are what it can't check. -->
 
 - [ ] Added or updated tests in `test/` for the change (or explained above why it can't be unit tested)
 - [ ] Native code formatted (Swift follows `darwin/.swift-format`, Kotlin follows ktlint)
