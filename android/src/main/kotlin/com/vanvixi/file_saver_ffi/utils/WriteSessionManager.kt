@@ -9,6 +9,7 @@ import com.vanvixi.file_saver_ffi.models.ConflictResolution
 import com.vanvixi.file_saver_ffi.models.FileType
 import com.vanvixi.file_saver_ffi.models.ProgressCallback
 import com.vanvixi.file_saver_ffi.models.SaveLocation
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -16,7 +17,14 @@ import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
-internal class WriteSessionManager {
+/**
+ * @param scope Scope for all session work. It must use a `SupervisorJob` and a
+ *   `CoroutineExceptionHandler`, so one failing session cannot cancel the
+ *   others or crash the app.
+ */
+internal class WriteSessionManager(
+    private val scope: CoroutineScope,
+) {
     private data class WriteSession(
         val entry: SaveEntry.Created,
         val entryFactory: SaveEntryFactory,
@@ -46,7 +54,7 @@ internal class WriteSessionManager {
         callback: ProgressCallback,
         ensureStoragePermission: suspend () -> Unit,
     ) {
-        CoroutineScope(Dispatchers.IO).launch {
+        scope.launch {
             try {
                 ensureStoragePermission()
                 val fileType = FileType(extension, mimeType)
@@ -61,12 +69,8 @@ internal class WriteSessionManager {
                         subDir = subDir,
                     )
                 startSession(context, entryFactory, conflictResolution, totalSize, callback)
-            } catch (e: FileExistsException) {
-                callback.onEvent(2, 0.0, Constants.ERROR_FILE_EXISTS, e.message)
-            } catch (e: IOException) {
-                callback.onEvent(2, 0.0, Constants.ERROR_FILE_IO, e.message)
-            } catch (e: SecurityException) {
-                callback.onEvent(2, 0.0, Constants.ERROR_PERMISSION_DENIED, e.message)
+            } catch (e: Exception) {
+                reportError(callback, e)
             }
         }
     }
@@ -87,7 +91,7 @@ internal class WriteSessionManager {
         totalSize: Long,
         callback: ProgressCallback,
     ) {
-        CoroutineScope(Dispatchers.IO).launch {
+        scope.launch {
             try {
                 val fileType = FileType(extension, mimeType)
                 val conflictResolution = ConflictResolution.fromInt(conflictMode)
@@ -99,10 +103,8 @@ internal class WriteSessionManager {
                         baseFileName = baseFileName,
                     )
                 startSession(context, entryFactory, conflictResolution, totalSize, callback)
-            } catch (e: FileExistsException) {
-                callback.onEvent(2, 0.0, Constants.ERROR_FILE_EXISTS, e.message)
-            } catch (e: IOException) {
-                callback.onEvent(2, 0.0, Constants.ERROR_FILE_IO, e.message)
+            } catch (e: Exception) {
+                reportError(callback, e)
             }
         }
     }
@@ -127,8 +129,8 @@ internal class WriteSessionManager {
 
             is SaveEntry.Created -> {
                 val sessionId = sessionIdCounter.incrementAndGet()
-                val scope = CoroutineScope(Dispatchers.IO.limitedParallelism(1))
-                writeSessions[sessionId] = WriteSession(entry, entryFactory, totalSize, scope)
+                val sessionScope = CoroutineScope(scope.coroutineContext + Dispatchers.IO.limitedParallelism(1))
+                writeSessions[sessionId] = WriteSession(entry, entryFactory, totalSize, sessionScope)
                 callback.onEvent(3, 0.0, sessionId.toString(), null)
             }
         }
@@ -154,8 +156,8 @@ internal class WriteSessionManager {
                 session.entry.outputStream.write(data)
                 session.bytesWritten += data.size
                 callback.onEvent(1, session.bytesWritten.toDouble(), null, null)
-            } catch (e: IOException) {
-                callback.onEvent(2, 0.0, Constants.ERROR_FILE_IO, e.message)
+            } catch (e: Exception) {
+                reportError(callback, e)
             }
         }
     }
@@ -178,8 +180,8 @@ internal class WriteSessionManager {
             try {
                 session.entry.outputStream.flush()
                 callback.onEvent(1, session.bytesWritten.toDouble(), null, null)
-            } catch (e: IOException) {
-                callback.onEvent(2, 0.0, Constants.ERROR_FILE_IO, e.message)
+            } catch (e: Exception) {
+                reportError(callback, e)
             }
         }
     }
@@ -229,5 +231,27 @@ internal class WriteSessionManager {
             }
             session.entryFactory.deleteEntry(context, session.entry.uri)
         }
+    }
+
+    /**
+     * Reports [e] through [callback] with the matching error code.
+     *
+     * Rethrows [CancellationException] so the coroutine still ends as cancelled.
+     */
+    private fun reportError(
+        callback: ProgressCallback,
+        e: Exception,
+    ) {
+        val code =
+            when (e) {
+                is CancellationException -> throw e
+                is FileExistsException -> Constants.ERROR_FILE_EXISTS
+                is IOException -> Constants.ERROR_FILE_IO
+                is SecurityException -> Constants.ERROR_PERMISSION_DENIED
+                // A non-tree SAF URI, or a MIME type the MediaStore collection rejects.
+                is IllegalArgumentException -> Constants.ERROR_INVALID_INPUT
+                else -> Constants.ERROR_PLATFORM
+            }
+        callback.onEvent(2, 0.0, code, e.message)
     }
 }

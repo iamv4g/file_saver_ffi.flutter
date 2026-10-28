@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import com.vanvixi.file_saver_ffi.core.AudioSaver
@@ -21,10 +22,14 @@ import com.vanvixi.file_saver_ffi.utils.Constants
 import com.vanvixi.file_saver_ffi.utils.FileOpener
 import com.vanvixi.file_saver_ffi.utils.StoragePermissionHandler
 import com.vanvixi.file_saver_ffi.utils.WriteSessionManager
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
@@ -39,11 +44,24 @@ class FileSaver {
     private val audioSaver get() = AudioSaver(context)
     private val customFileSaver get() = CustomFileSaver(context)
 
+    /**
+     * Runs every save and write-session coroutine. [SupervisorJob] keeps one
+     * failed operation from cancelling the others, and the handler logs an
+     * exception that escapes an operation instead of crashing the app.
+     */
+    private val scope =
+        CoroutineScope(
+            SupervisorJob() + Dispatchers.IO +
+                CoroutineExceptionHandler { _, e -> Log.e(TAG, "Unhandled error in save operation", e) },
+        )
+
     private val activeJobs = ConcurrentHashMap<Long, Job>()
     private val operationIdCounter = AtomicLong(0)
-    private val sessionManager = WriteSessionManager()
+    private val sessionManager = WriteSessionManager(scope)
 
     companion object {
+        private const val TAG = "FileSaverFfi"
+
         /**
          * Application context stored by [FileSaverFfiPlugin.onAttachedToEngine].
          * Must be set before any [FileSaver] instance is used.
@@ -266,6 +284,10 @@ class FileSaver {
     /**
      * Builds a Flow for MediaStore saves: handles permission check, type/location
      * resolution, entry factory creation, and error mapping.
+     *
+     * Errors are mapped with [catch], which only sees upstream exceptions, so a
+     * failure in the collector is not re-emitted into the flow and cancellation
+     * is not reported as an error.
      */
     private fun mediaStoreFlow(
         extension: String,
@@ -277,26 +299,28 @@ class FileSaver {
         save: (BaseFileSaver, SaveEntryFactory, ConflictResolution) -> Flow<SaveProgressEvent>,
     ): Flow<SaveProgressEvent> =
         flow {
-            try {
-                ensureStoragePermission()
+            ensureStoragePermission()
 
-                val fileType = FileType(extension, mimeType)
-                val conflictResolution = ConflictResolution.fromInt(conflictMode)
-                val saveLocation = SaveLocation.fromInt(saveLocationIndex)
-                val saver = getSaverForFileType(fileType)
-                val entryFactory =
-                    SaveEntryFactory.MediaStore(
-                        fileType = fileType,
-                        baseFileName = baseFileName,
-                        saveLocation = saveLocation,
-                        subDir = subDir,
-                    )
+            val fileType = FileType(extension, mimeType)
+            val conflictResolution = ConflictResolution.fromInt(conflictMode)
+            val saveLocation = SaveLocation.fromInt(saveLocationIndex)
+            val saver = getSaverForFileType(fileType)
+            val entryFactory =
+                SaveEntryFactory.MediaStore(
+                    fileType = fileType,
+                    baseFileName = baseFileName,
+                    saveLocation = saveLocation,
+                    subDir = subDir,
+                )
 
-                save(saver, entryFactory, conflictResolution).collect { emit(it) }
-            } catch (e: SecurityException) {
-                emit(SaveProgressEvent.Error(Constants.ERROR_PERMISSION_DENIED, "Permission denied: ${e.message}"))
-            } catch (e: Exception) {
-                emit(SaveProgressEvent.Error(Constants.ERROR_PLATFORM, "Unexpected error: ${e.message ?: "Unknown error"}"))
+            emitAll(save(saver, entryFactory, conflictResolution))
+        }.catch { e ->
+            when (e) {
+                is SecurityException ->
+                    emit(SaveProgressEvent.Error(Constants.ERROR_PERMISSION_DENIED, "Permission denied: ${e.message}"))
+                is Exception ->
+                    emit(SaveProgressEvent.Error(Constants.ERROR_PLATFORM, "Unexpected error: ${e.message ?: "Unknown error"}"))
+                else -> throw e
             }
         }.flowOn(Dispatchers.IO)
 
@@ -358,7 +382,7 @@ class FileSaver {
     ): Long {
         val operationId = operationIdCounter.incrementAndGet()
         val job =
-            CoroutineScope(Dispatchers.IO).launch {
+            scope.launch {
                 flow.collect { event ->
                     when (event) {
                         is SaveProgressEvent.Started -> callback.onEvent(0, 0.0, null, null)

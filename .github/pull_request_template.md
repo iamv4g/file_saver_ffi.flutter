@@ -43,7 +43,7 @@ Fixes #
      the platforms your change touches, as decided by `tool/ci_changes.sh`. Shared code runs
      everything. The items below are what it can't check. -->
 
-- [ ] Added or updated tests in `test/` for the change (or explained above why it can't be unit tested)
+- [ ] Added or updated tests for the change: Dart in `test/`, Kotlin in `android/src/test` (or explained above why it can't be unit tested)
 - [ ] Native code formatted (Swift follows `darwin/.swift-format`, Kotlin follows ktlint)
 - [ ] Tested in the `example/` app on every platform checked above
 - [ ] `CHANGELOG.md` updated for user-facing changes

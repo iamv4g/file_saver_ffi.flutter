@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.flowOn
  * - Catches CancellationException and emits Cancelled event
  * - Catches SecurityException and emits Error with permission denied code
  * - Catches generic Exception and emits Error with platform error code
+ * - Sends terminal events with the suspending send, so they are never dropped
  * - Properly closes the flow and awaits close
  * - Runs on IO dispatcher
  *
@@ -26,7 +27,7 @@ import kotlinx.coroutines.flow.flowOn
  *     // Business logic only - no boilerplate needed
  *     trySend(SaveProgressEvent.Progress(0.05))
  *     // ... do work ...
- *     trySend(SaveProgressEvent.Success(uri.toString()))
+ *     send(SaveProgressEvent.Success(uri.toString()))
  * }
  * ```
  */
@@ -41,14 +42,14 @@ inline fun saveFlow(crossinline block: suspend ProducerScope<SaveProgressEvent>.
             awaitClose {}
             throw e // Re-throw to properly cancel coroutine
         } catch (e: SecurityException) {
-            trySend(
+            send(
                 SaveProgressEvent.Error(
                     Constants.ERROR_PERMISSION_DENIED,
                     "Permission denied: ${e.message}",
                 ),
             )
         } catch (e: Exception) {
-            trySend(
+            send(
                 SaveProgressEvent.Error(
                     Constants.ERROR_PLATFORM,
                     "Unexpected error: ${e.message ?: "Unknown error"}",

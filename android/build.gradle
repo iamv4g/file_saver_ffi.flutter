@@ -46,6 +46,14 @@ android {
         minSdk = 24
         consumerProguardFiles 'proguard-rules.pro'
     }
+
+    // JVM unit tests in src/test, run with Robolectric. From example/android:
+    //   ./gradlew :file_saver_ffi:testDebugUnitTest
+    testOptions {
+        unitTests {
+            includeAndroidResources = true
+        }
+    }
 }
 
 kotlin {
@@ -59,4 +67,9 @@ dependencies {
     implementation "androidx.core:core-ktx:1.17.0"
     implementation "androidx.activity:activity-ktx:1.11.0"
     implementation "androidx.documentfile:documentfile:1.1.0"
+
+    testImplementation "junit:junit:4.13.2"
+    testImplementation "org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2"
+    testImplementation "org.robolectric:robolectric:4.17"
+    testImplementation "androidx.test:core:1.7.0"
 }
