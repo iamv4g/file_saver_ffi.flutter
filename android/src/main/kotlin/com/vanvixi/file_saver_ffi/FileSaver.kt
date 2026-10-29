@@ -64,16 +64,18 @@ class FileSaver {
 
         /**
          * Application context stored by [FileSaverFfiPlugin.onAttachedToEngine].
-         * Must be set before any [FileSaver] instance is used.
+         * Must be set before any [FileSaver] instance is used. Never cleared,
+         * because every engine in the process shares it.
          */
         @Volatile
         internal var appContext: Context? = null
 
         /**
-         * Static permission handler set by [FileSaverFfiPlugin] when Activity is available.
+         * Static permission handler set by [FileSaverFfiPlugin.onAttachedToEngine].
          *
          * Bridges [FileSaver] (created via JNI without Context) to the plugin layer
-         * (which has Activity access for showing permission dialogs).
+         * (which has Activity access for showing permission dialogs). It asks in
+         * the Activity of any attached engine.
          */
         @Volatile
         var storagePermissionHandler: StoragePermissionHandler? = null
@@ -285,9 +287,7 @@ class FileSaver {
      * Builds a Flow for MediaStore saves: handles permission check, type/location
      * resolution, entry factory creation, and error mapping.
      *
-     * Errors are mapped with [catch], which only sees upstream exceptions, so a
-     * failure in the collector is not re-emitted into the flow and cancellation
-     * is not reported as an error.
+     * Errors are mapped by [reportErrors].
      */
     private fun mediaStoreFlow(
         extension: String,
@@ -314,18 +314,13 @@ class FileSaver {
                 )
 
             emitAll(save(saver, entryFactory, conflictResolution))
-        }.catch { e ->
-            when (e) {
-                is SecurityException ->
-                    emit(SaveProgressEvent.Error(Constants.ERROR_PERMISSION_DENIED, "Permission denied: ${e.message}"))
-                is Exception ->
-                    emit(SaveProgressEvent.Error(Constants.ERROR_PLATFORM, "Unexpected error: ${e.message ?: "Unknown error"}"))
-                else -> throw e
-            }
-        }.flowOn(Dispatchers.IO)
+        }.reportErrors().flowOn(Dispatchers.IO)
 
     /**
      * Builds a Flow for SAF saves: wraps SAF entry factory creation and delegates to [save].
+     *
+     * Nothing runs until the flow is collected, so a failure is reported as an
+     * error event instead of being thrown across JNI.
      */
     private fun safFlow(
         directoryUri: String,
@@ -334,15 +329,33 @@ class FileSaver {
         mimeType: String,
         conflictMode: Int,
         save: (SaveEntryFactory, ConflictResolution) -> Flow<SaveProgressEvent>,
-    ): Flow<SaveProgressEvent> {
-        val entryFactory =
-            SaveEntryFactory.SAF(
-                treeUri = directoryUri.toUri(),
-                fileType = FileType(extension, mimeType),
-                baseFileName = baseFileName,
-            )
-        return save(entryFactory, ConflictResolution.fromInt(conflictMode))
-    }
+    ): Flow<SaveProgressEvent> =
+        flow {
+            val entryFactory =
+                SaveEntryFactory.SAF(
+                    treeUri = directoryUri.toUri(),
+                    fileType = FileType(extension, mimeType),
+                    baseFileName = baseFileName,
+                )
+            emitAll(save(entryFactory, ConflictResolution.fromInt(conflictMode)))
+        }.reportErrors()
+
+    /**
+     * Turns an exception from upstream into an error event.
+     *
+     * [catch] only sees upstream exceptions, so a failure in the collector is
+     * not re-emitted into the flow and cancellation is not reported as an error.
+     */
+    private fun Flow<SaveProgressEvent>.reportErrors(): Flow<SaveProgressEvent> =
+        catch { e ->
+            when (e) {
+                is SecurityException ->
+                    emit(SaveProgressEvent.Error(Constants.ERROR_PERMISSION_DENIED, "Permission denied: ${e.message}"))
+                is Exception ->
+                    emit(SaveProgressEvent.Error(Constants.ERROR_PLATFORM, "Unexpected error: ${e.message ?: "Unknown error"}"))
+                else -> throw e
+            }
+        }
 
     /**
      * Ensures WRITE_EXTERNAL_STORAGE permission is granted on API < 29.
