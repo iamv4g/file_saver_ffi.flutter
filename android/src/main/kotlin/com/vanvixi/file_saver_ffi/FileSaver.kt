@@ -27,16 +27,26 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
-class FileSaver {
+/**
+ * @param engineId Id of the Flutter engine whose Dart side creates this
+ *   instance (`PlatformDispatcher.engineId`), or -1 if there is none, as in a
+ *   background isolate. The saves and write sessions of an instance with an
+ *   engine are cancelled when that engine is destroyed.
+ */
+class FileSaver(
+    engineId: Long,
+) {
     private val context: Context
         get() = appContext ?: error("FileSaver not initialized. FileSaverFfiPlugin must be attached first.")
     private val imageSaver get() = ImageSaver(context)
@@ -59,6 +69,10 @@ class FileSaver {
     private val operationIdCounter = AtomicLong(0)
     private val sessionManager = WriteSessionManager(scope)
 
+    init {
+        FileSaverFfiPlugin.trackSaver(this, engineId)
+    }
+
     companion object {
         private const val TAG = "FileSaverFfi"
 
@@ -79,6 +93,16 @@ class FileSaver {
          */
         @Volatile
         var storagePermissionHandler: StoragePermissionHandler? = null
+    }
+
+    /**
+     * Cancels every save and write session of this instance, deleting their
+     * partial files. Called when the engine that created it is destroyed, so
+     * no Dart code is left to receive their events.
+     */
+    internal fun dispose() {
+        scope.cancel()
+        appContext?.let { sessionManager.discardAll(it, scope.coroutineContext.job) }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

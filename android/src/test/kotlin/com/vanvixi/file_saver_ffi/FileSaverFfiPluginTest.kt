@@ -11,11 +11,10 @@ import com.vanvixi.file_saver_ffi.models.ConflictResolution
 import com.vanvixi.file_saver_ffi.models.SaveLocation
 import com.vanvixi.file_saver_ffi.testing.Event
 import com.vanvixi.file_saver_ffi.testing.FakeActivityBinding
+import com.vanvixi.file_saver_ffi.testing.FakeEngine
 import com.vanvixi.file_saver_ffi.testing.FileSaverTestBase
 import com.vanvixi.file_saver_ffi.testing.RecordingCallback
-import com.vanvixi.file_saver_ffi.testing.flutterPluginBinding
 import com.vanvixi.file_saver_ffi.utils.Constants
-import io.flutter.embedding.engine.plugins.FlutterPlugin
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -52,28 +51,7 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
         val requestCode: Int,
     )
 
-    /** One engine: its plugin instance and the binding it was attached with. */
-    private inner class Engine {
-        val plugin = FileSaverFfiPlugin()
-        val binding: FlutterPlugin.FlutterPluginBinding = flutterPluginBinding(context)
-        var activityBinding: FakeActivityBinding? = null
-
-        init {
-            plugin.onAttachedToEngine(binding)
-            engines += this
-        }
-
-        fun attach(activity: Activity) {
-            activityBinding = FakeActivityBinding(activity).also { plugin.onAttachedToActivity(it) }
-        }
-
-        fun detach() {
-            plugin.onDetachedFromActivity()
-            plugin.onDetachedFromEngine(binding)
-        }
-    }
-
-    private val engines = mutableListOf<Engine>()
+    private val engines = mutableListOf<FakeEngine>()
     private val dialogs = CopyOnWriteArrayList<Dialog>()
     private val requestScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -104,7 +82,7 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
     @After
     fun detachEngines() {
         ActivityCompat.setPermissionCompatDelegate(null)
-        engines.forEach { it.detach() }
+        engines.forEach { it.destroy() }
         requestScope.cancel()
     }
 
@@ -112,7 +90,7 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
 
     @Test
     fun `saves that need the permission while the dialog is showing share its answer`() {
-        Engine().attach(componentActivity())
+        engine().attach(componentActivity())
         val first = startSave("first")
         runMainUntil { dialogs.size == 1 }
         val second = startSave("second")
@@ -127,7 +105,7 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
 
     @Test
     fun `a request after the dialog was answered shows a new dialog`() {
-        Engine().attach(componentActivity())
+        engine().attach(componentActivity())
         val denied = request()
         runMainUntil { dialogs.size == 1 }
         answer(dialogs[0], granted = false)
@@ -144,7 +122,7 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
 
     @Test
     fun `the answer reaches the request after a configuration change while the dialog is showing`() {
-        val engine = Engine()
+        val engine = engine()
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
         engine.attach(controller.get())
         val result = request()
@@ -160,7 +138,7 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
 
     @Test
     fun `an answer that arrives before the plugin reattaches after a configuration change is not lost`() {
-        val engine = Engine()
+        val engine = engine()
         val controller = Robolectric.buildActivity(ComponentActivity::class.java).setup()
         engine.attach(controller.get())
         val result = request()
@@ -176,7 +154,7 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
 
     @Test
     fun `the request is denied when the activity goes away while the dialog is showing`() {
-        val engine = Engine()
+        val engine = engine()
         engine.attach(componentActivity())
         val result = request()
         runMainUntil { dialogs.size == 1 }
@@ -188,7 +166,7 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
 
     @Test
     fun `an activity that is not a ComponentActivity gets the answer through the result listener`() {
-        val engine = Engine()
+        val engine = engine()
         engine.attach(Robolectric.buildActivity(Activity::class.java).setup().get())
         val result = request()
         runMainUntil { dialogs.size == 1 }
@@ -205,7 +183,7 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
 
     @Test
     fun `a save without any activity reports PERMISSION_DENIED`() {
-        Engine()
+        engine()
 
         val event = startSave("photo").awaitSave()
 
@@ -219,11 +197,11 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
     @Test
     fun `detaching a second engine keeps saves working for the first`() {
         val mainActivity = componentActivity()
-        Engine().attach(mainActivity)
-        val background = Engine()
+        engine().attach(mainActivity)
+        val background = engine()
         background.attach(componentActivity())
 
-        background.detach()
+        background.destroy()
         assertNotNull(FileSaver.appContext)
         val save = startSave("photo")
         runMainUntil { dialogs.size == 1 }
@@ -235,9 +213,9 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
 
     @Test
     fun `the dialog is shown in the most recently attached activity`() {
-        Engine().attach(componentActivity())
+        engine().attach(componentActivity())
         val latest = componentActivity()
-        Engine().attach(latest)
+        engine().attach(latest)
 
         val result = request()
         runMainUntil { dialogs.size == 1 }
@@ -248,6 +226,8 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
     }
 
     // ── helpers ────────────────────────────────────────────────────────────
+
+    private fun engine() = FakeEngine(context).also { engines += it }
 
     private fun componentActivity(): ComponentActivity = Robolectric.buildActivity(ComponentActivity::class.java).setup().get()
 
