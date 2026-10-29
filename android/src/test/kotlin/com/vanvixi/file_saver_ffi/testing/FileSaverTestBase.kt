@@ -31,7 +31,7 @@ abstract class FileSaverTestBase {
         Thread.setDefaultUncaughtExceptionHandler { _, e -> uncaught += e }
         FileSaver.appContext = context
         mediaStore = FakeMediaStoreProvider.install()
-        fileSaver = FileSaver()
+        fileSaver = FileSaver(engineId = -1)
     }
 
     @After

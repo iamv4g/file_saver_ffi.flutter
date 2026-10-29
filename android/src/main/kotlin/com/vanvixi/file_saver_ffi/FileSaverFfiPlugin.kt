@@ -2,6 +2,7 @@ package com.vanvixi.file_saver_ffi
 
 import android.Manifest
 import android.app.Activity
+import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
 import androidx.activity.ComponentActivity
@@ -61,6 +62,24 @@ class FileSaverFfiPlugin :
         private val permissionHandler = StoragePermissionHandler { requestStoragePermission() }
 
         /**
+         * The [FileSaver]s created by the Dart side of each attached engine, by
+         * engine id. Guarded by itself.
+         */
+        private val saversByEngine = HashMap<Long, MutableList<FileSaver>>()
+
+        /**
+         * Ties [saver] to the engine with [engineId], so it is disposed when that
+         * engine is destroyed. Does nothing for an id that isn't attached, such
+         * as -1 from a background isolate.
+         */
+        internal fun trackSaver(
+            saver: FileSaver,
+            engineId: Long,
+        ) {
+            synchronized(saversByEngine) { saversByEngine[engineId]?.add(saver) }
+        }
+
+        /**
          * Asks for WRITE_EXTERNAL_STORAGE in the most recently attached Activity
          * and waits for the answer. A save that needs the permission while the
          * dialog is showing waits for the same answer instead of opening a
@@ -117,6 +136,8 @@ class FileSaverFfiPlugin :
 
     private val permissionRegistryKey = "$PERMISSION_REGISTRY_KEY.${nextInstanceId.incrementAndGet()}"
 
+    private var engineId: Long? = null
+
     private var activity: Activity? = null
     private var activityBinding: ActivityPluginBinding? = null
 
@@ -127,15 +148,29 @@ class FileSaverFfiPlugin :
     // FlutterPlugin
     // ─────────────────────────────────────────────────────────────────────────
 
-    override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
-        FileSaver.appContext = binding.applicationContext
+    override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) =
+        attachEngine(binding.applicationContext, binding.flutterEngine.engineId)
+
+    /** [onAttachedToEngine] for an engine with [engineId] (separate for tests). */
+    internal fun attachEngine(
+        applicationContext: Context,
+        engineId: Long,
+    ) {
+        this.engineId = engineId
+        FileSaver.appContext = applicationContext
         FileSaver.storagePermissionHandler = permissionHandler
+        synchronized(saversByEngine) { saversByEngine.getOrPut(engineId) { mutableListOf() } }
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         // FileSaver.appContext stays set: it is the application context, which
         // lives as long as the process, and other engines may still save.
         detachActivity(changingConfigurations = false)
+
+        // The engine's Dart side is gone, so its saves have no one to report to.
+        val savers = engineId?.let { id -> synchronized(saversByEngine) { saversByEngine.remove(id) } }
+        engineId = null
+        savers?.forEach { it.dispose() }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

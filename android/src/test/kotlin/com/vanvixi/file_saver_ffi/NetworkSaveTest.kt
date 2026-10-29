@@ -5,6 +5,7 @@ import com.vanvixi.file_saver_ffi.models.SaveLocation
 import com.vanvixi.file_saver_ffi.testing.FileSaverTestBase
 import com.vanvixi.file_saver_ffi.testing.RecordingCallback
 import com.vanvixi.file_saver_ffi.testing.TestHttpServer
+import com.vanvixi.file_saver_ffi.testing.useOkHttpUrlConnection
 import com.vanvixi.file_saver_ffi.utils.Constants
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
@@ -17,10 +18,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
-import okhttp3.OkHttpClient
-import okhttp3.OkUrlFactory
 import java.net.ServerSocket
-import java.net.URL
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
@@ -38,7 +36,7 @@ class NetworkSaveTest : FileSaverTestBase() {
 
     @Before
     fun startServer() {
-        useOkHttpUrlConnection
+        useOkHttpUrlConnection()
         server = TestHttpServer()
     }
 
@@ -83,13 +81,6 @@ class NetworkSaveTest : FileSaverTestBase() {
     private fun awaitNoRows(timeoutMs: Long) {
         val deadline = System.currentTimeMillis() + timeoutMs
         while (mediaStore.rows.isNotEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(20)
-    }
-
-    companion object {
-        /** Installs the OkHttp URL factory once per JVM (the JDK allows only one). */
-        private val useOkHttpUrlConnection by lazy {
-            URL.setURLStreamHandlerFactory(OkUrlFactory(OkHttpClient()))
-        }
     }
 
     // ── success ────────────────────────────────────────────────────────────

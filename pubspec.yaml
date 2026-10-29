@@ -37,7 +37,7 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   ffigen: ^20.1.1
-  jnigen: ^0.16.0
+  jnigen: ^0.17.0
 
 flutter:
   plugin:

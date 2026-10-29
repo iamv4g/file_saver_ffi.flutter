@@ -1,6 +1,7 @@
 package com.vanvixi.file_saver_ffi.utils
 
 import android.content.Context
+import android.util.Log
 import androidx.core.net.toUri
 import com.vanvixi.file_saver_ffi.core.base.SaveEntry
 import com.vanvixi.file_saver_ffi.core.base.SaveEntryFactory
@@ -10,8 +11,10 @@ import com.vanvixi.file_saver_ffi.models.FileType
 import com.vanvixi.file_saver_ffi.models.ProgressCallback
 import com.vanvixi.file_saver_ffi.models.SaveLocation
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
@@ -25,6 +28,10 @@ import java.util.concurrent.atomic.AtomicLong
 internal class WriteSessionManager(
     private val scope: CoroutineScope,
 ) {
+    private companion object {
+        const val TAG = "FileSaverFfi"
+    }
+
     private data class WriteSession(
         val entry: SaveEntry.Created,
         val entryFactory: SaveEntryFactory,
@@ -231,6 +238,34 @@ internal class WriteSessionManager(
             }
             session.entryFactory.deleteEntry(context, session.entry.uri)
         }
+    }
+
+    /**
+     * Removes every open session and deletes its partial file, once [scope]'s
+     * work (including chunk writes in progress) has ended. No callback.
+     *
+     * @param scopeJob The job of [scope], already cancelled. The cleanup runs
+     *   outside [scope] for that reason.
+     */
+    fun discardAll(
+        context: Context,
+        scopeJob: Job,
+    ) {
+        val sessions = writeSessions.values.toList()
+        writeSessions.clear()
+        if (sessions.isEmpty()) return
+
+        CoroutineScope(Dispatchers.IO + CoroutineExceptionHandler { _, e -> Log.e(TAG, "Failed to discard write sessions", e) })
+            .launch {
+                scopeJob.join()
+                sessions.forEach { session ->
+                    try {
+                        session.entry.outputStream.close()
+                    } catch (_: Exception) {
+                    }
+                    session.entryFactory.deleteEntry(context, session.entry.uri)
+                }
+            }
     }
 
     /**

@@ -57,7 +57,7 @@ extension type Foo._(jni$_.JObject _$this) implements jni$_.JObject {
         lookups,
         containsAll([
           'Lcom/vanvixi/file_saver_ffi/FileSaver;',
-          'Lcom/vanvixi/file_saver_ffi/FileSaver;-><init>:()V',
+          'Lcom/vanvixi/file_saver_ffi/FileSaver;-><init>:(J)V',
           'Lcom/vanvixi/file_saver_ffi/models/ProgressCallback;->onEvent:(IDLjava/lang/String;Ljava/lang/String;)V',
         ]),
       );
