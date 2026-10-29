@@ -2,7 +2,7 @@
 // (Android only).
 // Run from example/ with a device attached:
 //   flutter test integration_test/android_test.dart -d <device-id>
-// They save to Download/fsf_it/; remove it afterwards with
+// They save to Download/fsf_it/<run>/; remove it afterwards with
 //   adb shell content delete --uri content://media/external/file \
 //     --where "\"_data LIKE '%/Download/fsf_it/%'\""
 import 'dart:typed_data';
@@ -11,7 +11,10 @@ import 'package:file_saver_ffi/file_saver_ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-const _subDir = 'fsf_it';
+// `flutter test` uninstalls the app afterwards, and files of an uninstalled
+// app are invisible to the next install, so `overwrite` and `skip` could not
+// find them. Each run therefore uses its own directory.
+final _subDir = 'fsf_it/${DateTime.now().millisecondsSinceEpoch}';
 const _text = CustomFileType(ext: 'txt', mimeType: 'text/plain');
 
 Future<Uri> _saveText(String name, String content) => FileSaver.saveAsync(
