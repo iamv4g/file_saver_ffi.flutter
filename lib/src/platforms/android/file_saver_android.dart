@@ -56,16 +56,19 @@ class FileSaverAndroid extends FileSaverPlatform {
     }
 
     return Stream.multi((controller) {
+      // Releases the JNI arguments once the native call has returned; the JVM
+      // keeps its own references for as long as the save runs.
+      final arena = Arena();
       bool cleanedUp = false;
       late final bindings.ProgressCallback callback;
 
-      final jByteArray = JByteArray.of(fileBytes);
-      final jFileName = fileName.toJString();
-      final jExtension = fileType.ext.toJString();
-      final jMimeType = fileType.mimeType.toJString();
+      final jByteArray = JByteArray.of(fileBytes)..releasedBy(arena);
+      final jFileName = fileName.toJString()..releasedBy(arena);
+      final jExtension = fileType.ext.toJString()..releasedBy(arena);
+      final jMimeType = fileType.mimeType.toJString()..releasedBy(arena);
       final jConflictMode = conflictResolution.index;
       final jSaveLocationIndex = _saveLocationToIndex(saveLocation);
-      final jSubDir = subDir?.toJString();
+      final jSubDir = subDir?.toJString()?..releasedBy(arena);
 
       void cleanup() {
         if (cleanedUp) return;
@@ -94,16 +97,21 @@ class FileSaverAndroid extends FileSaverPlatform {
       );
 
       // Call native method - returns operationId for cancellation
-      final operationId = _fileSaver.saveBytes(
-        jByteArray,
-        jFileName,
-        jExtension,
-        jMimeType,
-        jSaveLocationIndex,
-        jSubDir,
-        jConflictMode,
-        callback,
-      );
+      final int operationId;
+      try {
+        operationId = _fileSaver.saveBytes(
+          jByteArray,
+          jFileName,
+          jExtension,
+          jMimeType,
+          jSaveLocationIndex,
+          jSubDir,
+          jConflictMode,
+          callback,
+        );
+      } finally {
+        arena.releaseAll();
+      }
 
       controller.onCancel = () {
         _fileSaver.cancelOperation(operationId);
@@ -136,16 +144,19 @@ class FileSaverAndroid extends FileSaverPlatform {
     }
 
     return Stream.multi((controller) {
+      // Releases the JNI arguments once the native call has returned; the JVM
+      // keeps its own references for as long as the save runs.
+      final arena = Arena();
       bool cleanedUp = false;
       late final bindings.ProgressCallback callback;
 
-      final jFilePath = filePath.toJString();
-      final jFileName = fileName.toJString();
-      final jExtension = fileType.ext.toJString();
-      final jMimeType = fileType.mimeType.toJString();
+      final jFilePath = filePath.toJString()..releasedBy(arena);
+      final jFileName = fileName.toJString()..releasedBy(arena);
+      final jExtension = fileType.ext.toJString()..releasedBy(arena);
+      final jMimeType = fileType.mimeType.toJString()..releasedBy(arena);
       final jConflictMode = conflictResolution.index;
       final jSaveLocationIndex = _saveLocationToIndex(saveLocation);
-      final jSubDir = subDir?.toJString();
+      final jSubDir = subDir?.toJString()?..releasedBy(arena);
 
       void cleanup() {
         if (cleanedUp) return;
@@ -174,16 +185,21 @@ class FileSaverAndroid extends FileSaverPlatform {
       );
 
       // Call native method - returns operationId for cancellation
-      final operationId = _fileSaver.saveFile(
-        jFilePath,
-        jFileName,
-        jExtension,
-        jMimeType,
-        jSaveLocationIndex,
-        jSubDir,
-        jConflictMode,
-        callback,
-      );
+      final int operationId;
+      try {
+        operationId = _fileSaver.saveFile(
+          jFilePath,
+          jFileName,
+          jExtension,
+          jMimeType,
+          jSaveLocationIndex,
+          jSubDir,
+          jConflictMode,
+          callback,
+        );
+      } finally {
+        arena.releaseAll();
+      }
 
       controller.onCancel = () {
         _fileSaver.cancelOperation(operationId);
@@ -220,20 +236,23 @@ class FileSaverAndroid extends FileSaverPlatform {
     }
 
     return Stream.multi((controller) {
+      // Releases the JNI arguments once the native call has returned; the JVM
+      // keeps its own references for as long as the save runs.
+      final arena = Arena();
       bool cleanedUp = false;
       late final bindings.ProgressCallback callback;
 
-      final jUrl = url.toJString();
+      final jUrl = url.toJString()..releasedBy(arena);
       final jHeadersJson = headers != null
-          ? jsonEncode(headers).toJString()
+          ? (jsonEncode(headers).toJString()..releasedBy(arena))
           : null;
       final jTimeoutMs = timeout.inMilliseconds;
-      final jFileName = fileName.toJString();
-      final jExtension = fileType.ext.toJString();
-      final jMimeType = fileType.mimeType.toJString();
+      final jFileName = fileName.toJString()..releasedBy(arena);
+      final jExtension = fileType.ext.toJString()..releasedBy(arena);
+      final jMimeType = fileType.mimeType.toJString()..releasedBy(arena);
       final jConflictMode = conflictResolution.index;
       final jSaveLocationIndex = _saveLocationToIndex(saveLocation);
-      final jSubDir = subDir?.toJString();
+      final jSubDir = subDir?.toJString()?..releasedBy(arena);
 
       void cleanup() {
         if (cleanedUp) return;
@@ -262,18 +281,23 @@ class FileSaverAndroid extends FileSaverPlatform {
       );
 
       // Call native method - returns operationId for cancellation
-      final operationId = _fileSaver.saveNetwork(
-        jUrl,
-        jHeadersJson,
-        jTimeoutMs,
-        jFileName,
-        jExtension,
-        jMimeType,
-        jSaveLocationIndex,
-        jSubDir,
-        jConflictMode,
-        callback,
-      );
+      final int operationId;
+      try {
+        operationId = _fileSaver.saveNetwork(
+          jUrl,
+          jHeadersJson,
+          jTimeoutMs,
+          jFileName,
+          jExtension,
+          jMimeType,
+          jSaveLocationIndex,
+          jSubDir,
+          jConflictMode,
+          callback,
+        );
+      } finally {
+        arena.releaseAll();
+      }
 
       controller.onCancel = () {
         _fileSaver.cancelOperation(operationId);
@@ -331,14 +355,17 @@ class FileSaverAndroid extends FileSaverPlatform {
     required ConflictResolution conflictResolution,
   }) {
     return Stream.multi((controller) {
+      // Releases the JNI arguments once the native call has returned; the JVM
+      // keeps its own references for as long as the save runs.
+      final arena = Arena();
       bool cleanedUp = false;
       late final bindings.ProgressCallback callback;
 
-      final jByteArray = JByteArray.of(fileBytes);
-      final jDirectoryUri = directoryUri.toJString();
-      final jBaseFileName = baseFileName.toJString();
-      final jExtension = extension.toJString();
-      final jMimeType = mimeType.toJString();
+      final jByteArray = JByteArray.of(fileBytes)..releasedBy(arena);
+      final jDirectoryUri = directoryUri.toJString()..releasedBy(arena);
+      final jBaseFileName = baseFileName.toJString()..releasedBy(arena);
+      final jExtension = extension.toJString()..releasedBy(arena);
+      final jMimeType = mimeType.toJString()..releasedBy(arena);
       final jConflictMode = conflictResolution.index;
 
       void cleanup() {
@@ -362,15 +389,20 @@ class FileSaverAndroid extends FileSaverPlatform {
         ),
       );
 
-      final operationId = _fileSaver.saveBytesAs(
-        jByteArray,
-        jDirectoryUri,
-        jBaseFileName,
-        jExtension,
-        jMimeType,
-        jConflictMode,
-        callback,
-      );
+      final int operationId;
+      try {
+        operationId = _fileSaver.saveBytesAs(
+          jByteArray,
+          jDirectoryUri,
+          jBaseFileName,
+          jExtension,
+          jMimeType,
+          jConflictMode,
+          callback,
+        );
+      } finally {
+        arena.releaseAll();
+      }
 
       controller.onCancel = () {
         _fileSaver.cancelOperation(operationId);
@@ -388,14 +420,17 @@ class FileSaverAndroid extends FileSaverPlatform {
     required ConflictResolution conflictResolution,
   }) {
     return Stream.multi((controller) {
+      // Releases the JNI arguments once the native call has returned; the JVM
+      // keeps its own references for as long as the save runs.
+      final arena = Arena();
       bool cleanedUp = false;
       late final bindings.ProgressCallback callback;
 
-      final jFilePath = filePath.toJString();
-      final jDirectoryUri = directoryUri.toJString();
-      final jBaseFileName = baseFileName.toJString();
-      final jExtension = extension.toJString();
-      final jMimeType = mimeType.toJString();
+      final jFilePath = filePath.toJString()..releasedBy(arena);
+      final jDirectoryUri = directoryUri.toJString()..releasedBy(arena);
+      final jBaseFileName = baseFileName.toJString()..releasedBy(arena);
+      final jExtension = extension.toJString()..releasedBy(arena);
+      final jMimeType = mimeType.toJString()..releasedBy(arena);
       final jConflictMode = conflictResolution.index;
 
       void cleanup() {
@@ -419,15 +454,20 @@ class FileSaverAndroid extends FileSaverPlatform {
         ),
       );
 
-      final operationId = _fileSaver.saveFileAs(
-        jFilePath,
-        jDirectoryUri,
-        jBaseFileName,
-        jExtension,
-        jMimeType,
-        jConflictMode,
-        callback,
-      );
+      final int operationId;
+      try {
+        operationId = _fileSaver.saveFileAs(
+          jFilePath,
+          jDirectoryUri,
+          jBaseFileName,
+          jExtension,
+          jMimeType,
+          jConflictMode,
+          callback,
+        );
+      } finally {
+        arena.releaseAll();
+      }
 
       controller.onCancel = () {
         _fileSaver.cancelOperation(operationId);
@@ -447,18 +487,21 @@ class FileSaverAndroid extends FileSaverPlatform {
     required ConflictResolution conflictResolution,
   }) {
     return Stream.multi((controller) {
+      // Releases the JNI arguments once the native call has returned; the JVM
+      // keeps its own references for as long as the save runs.
+      final arena = Arena();
       bool cleanedUp = false;
       late final bindings.ProgressCallback callback;
 
-      final jUrl = url.toJString();
+      final jUrl = url.toJString()..releasedBy(arena);
       final jHeadersJson = headers != null
-          ? jsonEncode(headers).toJString()
+          ? (jsonEncode(headers).toJString()..releasedBy(arena))
           : null;
       final jTimeoutMs = timeout.inMilliseconds;
-      final jDirectoryUri = directoryUri.toJString();
-      final jBaseFileName = baseFileName.toJString();
-      final jExtension = extension.toJString();
-      final jMimeType = mimeType.toJString();
+      final jDirectoryUri = directoryUri.toJString()..releasedBy(arena);
+      final jBaseFileName = baseFileName.toJString()..releasedBy(arena);
+      final jExtension = extension.toJString()..releasedBy(arena);
+      final jMimeType = mimeType.toJString()..releasedBy(arena);
       final jConflictMode = conflictResolution.index;
 
       void cleanup() {
@@ -482,17 +525,22 @@ class FileSaverAndroid extends FileSaverPlatform {
         ),
       );
 
-      final operationId = _fileSaver.saveNetworkAs(
-        jUrl,
-        jHeadersJson,
-        jTimeoutMs,
-        jDirectoryUri,
-        jBaseFileName,
-        jExtension,
-        jMimeType,
-        jConflictMode,
-        callback,
-      );
+      final int operationId;
+      try {
+        operationId = _fileSaver.saveNetworkAs(
+          jUrl,
+          jHeadersJson,
+          jTimeoutMs,
+          jDirectoryUri,
+          jBaseFileName,
+          jExtension,
+          jMimeType,
+          jConflictMode,
+          callback,
+        );
+      } finally {
+        arena.releaseAll();
+      }
 
       controller.onCancel = () {
         _fileSaver.cancelOperation(operationId);
@@ -503,8 +551,13 @@ class FileSaverAndroid extends FileSaverPlatform {
 
   @override
   Future<bool> canOpenFile(Uri uri) async {
-    final jUri = uri.toString().toJString();
-    return _fileSaver.canOpenFile(jUri);
+    final result = await _callForResult(
+      (arena, callback) => _fileSaver.canOpenFile(
+        uri.toString().toJString()..releasedBy(arena),
+        callback,
+      ),
+    );
+    return result == 'true';
   }
 
   @override
@@ -515,18 +568,15 @@ class FileSaverAndroid extends FileSaverPlatform {
       );
     }
 
-    if (!await canOpenFile(uri)) {
-      throw OpenFailedException('File is not accessible: $uri');
-    }
-
-    try {
-      final jUri = uri.toString().toJString();
-      final jMimeType = mimeType?.toJString();
-      _fileSaver.openFile(jUri, jMimeType);
-    } catch (e) {
-      if (e is FileSaverException) rethrow;
-      throw OpenFailedException('$e');
-    }
+    // Native side checks that the file exists and is readable, and reports
+    // FILE_NOT_FOUND / OPEN_FAILED / INVALID_INPUT error codes.
+    await _callForResult(
+      (arena, callback) => _fileSaver.openFile(
+        uri.toString().toJString()..releasedBy(arena),
+        mimeType?.toJString()?..releasedBy(arena),
+        callback,
+      ),
+    );
   }
 
   @override
@@ -549,48 +599,20 @@ class FileSaverAndroid extends FileSaverPlatform {
       );
     }
 
-    final completer = Completer<int>();
-    bindings.ProgressCallback? callback;
-    callback = bindings.ProgressCallback.implement(
-      bindings.$ProgressCallback(
-        onEvent: (eventType, progress, jStr1, jStr2) {
-          switch (eventType) {
-            case 3:
-              final sessionIdStr =
-                  jStr1?.toDartString(releaseOriginal: true) ?? '0';
-              jStr2?.release();
-              if (!completer.isCompleted) {
-                completer.complete(int.parse(sessionIdStr));
-              }
-            case 2:
-              final code =
-                  jStr1?.toDartString(releaseOriginal: true) ?? 'UNKNOWN';
-              final msg = jStr2?.toDartString(releaseOriginal: true) ?? '';
-              if (!completer.isCompleted) {
-                completer.completeError(
-                  FileSaverException.fromErrorResult(code, msg),
-                );
-              }
-            default:
-              jStr1?.release();
-              jStr2?.release();
-          }
-          Future.microtask(() => callback?.release());
-        },
-        onEvent$async: true,
+    // Session id 0 means SKIP found an existing file and opened nothing.
+    final result = await _callForResult(
+      (arena, callback) => _fileSaver.openWriteSession(
+        fileName.toJString()..releasedBy(arena),
+        fileType.ext.toJString()..releasedBy(arena),
+        fileType.mimeType.toJString()..releasedBy(arena),
+        _saveLocationToIndex(saveLocation),
+        subDir?.toJString()?..releasedBy(arena),
+        conflictResolution.index,
+        totalSize ?? -1,
+        callback,
       ),
     );
-    _fileSaver.openWriteSession(
-      fileName.toJString(),
-      fileType.ext.toJString(),
-      fileType.mimeType.toJString(),
-      _saveLocationToIndex(saveLocation),
-      subDir?.toJString(),
-      conflictResolution.index,
-      totalSize ?? -1,
-      callback,
-    );
-    final sessionId = await completer.future;
+    final sessionId = int.parse(result ?? '0');
     if (sessionId == 0) return null;
     return AndroidFileSaverSink(
       fileSaver: _fileSaver,
@@ -607,47 +629,19 @@ class FileSaverAndroid extends FileSaverPlatform {
     int? totalSize,
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
   }) async {
-    final completer = Completer<int>();
-    bindings.ProgressCallback? callback;
-    callback = bindings.ProgressCallback.implement(
-      bindings.$ProgressCallback(
-        onEvent: (eventType, progress, jStr1, jStr2) {
-          switch (eventType) {
-            case 3:
-              final sessionIdStr =
-                  jStr1?.toDartString(releaseOriginal: true) ?? '0';
-              jStr2?.release();
-              if (!completer.isCompleted) {
-                completer.complete(int.parse(sessionIdStr));
-              }
-            case 2:
-              final code =
-                  jStr1?.toDartString(releaseOriginal: true) ?? 'UNKNOWN';
-              final msg = jStr2?.toDartString(releaseOriginal: true) ?? '';
-              if (!completer.isCompleted) {
-                completer.completeError(
-                  FileSaverException.fromErrorResult(code, msg),
-                );
-              }
-            default:
-              jStr1?.release();
-              jStr2?.release();
-          }
-          Future.microtask(() => callback?.release());
-        },
-        onEvent$async: true,
+    // Session id 0 means SKIP found an existing file and opened nothing.
+    final result = await _callForResult(
+      (arena, callback) => _fileSaver.openWriteSessionAs(
+        saveLocation.uri.toString().toJString()..releasedBy(arena),
+        fileName.toJString()..releasedBy(arena),
+        fileType.ext.toJString()..releasedBy(arena),
+        fileType.mimeType.toJString()..releasedBy(arena),
+        conflictResolution.index,
+        totalSize ?? -1,
+        callback,
       ),
     );
-    _fileSaver.openWriteSessionAs(
-      saveLocation.uri.toString().toJString(),
-      fileName.toJString(),
-      fileType.ext.toJString(),
-      fileType.mimeType.toJString(),
-      conflictResolution.index,
-      totalSize ?? -1,
-      callback,
-    );
-    final sessionId = await completer.future;
+    final sessionId = int.parse(result ?? '0');
     if (sessionId == 0) return null;
     return AndroidFileSaverSink(
       fileSaver: _fileSaver,
@@ -659,6 +653,51 @@ class FileSaverAndroid extends FileSaverPlatform {
   // ─────────────────────────────────────────────────────────────────────────
   // Private Methods
   // ─────────────────────────────────────────────────────────────────────────
+
+  /// Runs a native call that reports one result through a
+  /// [bindings.ProgressCallback], and returns the data of its success event
+  /// (3) or throws the [FileSaverException] of its error event (2).
+  ///
+  /// The JNI arguments [call] registers on the arena are released once the
+  /// call has returned, and the callback after its result arrived.
+  Future<String?> _callForResult(
+    void Function(Arena arena, bindings.ProgressCallback callback) call,
+  ) {
+    final completer = Completer<String?>();
+    late final bindings.ProgressCallback callback;
+    callback = bindings.ProgressCallback.implement(
+      bindings.$ProgressCallback(
+        onEvent: (eventType, progress, data, message) {
+          final dataStr = data?.toDartString(releaseOriginal: true);
+          final messageStr = message?.toDartString(releaseOriginal: true);
+          if (completer.isCompleted) return;
+          switch (eventType) {
+            case 3:
+              completer.complete(dataStr);
+            case 2:
+              completer.completeError(
+                FileSaverException.fromErrorResult(
+                  dataStr ?? 'UNKNOWN',
+                  messageStr ?? '',
+                ),
+              );
+            default:
+              return;
+          }
+          // Defer release out of [callback]'s own stack.
+          Future.microtask(callback.release);
+        },
+        onEvent$async: true,
+      ),
+    );
+    try {
+      using((arena) => call(arena, callback));
+    } catch (_) {
+      callback.release();
+      rethrow;
+    }
+    return completer.future;
+  }
 
   /// Returns the native index for a [SaveLocation].
   ///

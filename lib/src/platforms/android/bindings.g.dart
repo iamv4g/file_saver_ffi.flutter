@@ -218,44 +218,10 @@ extension type FileSaver._(jni$_.JObject _$this) implements jni$_.JObject {
 extension FileSaver$$Methods on FileSaver {
   static final _id_canOpenFile = FileSaver._class.instanceMethodId(
     r'canOpenFile',
-    r'(Ljava/lang/String;)Z',
+    r'(Ljava/lang/String;Lcom/vanvixi/file_saver_ffi/models/ProgressCallback;)V',
   );
 
   static final _canOpenFile =
-      jni$_.ProtectedJniExtensions.lookup<
-            jni$_.NativeFunction<
-              jni$_.JniResult Function(
-                jni$_.Pointer<jni$_.Void>,
-                jni$_.JMethodIDPtr,
-                jni$_.VarArgs<(jni$_.Pointer<jni$_.Void>,)>,
-              )
-            >
-          >('globalEnv_CallBooleanMethod')
-          .asFunction<
-            jni$_.JniResult Function(
-              jni$_.Pointer<jni$_.Void>,
-              jni$_.JMethodIDPtr,
-              jni$_.Pointer<jni$_.Void>,
-            )
-          >();
-
-  /// from: `public fun canOpenFile(uri: kotlin.String): kotlin.Boolean`
-  core$_.bool canOpenFile(jni$_.JString string) {
-    final _$$selfRef = reference;
-    final _$string = string.reference;
-    return _canOpenFile(
-      _$$selfRef.pointer,
-      _id_canOpenFile.pointer,
-      _$string.pointer,
-    ).boolean;
-  }
-
-  static final _id_openFile = FileSaver._class.instanceMethodId(
-    r'openFile',
-    r'(Ljava/lang/String;Ljava/lang/String;)V',
-  );
-
-  static final _openFile =
       jni$_.ProtectedJniExtensions.lookup<
             jni$_.NativeFunction<
               jni$_.JThrowablePtr Function(
@@ -276,16 +242,66 @@ extension FileSaver$$Methods on FileSaver {
             )
           >();
 
-  /// from: `public fun openFile(uri: kotlin.String, mimeType: kotlin.String?): kotlin.Unit`
-  void openFile(jni$_.JString string, jni$_.JString? string1) {
+  /// from: `public fun canOpenFile(uri: kotlin.String, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
+  void canOpenFile(jni$_.JString string, ProgressCallback progressCallback) {
+    final _$$selfRef = reference;
+    final _$string = string.reference;
+    final _$progressCallback = progressCallback.reference;
+    _canOpenFile(
+      _$$selfRef.pointer,
+      _id_canOpenFile.pointer,
+      _$string.pointer,
+      _$progressCallback.pointer,
+    ).check();
+  }
+
+  static final _id_openFile = FileSaver._class.instanceMethodId(
+    r'openFile',
+    r'(Ljava/lang/String;Ljava/lang/String;Lcom/vanvixi/file_saver_ffi/models/ProgressCallback;)V',
+  );
+
+  static final _openFile =
+      jni$_.ProtectedJniExtensions.lookup<
+            jni$_.NativeFunction<
+              jni$_.JThrowablePtr Function(
+                jni$_.Pointer<jni$_.Void>,
+                jni$_.JMethodIDPtr,
+                jni$_.VarArgs<
+                  (
+                    jni$_.Pointer<jni$_.Void>,
+                    jni$_.Pointer<jni$_.Void>,
+                    jni$_.Pointer<jni$_.Void>,
+                  )
+                >,
+              )
+            >
+          >('globalEnv_CallVoidMethod')
+          .asFunction<
+            jni$_.JThrowablePtr Function(
+              jni$_.Pointer<jni$_.Void>,
+              jni$_.JMethodIDPtr,
+              jni$_.Pointer<jni$_.Void>,
+              jni$_.Pointer<jni$_.Void>,
+              jni$_.Pointer<jni$_.Void>,
+            )
+          >();
+
+  /// from: `public fun openFile(uri: kotlin.String, mimeType: kotlin.String?, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
+  void openFile(
+    jni$_.JString string,
+    jni$_.JString? string1,
+    ProgressCallback progressCallback,
+  ) {
     final _$$selfRef = reference;
     final _$string = string.reference;
     final _$string1 = string1?.reference ?? jni$_.jNullReference;
+    final _$progressCallback = progressCallback.reference;
     _openFile(
       _$$selfRef.pointer,
       _id_openFile.pointer,
       _$string.pointer,
       _$string1.pointer,
+      _$progressCallback.pointer,
     ).check();
   }
 
