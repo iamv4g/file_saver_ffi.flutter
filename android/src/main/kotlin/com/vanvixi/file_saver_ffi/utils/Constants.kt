@@ -42,6 +42,11 @@ object Constants {
     const val ERROR_FILE_NOT_FOUND = "FILE_NOT_FOUND"
 
     /**
+     * A saved file could not be opened (no app for it, missing FileProvider setup)
+     */
+    const val ERROR_OPEN_FAILED = "OPEN_FAILED"
+
+    /**
      * Generic platform error
      */
     const val ERROR_PLATFORM = "PLATFORM_ERROR"

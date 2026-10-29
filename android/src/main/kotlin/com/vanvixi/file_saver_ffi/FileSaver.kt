@@ -13,6 +13,7 @@ import com.vanvixi.file_saver_ffi.core.ImageSaver
 import com.vanvixi.file_saver_ffi.core.VideoSaver
 import com.vanvixi.file_saver_ffi.core.base.BaseFileSaver
 import com.vanvixi.file_saver_ffi.core.base.SaveEntryFactory
+import com.vanvixi.file_saver_ffi.exception.FileOpenException
 import com.vanvixi.file_saver_ffi.models.ConflictResolution
 import com.vanvixi.file_saver_ffi.models.FileType
 import com.vanvixi.file_saver_ffi.models.ProgressCallback
@@ -109,12 +110,50 @@ class FileSaver(
     // File opening
     // ─────────────────────────────────────────────────────────────────────────
 
-    fun canOpenFile(uri: String): Boolean = FileOpener.canOpenFile(context, uri)
+    // Both run on [scope] rather than on the caller's thread, which is the
+    // main thread when Dart calls in: they make blocking IPC calls.
 
+    /**
+     * Checks whether the file at [uri] can be read.
+     *
+     * Reports `callback(3, 1.0, "true" | "false", null)`, or
+     * `callback(2, 0.0, code, message)` if the check couldn't run.
+     */
+    fun canOpenFile(
+        uri: String,
+        callback: ProgressCallback,
+    ) {
+        scope.launch {
+            try {
+                callback.onEvent(3, 1.0, FileOpener.canOpenFile(context, uri).toString(), null)
+            } catch (e: Exception) {
+                callback.onEvent(2, 0.0, Constants.ERROR_PLATFORM, e.message)
+            }
+        }
+    }
+
+    /**
+     * Opens the file at [uri] with a system app (see [FileOpener.openFile]).
+     *
+     * Reports `callback(3, 1.0, null, null)` once the app was started, or
+     * `callback(2, 0.0, code, message)` with the code from [FileOpenException].
+     */
     fun openFile(
         uri: String,
         mimeType: String?,
-    ) = FileOpener.openFile(context, uri, mimeType)
+        callback: ProgressCallback,
+    ) {
+        scope.launch {
+            try {
+                FileOpener.openFile(context, uri, mimeType)
+                callback.onEvent(3, 1.0, null, null)
+            } catch (e: FileOpenException) {
+                callback.onEvent(2, 0.0, e.code, e.message)
+            } catch (e: Exception) {
+                callback.onEvent(2, 0.0, Constants.ERROR_PLATFORM, e.message)
+            }
+        }
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Operation management

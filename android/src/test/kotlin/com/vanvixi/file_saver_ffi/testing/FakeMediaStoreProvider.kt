@@ -51,6 +51,10 @@ class FakeMediaStoreProvider : ContentProvider() {
     private var nextId = 1L
     private val storageDir: File by lazy { Files.createTempDirectory("fake-media").toFile() }
 
+    /** Runs before `openFile` opens a row's file, e.g. to block like a slow provider. */
+    @Volatile
+    var beforeOpenFile: () -> Unit = {}
+
     override fun onCreate() = true
 
     override fun getType(uri: Uri): String? = rowFor(uri)?.values?.getAsString(MediaColumns.MIME_TYPE)
@@ -150,6 +154,7 @@ class FakeMediaStoreProvider : ContentProvider() {
         uri: Uri,
         mode: String,
     ): ParcelFileDescriptor {
+        beforeOpenFile()
         val row = synchronized(this) { rowFor(uri) } ?: throw FileNotFoundException("No row for $uri")
         return ParcelFileDescriptor.open(row.file, ParcelFileDescriptor.parseMode(mode))
     }

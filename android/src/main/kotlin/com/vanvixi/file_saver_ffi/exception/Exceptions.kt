@@ -29,3 +29,14 @@ class NetworkDownloadException(
     message: String,
     val statusCode: Int? = null,
 ) : IOException(message)
+
+/**
+ * Exception thrown when a saved file cannot be opened.
+ *
+ * @property code One of the error codes in [com.vanvixi.file_saver_ffi.utils.Constants]
+ */
+class FileOpenException(
+    val code: String,
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)
