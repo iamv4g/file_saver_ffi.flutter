@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:jni/jni.dart';
 
@@ -20,7 +21,12 @@ import 'bindings.g.dart' as bindings;
 class FileSaverAndroid extends FileSaverPlatform {
   /// Native FileSaver instance - lazily initialized to avoid JNI calls during
   /// plugin registration (before JniPlugin has set up the JVM context).
-  late final bindings.FileSaver _fileSaver = bindings.FileSaver();
+  ///
+  /// It is tied to the engine running this isolate, so its saves are cancelled
+  /// when that engine is destroyed. A background isolate has no engine (-1).
+  late final bindings.FileSaver _fileSaver = bindings.FileSaver(
+    PlatformDispatcher.instance.engineId ?? -1,
+  );
 
   /// Registers this class as the default instance of [FileSaverPlatform].
   static void registerWith() {

@@ -49,9 +49,10 @@ Future<void> main(List<String> args) async {
           'android/src/main/kotlin/com/vanvixi/file_saver_ffi',
         ),
       ],
+      // Output of compileDebugKotlin with AGP 9's built-in Kotlin support.
       classPath: [
         packageRoot.resolve(
-          'example/build/file_saver_ffi/tmp/kotlin-classes/debug',
+          'example/build/file_saver_ffi/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes',
         ),
       ],
       classes: [
