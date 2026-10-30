@@ -54,7 +54,8 @@ final class WriteSessionTests: XCTestCase {
     ) throws -> WriteSession {
         let fileURL = directory.appendingPathComponent("log.txt")
         FileManager.default.createFile(atPath: fileURL.path, contents: nil)
-        let handle = failingWrites
+        let handle =
+            failingWrites
             ? try FileHandle(forReadingFrom: fileURL)
             : try FileHandle(forWritingTo: fileURL)
         return WriteSession(
