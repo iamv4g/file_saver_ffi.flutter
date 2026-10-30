@@ -351,7 +351,8 @@ extension BaseFileSaver {
             try cancellationToken?.throwIfCancelled()
             let sourceFile = try FileHelper.openSourceFile(
                 at: filePath,
-                onDownloadProgress: downloadProgressHandler
+                onDownloadProgress: downloadProgressHandler,
+                cancellationToken: cancellationToken
             )
             defer { sourceFile.close() }
 
@@ -410,10 +411,17 @@ extension BaseFileSaver {
 
         let downloadProgressHandler = progressMapper(from: onProgress, startProgress: 0.0, endProgress: 0.8)
 
-        let sourceFile = try FileHelper.openSourceFile(
-            at: filePath,
-            onDownloadProgress: downloadProgressHandler
-        )
+        let sourceFile: FileHelper.SourceFile
+        do {
+            sourceFile = try FileHelper.openSourceFile(
+                at: filePath,
+                onDownloadProgress: downloadProgressHandler,
+                cancellationToken: cancellationToken
+            )
+        } catch {
+            target.discard()
+            throw error
+        }
         defer { sourceFile.close() }
 
         let copyProgressHandler = progressMapper(from: onProgress, startProgress: 0.8, endProgress: 1.0)

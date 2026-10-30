@@ -282,10 +282,9 @@ class FileSaver {
         }
 
         let writeURL = target.writeURL
-        FileManager.default.createFile(atPath: writeURL.path, contents: nil)
         let fileHandle: FileHandle
         do {
-            fileHandle = try FileHandle(forWritingTo: writeURL)
+            fileHandle = try FileHelper.openForWriting(writeURL)
         } catch {
             target.discard()
             throw error
@@ -331,8 +330,7 @@ class FileSaver {
         let tmpURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension(ext)
-        FileManager.default.createFile(atPath: tmpURL.path, contents: nil)
-        let fileHandle = try FileHandle(forWritingTo: tmpURL)
+        let fileHandle = try FileHelper.openForWriting(tmpURL)
 
         // Closure captures everything needed for commit; caller invokes on closeWrite.
         let photosCommit: () throws -> String = {

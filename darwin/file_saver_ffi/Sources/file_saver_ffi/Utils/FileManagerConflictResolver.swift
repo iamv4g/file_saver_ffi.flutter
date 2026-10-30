@@ -2,16 +2,18 @@ import Foundation
 
 /// Where a save writes its content, as decided by `FileManagerConflictResolver`.
 ///
-/// Resolving never modifies anything on disk. Write the content to `writeURL`,
-/// then call `commit()` once the write succeeded, or `discard()` after it failed
-/// or was cancelled. `discard()` only removes the new file, never the file being
-/// replaced, so a failed `overwrite` keeps the original.
+/// Resolving creates the new file empty, so two saves can never pick the same
+/// name, and never touches an existing file. Write the content to `writeURL`,
+/// then call `commit()` once the write succeeded, or `discard()` if the save
+/// fails or is cancelled at any later point. `discard()` only removes the new
+/// file, never the file being replaced, so a failed `overwrite` keeps the
+/// original.
 enum FileSaveTarget {
-    /// No conflict, or `autoRename`: the new file is written at this URL.
+    /// No conflict, or `autoRename`: the new file, created empty.
     case create(URL)
 
-    /// `overwrite`: the content is written to `tempURL` in the same directory, and
-    /// `commit()` replaces `finalURL` with it.
+    /// `overwrite`: the content is written to `tempURL` (created empty) in the
+    /// same directory, and `commit()` replaces `finalURL` with it.
     case replace(finalURL: URL, tempURL: URL)
 
     /// `skip`: the file already exists. Nothing is written and the save reports
@@ -66,11 +68,13 @@ enum FileSaveTarget {
 }
 
 enum FileManagerConflictResolver {
-    /// Resolves the conflict for `fileName` in `directory` without modifying
-    /// anything on disk.
+    /// Resolves the conflict for `fileName` in `directory`. The file to write is
+    /// created empty: existence is checked and the name claimed in one step
+    /// (`O_CREAT | O_EXCL`).
     ///
     /// - Throws: `FileSaverError.fileExists` if the file exists and
-    ///   `conflictResolution` is `.fail`.
+    ///   `conflictResolution` is `.fail`, and the error of creating the file,
+    ///   such as `permissionDenied` in a directory the app can't write.
     static func resolveConflict(
         directory: URL,
         fileName: String,
@@ -78,7 +82,7 @@ enum FileManagerConflictResolver {
     ) throws -> FileSaveTarget {
         let targetURL = directory.appendingPathComponent(fileName)
 
-        if !FileManager.default.fileExists(atPath: targetURL.path) {
+        if try claim(targetURL) {
             return .create(targetURL)
         }
 
@@ -88,6 +92,7 @@ enum FileManagerConflictResolver {
 
         case .overwrite:
             let tempURL = directory.appendingPathComponent(".\(fileName).\(UUID().uuidString).tmp")
+            try FileHelper.createFileExclusively(at: tempURL)
             return .replace(finalURL: targetURL, tempURL: tempURL)
 
         case .fail:
@@ -98,14 +103,20 @@ enum FileManagerConflictResolver {
         }
     }
 
+    /// Creates `url` empty. Returns `false` if it already exists.
+    private static func claim(_ url: URL) throws -> Bool {
+        do {
+            try FileHelper.createFileExclusively(at: url)
+            return true
+        } catch FileSaverError.fileExists {
+            return false
+        }
+    }
+
     private static func autoRename(directory: URL, fileName: String) throws -> URL {
-        let (name, ext) = splitFileName(fileName)
-
         for i in 1...Constants.maxRenameAttempts {
-            let newName = "\(name) (\(i)).\(ext)"
-            let newURL = directory.appendingPathComponent(newName)
-
-            if !FileManager.default.fileExists(atPath: newURL.path) {
+            let newURL = directory.appendingPathComponent(renamed(fileName, i))
+            if try claim(newURL) {
                 return newURL
             }
         }
@@ -115,13 +126,13 @@ enum FileManagerConflictResolver {
         )
     }
 
-    private static func splitFileName(_ fileName: String) -> (name: String, ext: String) {
-        let components = fileName.split(separator: ".")
-        if components.count > 1 {
-            let ext = String(components.last!)
-            let name = components.dropLast().joined(separator: ".")
-            return (name, ext)
+    /// `photo.jpg` → `photo (n).jpg`. A name without an extension, or a dot
+    /// file such as `.env`, gets the number at the end: `notes (n)`,
+    /// `.env (n)`.
+    static func renamed(_ fileName: String, _ n: Int) -> String {
+        guard let dot = fileName.lastIndex(of: "."), dot != fileName.startIndex else {
+            return "\(fileName) (\(n))"
         }
-        return (fileName, "")
+        return "\(fileName[..<dot]) (\(n))\(fileName[dot...])"
     }
 }
