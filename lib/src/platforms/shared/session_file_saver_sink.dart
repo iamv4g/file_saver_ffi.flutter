@@ -148,12 +148,10 @@ class SessionFileSaverSink implements FileSaverSink {
     }
   }
 
-  /// Writes what is still queued and finishes the file.
-  ///
-  /// Completes like [done]: with an error if a write failed or the file
-  /// can't be finished.
+  /// Writes what is still queued, finishes the file and completes with its
+  /// URI, like [result].
   @override
-  Future<void> close() {
+  Future<Uri> close() {
     if (_isAddingStream) {
       throw StateError('Cannot close a FileSaverSink while addStream runs');
     }
@@ -162,7 +160,7 @@ class SessionFileSaverSink implements FileSaverSink {
       _finalizer.detach(this);
       _finish();
     }
-    return done;
+    return result;
   }
 
   // ─────────────────────────────────────────────────────────────────────────

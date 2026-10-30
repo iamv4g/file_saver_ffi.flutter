@@ -99,6 +99,23 @@ void main() {
     expect(session.cancels, 0);
   });
 
+  group('close', () {
+    test('completes with the URI, and again when called twice', () async {
+      sink.add([1]);
+
+      expect(await sink.close(), Uri.parse('content://saved/1'));
+      expect(await sink.close(), Uri.parse('content://saved/1'));
+      expect(session.closes, 1);
+    });
+
+    test('after cancel throws CancelledException', () async {
+      await sink.cancel();
+
+      await expectLater(sink.close(), throwsA(isA<CancelledException>()));
+      expect(session.closes, 0);
+    });
+  });
+
   group('close while addStream runs', () {
     test('throws StateError instead of waiting forever', () async {
       final adding = sink.addStream(

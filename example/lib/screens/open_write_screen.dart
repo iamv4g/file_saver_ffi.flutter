@@ -146,8 +146,7 @@ class _OpenWriteScreenState extends State<OpenWriteScreen> {
       await _sink?.addStream(response.stream.cast<List<int>>());
 
       // ── Step 7: Finalize ──────────────────────────────────────────────────
-      await _sink?.close();
-      final savedUri = await _sink?.result;
+      final savedUri = await _sink?.close();
       _sink = null;
 
       // Cancel button pressed while streaming: _cancel already reported it.
