@@ -1,6 +1,6 @@
 name: file_saver_ffi
 description: "A high-performance file saver for Flutter using FFI and JNI. Effortlessly save to gallery (images/videos) or device storage with original quality and custom album support."
-version: 0.10.1
+version: 0.11.0
 homepage: https://github.com/iamv4g/file_saver_ffi.flutter
 repository: https://github.com/iamv4g/file_saver_ffi.flutter
 issue_tracker: https://github.com/iamv4g/file_saver_ffi.flutter/issues
@@ -29,7 +29,7 @@ dependencies:
   path: ^1.9.1
   path_provider_windows: ^2.3.0
   xdg_directories: ^1.1.0
-  dir_picker: ^0.5.1
+  dir_picker: ^0.6.0
   web: ^1.1.1
 
 dev_dependencies:
