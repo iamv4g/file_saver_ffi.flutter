@@ -29,7 +29,7 @@ if ! $all; then
       # The rest of test/ (contracts, exceptions, facade) runs on Ubuntu, always.
       test/*) ;;
       android/* | lib/src/platforms/android/* | example/android/* | example/integration_test/android_* | tool/jnigen.dart | tool/check_jni_keeps.dart) android=true ;;
-      darwin/* | lib/src/platforms/darwin/* | example/ios/* | example/macos/* | tool/ffigen.dart) darwin=true ;;
+      darwin/* | lib/src/platforms/darwin/* | example/ios/* | example/macos/* | example/integration_test/ios_* | tool/ffigen.dart) darwin=true ;;
       lib/src/platforms/windows/* | example/windows/*) windows=true ;;
       lib/src/platforms/linux/* | example/linux/*) linux=true ;;
       lib/src/platforms/shared/*) desktop=true windows=true linux=true ;;
