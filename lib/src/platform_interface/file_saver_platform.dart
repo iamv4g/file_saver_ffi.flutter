@@ -237,6 +237,27 @@ abstract class FileSaverPlatform {
   // MARK: Protected helpers for subclasses
   // ─────────────────────────────────────────────────────────────────────────
 
+  /// Returns [saveLocation] as a location of the running platform, [T], or
+  /// null for the platform's default. Call it after handling [PathLocation].
+  ///
+  /// Throws [InvalidInputException] for another platform's location, such as
+  /// [IosSaveLocation.photos] on macOS, and for a [PickedDirectoryLocation],
+  /// which [saveAs] and [openWriteAs] take.
+  @protected
+  T? checkSaveLocation<T extends SaveLocation>(SaveLocation? saveLocation) {
+    return switch (saveLocation) {
+      null => null,
+      final T location => location,
+      PickedDirectoryLocation() => throw const InvalidInputException(
+        'A PickedDirectoryLocation is saved to with saveAs or openWriteAs.',
+      ),
+      _ => throw InvalidInputException(
+        "$saveLocation isn't a save location on this platform. Pass a $T, a "
+        'PathLocation, or null for the default.',
+      ),
+    };
+  }
+
   /// Validates input for [saveBytes] and [saveBytesAsync].
   @protected
   void validateBytesInput(Uint8List bytes, String fileName) {

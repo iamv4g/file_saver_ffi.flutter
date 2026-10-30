@@ -20,17 +20,14 @@ import '../shared/path_location_writer.dart';
 import 'bindings.g.dart';
 import 'darwin_file_saver_sink.dart';
 
-typedef NativeVoidFun = NativeFunction<Void Function(Pointer<Void>)>;
-
 /// FileSaver implementation for Apple platforms (iOS and macOS).
 ///
 /// Uses shared darwin code with platform-specific behaviors:
 /// - iOS: Supports Photos Library and Documents
 /// - macOS: Supports Documents, Downloads, and Desktop
-class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
+class FileSaverDarwin extends FileSaverPlatform {
   FileSaverDarwin() {
-    final dylib = DynamicLibrary.process();
-    _fileSaver = FileSaverFFI(dylib);
+    _fileSaver = FileSaverFFI(DynamicLibrary.process());
 
     // Initialize Dart API DL for NativePort communication
     final initResult = _fileSaver.initDartApiDl(NativeApi.initializeApiDLData);
@@ -40,25 +37,9 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
         'INIT_FAILED',
       );
     }
-
-    _saverInstance = _fileSaver.init();
-
-    if (_saverInstance.address != 0) {
-      _finalizer.attach(this, _saverInstance.cast());
-    }
   }
 
   late final FileSaverFFI _fileSaver;
-  late final Pointer<Void> _saverInstance;
-
-  static final int _disposeAddress = DynamicLibrary.process()
-      .lookup<NativeVoidFun>('file_saver_dispose')
-      .address;
-
-  static final Pointer<NativeFinalizerFunction> _nativeFinalizerPtr =
-      Pointer.fromAddress(_disposeAddress);
-
-  static final _finalizer = NativeFinalizer(_nativeFinalizerPtr);
 
   /// Registers this class as the default instance of [FileSaverPlatform].
   static void registerWith() {
@@ -87,60 +68,20 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
       );
     }
 
-    return Stream.multi((controller) {
-      final receivePort = ReceivePort();
-      final arena = Arena();
-      final nativePort = receivePort.sendPort.nativePort;
-      bool cleanedUp = false;
-
-      void cleanup() {
-        if (cleanedUp) return;
-        cleanedUp = true;
-        receivePort.close();
-        arena.releaseAll();
-        controller.closeSync();
-      }
-
-      // Allocate in arena - all freed together with arena.releaseAll()
-      final dataPointer = arena<Uint8>(fileBytes.length);
-      dataPointer.asTypedList(fileBytes.length).setAll(0, fileBytes);
-
-      final fileNameCStr = fileName.toNativeUtf8(allocator: arena);
-      final extCStr = fileType.ext.toNativeUtf8(allocator: arena);
-      final mimeCStr = fileType.mimeType.toNativeUtf8(allocator: arena);
-      final saveLocationIndex = _saveLocationToIndex(saveLocation);
-      final subDirCStr = subDir?.toNativeUtf8(allocator: arena);
-
-      // Listen to native port - cleanup happens here on terminal events
-      receivePort.listen((message) {
-        if (cleanedUp || controller.isClosed) return;
-
-        final event = parseDarwinMessage(message);
-        controller.addSync(event);
-
-        if (isTerminal(event)) cleanup();
-      });
-
-      // Call native function - returns tokenId for cancellation
-      final tokenId = _fileSaver.saveBytes(
-        _saverInstance,
-        dataPointer,
+    final saveLocationIndex = _saveLocationToIndex(saveLocation);
+    return _runSave(
+      (arena, nativePort) => _fileSaver.saveBytes(
+        _toNativeBytes(fileBytes),
         fileBytes.length,
-        fileNameCStr.cast(),
-        extCStr.cast(),
-        mimeCStr.cast(),
+        fileName.toNativeUtf8(allocator: arena).cast(),
+        fileType.ext.toNativeUtf8(allocator: arena).cast(),
+        fileType.mimeType.toNativeUtf8(allocator: arena).cast(),
         saveLocationIndex,
-        subDirCStr?.cast() ?? nullptr,
+        subDir?.toNativeUtf8(allocator: arena).cast() ?? nullptr,
         conflictResolution.index,
         nativePort,
-      );
-
-      controller.onCancel = () {
-        _fileSaver.cancel(tokenId);
-        // Fallback cleanup if native doesn't respond with Cancelled event
-        Future.delayed(const Duration(milliseconds: 500), cleanup);
-      };
-    });
+      ),
+    );
   }
 
   @override
@@ -165,57 +106,19 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
       );
     }
 
-    return Stream.multi((controller) {
-      final receivePort = ReceivePort();
-      final arena = Arena();
-      final nativePort = receivePort.sendPort.nativePort;
-      bool cleanedUp = false;
-
-      void cleanup() {
-        if (cleanedUp) return;
-        cleanedUp = true;
-        receivePort.close();
-        arena.releaseAll();
-        controller.closeSync();
-      }
-
-      // Allocate in arena - all freed together with arena.releaseAll()
-      final filePathCStr = filePath.toNativeUtf8(allocator: arena);
-      final fileNameCStr = fileName.toNativeUtf8(allocator: arena);
-      final extCStr = fileType.ext.toNativeUtf8(allocator: arena);
-      final mimeCStr = fileType.mimeType.toNativeUtf8(allocator: arena);
-      final saveLocationIndex = _saveLocationToIndex(saveLocation);
-      final subDirCStr = subDir?.toNativeUtf8(allocator: arena);
-
-      // Listen to native port - cleanup happens here on terminal events
-      receivePort.listen((message) {
-        if (cleanedUp || controller.isClosed) return;
-
-        final event = parseDarwinMessage(message);
-        controller.addSync(event);
-
-        if (isTerminal(event)) cleanup();
-      });
-
-      // Call native function - returns tokenId for cancellation
-      final tokenId = _fileSaver.saveFile(
-        _saverInstance,
-        filePathCStr.cast(),
-        fileNameCStr.cast(),
-        extCStr.cast(),
-        mimeCStr.cast(),
+    final saveLocationIndex = _saveLocationToIndex(saveLocation);
+    return _runSave(
+      (arena, nativePort) => _fileSaver.saveFile(
+        filePath.toNativeUtf8(allocator: arena).cast(),
+        fileName.toNativeUtf8(allocator: arena).cast(),
+        fileType.ext.toNativeUtf8(allocator: arena).cast(),
+        fileType.mimeType.toNativeUtf8(allocator: arena).cast(),
         saveLocationIndex,
-        subDirCStr?.cast() ?? nullptr,
+        subDir?.toNativeUtf8(allocator: arena).cast() ?? nullptr,
         conflictResolution.index,
         nativePort,
-      );
-
-      controller.onCancel = () {
-        _fileSaver.cancel(tokenId);
-        // Fallback cleanup if native doesn't respond with Cancelled event
-        Future.delayed(const Duration(milliseconds: 500), cleanup);
-      };
-    });
+      ),
+    );
   }
 
   @override
@@ -244,62 +147,21 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
       );
     }
 
-    return Stream.multi((controller) {
-      final receivePort = ReceivePort();
-      final arena = Arena();
-      final nativePort = receivePort.sendPort.nativePort;
-      bool cleanedUp = false;
-
-      void cleanup() {
-        if (cleanedUp) return;
-        cleanedUp = true;
-        receivePort.close();
-        arena.releaseAll();
-        controller.closeSync();
-      }
-
-      // Allocate in arena - all freed together with arena.releaseAll()
-      final urlCStr = url.toNativeUtf8(allocator: arena);
-      final headersJsonCStr = headers != null
-          ? jsonEncode(headers).toNativeUtf8(allocator: arena)
-          : null;
-      final fileNameCStr = fileName.toNativeUtf8(allocator: arena);
-      final extCStr = fileType.ext.toNativeUtf8(allocator: arena);
-      final mimeCStr = fileType.mimeType.toNativeUtf8(allocator: arena);
-      final saveLocationIndex = _saveLocationToIndex(saveLocation);
-      final subDirCStr = subDir?.toNativeUtf8(allocator: arena);
-
-      // Listen to native port - cleanup happens here on terminal events
-      receivePort.listen((message) {
-        if (cleanedUp || controller.isClosed) return;
-
-        final event = parseDarwinMessage(message);
-        controller.addSync(event);
-
-        if (isTerminal(event)) cleanup();
-      });
-
-      // Call native function - returns tokenId for cancellation
-      final tokenId = _fileSaver.saveNetwork(
-        _saverInstance,
-        urlCStr.cast(),
-        headersJsonCStr?.cast() ?? nullptr,
+    final saveLocationIndex = _saveLocationToIndex(saveLocation);
+    return _runSave(
+      (arena, nativePort) => _fileSaver.saveNetwork(
+        url.toNativeUtf8(allocator: arena).cast(),
+        _headersToNative(headers, arena),
         timeout.inSeconds,
-        fileNameCStr.cast(),
-        extCStr.cast(),
-        mimeCStr.cast(),
+        fileName.toNativeUtf8(allocator: arena).cast(),
+        fileType.ext.toNativeUtf8(allocator: arena).cast(),
+        fileType.mimeType.toNativeUtf8(allocator: arena).cast(),
         saveLocationIndex,
-        subDirCStr?.cast() ?? nullptr,
+        subDir?.toNativeUtf8(allocator: arena).cast() ?? nullptr,
         conflictResolution.index,
         nativePort,
-      );
-
-      controller.onCancel = () {
-        _fileSaver.cancel(tokenId);
-        // Fallback cleanup if native doesn't respond with Cancelled event
-        Future.delayed(const Duration(milliseconds: 500), cleanup);
-      };
-    });
+      ),
+    );
   }
 
   @override
@@ -345,49 +207,17 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
     required String extension,
     required ConflictResolution conflictResolution,
   }) {
-    return Stream.multi((controller) {
-      final receivePort = ReceivePort();
-      final arena = Arena();
-      final nativePort = receivePort.sendPort.nativePort;
-      bool cleanedUp = false;
-
-      void cleanup() {
-        if (cleanedUp) return;
-        cleanedUp = true;
-        receivePort.close();
-        arena.releaseAll();
-        controller.closeSync();
-      }
-
-      final dataPointer = arena<Uint8>(fileBytes.length);
-      dataPointer.asTypedList(fileBytes.length).setAll(0, fileBytes);
-      final dirUriCStr = directoryUri.toNativeUtf8(allocator: arena);
-      final baseFileNameCStr = baseFileName.toNativeUtf8(allocator: arena);
-      final extCStr = extension.toNativeUtf8(allocator: arena);
-
-      receivePort.listen((message) {
-        if (cleanedUp || controller.isClosed) return;
-        final event = parseDarwinMessage(message);
-        controller.addSync(event);
-        if (isTerminal(event)) cleanup();
-      });
-
-      final tokenId = _fileSaver.saveBytesAs(
-        _saverInstance,
-        dataPointer,
+    return _runSave(
+      (arena, nativePort) => _fileSaver.saveBytesAs(
+        _toNativeBytes(fileBytes),
         fileBytes.length,
-        dirUriCStr.cast(),
-        baseFileNameCStr.cast(),
-        extCStr.cast(),
+        directoryUri.toNativeUtf8(allocator: arena).cast(),
+        baseFileName.toNativeUtf8(allocator: arena).cast(),
+        extension.toNativeUtf8(allocator: arena).cast(),
         conflictResolution.index,
         nativePort,
-      );
-
-      controller.onCancel = () {
-        _fileSaver.cancel(tokenId);
-        Future.delayed(const Duration(milliseconds: 500), cleanup);
-      };
-    });
+      ),
+    );
   }
 
   Stream<SaveProgress> _saveFileAs({
@@ -397,47 +227,16 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
     required String extension,
     required ConflictResolution conflictResolution,
   }) {
-    return Stream.multi((controller) {
-      final receivePort = ReceivePort();
-      final arena = Arena();
-      final nativePort = receivePort.sendPort.nativePort;
-      bool cleanedUp = false;
-
-      void cleanup() {
-        if (cleanedUp) return;
-        cleanedUp = true;
-        receivePort.close();
-        arena.releaseAll();
-        controller.closeSync();
-      }
-
-      final filePathCStr = filePath.toNativeUtf8(allocator: arena);
-      final dirUriCStr = directoryUri.toNativeUtf8(allocator: arena);
-      final baseFileNameCStr = baseFileName.toNativeUtf8(allocator: arena);
-      final extCStr = extension.toNativeUtf8(allocator: arena);
-
-      receivePort.listen((message) {
-        if (cleanedUp || controller.isClosed) return;
-        final event = parseDarwinMessage(message);
-        controller.addSync(event);
-        if (isTerminal(event)) cleanup();
-      });
-
-      final tokenId = _fileSaver.saveFileAs(
-        _saverInstance,
-        filePathCStr.cast(),
-        dirUriCStr.cast(),
-        baseFileNameCStr.cast(),
-        extCStr.cast(),
+    return _runSave(
+      (arena, nativePort) => _fileSaver.saveFileAs(
+        filePath.toNativeUtf8(allocator: arena).cast(),
+        directoryUri.toNativeUtf8(allocator: arena).cast(),
+        baseFileName.toNativeUtf8(allocator: arena).cast(),
+        extension.toNativeUtf8(allocator: arena).cast(),
         conflictResolution.index,
         nativePort,
-      );
-
-      controller.onCancel = () {
-        _fileSaver.cancel(tokenId);
-        Future.delayed(const Duration(milliseconds: 500), cleanup);
-      };
-    });
+      ),
+    );
   }
 
   Stream<SaveProgress> _saveNetworkAs({
@@ -449,52 +248,18 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
     required String extension,
     required ConflictResolution conflictResolution,
   }) {
-    return Stream.multi((controller) {
-      final receivePort = ReceivePort();
-      final arena = Arena();
-      final nativePort = receivePort.sendPort.nativePort;
-      bool cleanedUp = false;
-
-      void cleanup() {
-        if (cleanedUp) return;
-        cleanedUp = true;
-        receivePort.close();
-        arena.releaseAll();
-        controller.closeSync();
-      }
-
-      final urlCStr = url.toNativeUtf8(allocator: arena);
-      final headersJsonCStr = headers != null
-          ? jsonEncode(headers).toNativeUtf8(allocator: arena)
-          : null;
-      final dirUriCStr = directoryUri.toNativeUtf8(allocator: arena);
-      final baseFileNameCStr = baseFileName.toNativeUtf8(allocator: arena);
-      final extCStr = extension.toNativeUtf8(allocator: arena);
-
-      receivePort.listen((message) {
-        if (cleanedUp || controller.isClosed) return;
-        final event = parseDarwinMessage(message);
-        controller.addSync(event);
-        if (isTerminal(event)) cleanup();
-      });
-
-      final tokenId = _fileSaver.saveNetworkAs(
-        _saverInstance,
-        urlCStr.cast(),
-        headersJsonCStr?.cast() ?? nullptr,
+    return _runSave(
+      (arena, nativePort) => _fileSaver.saveNetworkAs(
+        url.toNativeUtf8(allocator: arena).cast(),
+        _headersToNative(headers, arena),
         timeout.inSeconds,
-        dirUriCStr.cast(),
-        baseFileNameCStr.cast(),
-        extCStr.cast(),
+        directoryUri.toNativeUtf8(allocator: arena).cast(),
+        baseFileName.toNativeUtf8(allocator: arena).cast(),
+        extension.toNativeUtf8(allocator: arena).cast(),
         conflictResolution.index,
         nativePort,
-      );
-
-      controller.onCancel = () {
-        _fileSaver.cancel(tokenId);
-        Future.delayed(const Duration(milliseconds: 500), cleanup);
-      };
-    });
+      ),
+    );
   }
 
   @override
@@ -560,6 +325,7 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
       );
     }
 
+    final saveLocationIndex = _saveLocationToIndex(saveLocation);
     final receivePort = ReceivePort();
     final completer = Completer<int>();
     receivePort.listen((message) {
@@ -587,11 +353,10 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
       final mimeCStr = fileType.mimeType.toNativeUtf8(allocator: arena);
       final subDirCStr = subDir?.toNativeUtf8(allocator: arena);
       _fileSaver.openWrite(
-        _saverInstance,
         fileNameCStr.cast(),
         extCStr.cast(),
         mimeCStr.cast(),
-        _saveLocationToIndex(saveLocation),
+        saveLocationIndex,
         subDirCStr?.cast() ?? nullptr,
         conflictResolution.index,
         totalSize ?? -1,
@@ -643,7 +408,6 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
       final fileNameCStr = fileName.toNativeUtf8(allocator: arena);
       final extCStr = fileType.ext.toNativeUtf8(allocator: arena);
       _fileSaver.openWriteAs(
-        _saverInstance,
         dirUriCStr.cast(),
         fileNameCStr.cast(),
         extCStr.cast(),
@@ -665,16 +429,70 @@ class FileSaverDarwin extends FileSaverPlatform implements Finalizable {
   // Private Methods
   // ─────────────────────────────────────────────────────────────────────────
 
-  /// Returns the native index for a [SaveLocation].
+  /// Starts a save with [start] and returns its events.
   ///
-  /// Maps platform-specific save locations to their FFI integer values:
-  /// - iOS: [IosSaveLocation.documents] = 0 (default), etc.
-  /// - macOS: [MacosSaveLocation.downloads] = 0 (default), etc.
+  /// [start] calls the native function, which returns the token for
+  /// cancellation. The native side copies the strings before it returns, so
+  /// [start]'s arena is released right after the call.
+  Stream<SaveProgress> _runSave(
+    int Function(Arena arena, int nativePort) start,
+  ) {
+    return Stream.multi((controller) {
+      final receivePort = ReceivePort();
+      var cleanedUp = false;
+
+      void cleanup() {
+        if (cleanedUp) return;
+        cleanedUp = true;
+        receivePort.close();
+        controller.closeSync();
+      }
+
+      // Cleanup happens here on terminal events
+      receivePort.listen((message) {
+        if (cleanedUp || controller.isClosed) return;
+        final event = parseDarwinMessage(message);
+        controller.addSync(event);
+        if (isTerminal(event)) cleanup();
+      });
+
+      final tokenId = using(
+        (arena) => start(arena, receivePort.sendPort.nativePort),
+      );
+
+      controller.onCancel = () {
+        _fileSaver.cancel(tokenId);
+        // Fallback cleanup if native doesn't respond with Cancelled event
+        Future.delayed(const Duration(milliseconds: 500), cleanup);
+      };
+    });
+  }
+
+  /// Copies [bytes] into a `malloc` buffer. The native function it is passed
+  /// to takes ownership and frees it, so Dart holds no copy while the save
+  /// runs.
+  static Pointer<Uint8> _toNativeBytes(Uint8List bytes) {
+    final pointer = malloc<Uint8>(bytes.length);
+    pointer.asTypedList(bytes.length).setAll(0, bytes);
+    return pointer;
+  }
+
+  static Pointer<Char> _headersToNative(
+    Map<String, String>? headers,
+    Arena arena,
+  ) {
+    if (headers == null) return nullptr;
+    return jsonEncode(headers).toNativeUtf8(allocator: arena).cast();
+  }
+
+  /// Returns the native index of [saveLocation]: the [IosSaveLocation] on iOS
+  /// or the [MacosSaveLocation] on macOS, and 0 (the default) for null.
+  ///
+  /// Throws [InvalidInputException] for any other location.
   int _saveLocationToIndex(SaveLocation? saveLocation) {
-    return switch (saveLocation) {
-      IosSaveLocation location => location.index,
-      MacosSaveLocation location => location.index,
-      _ => 0,
-    };
+    final Enum? location = Platform.isIOS
+        ? checkSaveLocation<IosSaveLocation>(saveLocation)
+        : checkSaveLocation<MacosSaveLocation>(saveLocation);
+    return location?.index ?? 0;
   }
 }

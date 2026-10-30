@@ -5,16 +5,12 @@
 #include <stdbool.h>
 
 /// Initialize Dart API for NativePort communication.
-/// Must be called before using file_saver_save_bytes.
+/// Must be called before any other function.
 ///
 /// @param data Pointer from NativeApi.initializeApiDLData
-/// @return 0 on success, -1 on failure
+/// @return 0 on success, -1 if the Dart API DL major version isn't 2 or
+///         Dart_PostCObject is missing
 intptr_t file_saver_init_dart_api_dl(void* data);
-
-void* file_saver_init(void);
-
-
-void file_saver_dispose(void* instance);
 
 /// Cancel an ongoing save operation.
 ///
@@ -30,8 +26,8 @@ void file_saver_cancel(uint64_t tokenId);
 /// - Success:    [3, fileUri]
 /// - Cancelled:  [4]
 ///
-/// @param instance FileSaver instance from file_saver_init
-/// @param fileData Byte array of file content
+/// @param fileData Byte array of file content, allocated with malloc. The
+///        function takes ownership and frees it with free().
 /// @param fileDataLength Length of fileData
 /// @param baseFileName File name without extension
 /// @param extension File extension without dot
@@ -42,8 +38,7 @@ void file_saver_cancel(uint64_t tokenId);
 /// @param native_port Dart NativePort for progress reporting
 /// @return Token ID for cancellation
 uint64_t file_saver_save_bytes(
-    void* instance,
-    const uint8_t* fileData,
+    uint8_t* fileData,
     int64_t fileDataLength,
     const char* baseFileName,
     const char* extension,
@@ -68,7 +63,6 @@ uint64_t file_saver_save_bytes(
 /// - Success:    [3, fileUri]
 /// - Cancelled:  [4]
 ///
-/// @param instance FileSaver instance from file_saver_init
 /// @param filePath Source file path (file:// URI)
 /// @param baseFileName Target file name without extension
 /// @param extension File extension without dot
@@ -79,7 +73,6 @@ uint64_t file_saver_save_bytes(
 /// @param native_port Dart NativePort for progress reporting
 /// @return Token ID for cancellation
 uint64_t file_saver_save_file(
-    void *instance,
     const char *filePath,
     const char *baseFileName,
     const char *extension,
@@ -104,7 +97,6 @@ uint64_t file_saver_save_file(
 /// - Success:    [3, fileUri]
 /// - Cancelled:  [4]
 ///
-/// @param instance FileSaver instance from file_saver_init
 /// @param urlString URL to download from
 /// @param headersJson Optional JSON string of HTTP headers (can be NULL)
 /// @param timeoutSeconds Timeout in seconds for network request
@@ -117,7 +109,6 @@ uint64_t file_saver_save_file(
 /// @param native_port Dart NativePort for progress reporting
 /// @return Token ID for cancellation
 uint64_t file_saver_save_network(
-    void* instance,
     const char* urlString,
     const char* headersJson,
     int32_t timeoutSeconds,
@@ -142,8 +133,8 @@ uint64_t file_saver_save_network(
 /// - Success:    [3, fileUri]
 /// - Cancelled:  [4]
 ///
-/// @param instance FileSaver instance from file_saver_init
-/// @param fileData Byte array of file content
+/// @param fileData Byte array of file content, allocated with malloc. The
+///        function takes ownership and frees it with free().
 /// @param fileDataLength Length of fileData
 /// @param directoryUri Directory URI from DirPicker.pick() (package:dir_picker)
 /// @param baseFileName File name without extension
@@ -152,8 +143,7 @@ uint64_t file_saver_save_network(
 /// @param native_port Dart NativePort for progress reporting
 /// @return Token ID for cancellation
 uint64_t file_saver_save_bytes_as(
-    void* instance,
-    const uint8_t* fileData,
+    uint8_t* fileData,
     int64_t fileDataLength,
     const char* directoryUri,
     const char* baseFileName,
@@ -174,7 +164,6 @@ uint64_t file_saver_save_bytes_as(
 /// - Success:    [3, fileUri]
 /// - Cancelled:  [4]
 ///
-/// @param instance FileSaver instance from file_saver_init
 /// @param filePath Source file path (file:// URI)
 /// @param directoryUri Directory URI from DirPicker.pick() (package:dir_picker)
 /// @param baseFileName File name without extension
@@ -183,7 +172,6 @@ uint64_t file_saver_save_bytes_as(
 /// @param native_port Dart NativePort for progress reporting
 /// @return Token ID for cancellation
 uint64_t file_saver_save_file_as(
-    void* instance,
     const char* filePath,
     const char* directoryUri,
     const char* baseFileName,
@@ -204,7 +192,6 @@ uint64_t file_saver_save_file_as(
 /// - Success:    [3, fileUri]
 /// - Cancelled:  [4]
 ///
-/// @param instance FileSaver instance from file_saver_init
 /// @param urlString URL to download from
 /// @param headersJson Optional JSON string of HTTP headers (can be NULL)
 /// @param timeoutSeconds Timeout in seconds for network request
@@ -215,7 +202,6 @@ uint64_t file_saver_save_file_as(
 /// @param native_port Dart NativePort for progress reporting
 /// @return Token ID for cancellation
 uint64_t file_saver_save_network_as(
-    void* instance,
     const char* urlString,
     const char* headersJson,
     int32_t timeoutSeconds,
@@ -264,7 +250,6 @@ bool file_saver_can_open_file(const char* uri);
 /// - Session opened:  [3, sessionId]   (sessionId as string)
 /// - Error:           [2, errorCode, errorMessage]
 ///
-/// @param instance    FileSaver instance from file_saver_init
 /// @param baseFileName File name without extension
 /// @param ext         File extension without dot
 /// @param mimeType    MIME type string
@@ -274,7 +259,6 @@ bool file_saver_can_open_file(const char* uri);
 /// @param totalSize   Total expected bytes (-1 if unknown)
 /// @param native_port Dart NativePort for result delivery
 void file_saver_open_write(
-    void* instance,
     const char* baseFileName,
     const char* ext,
     const char* mimeType,
@@ -291,7 +275,6 @@ void file_saver_open_write(
 /// - Session opened:  [3, sessionId]   (sessionId as string)
 /// - Error:           [2, errorCode, errorMessage]
 ///
-/// @param instance    FileSaver instance from file_saver_init
 /// @param directoryUri Directory URI from DirPicker.pick()
 /// @param baseFileName File name without extension
 /// @param ext         File extension without dot
@@ -299,7 +282,6 @@ void file_saver_open_write(
 /// @param totalSize   Total expected bytes (-1 if unknown)
 /// @param native_port Dart NativePort for result delivery
 void file_saver_open_write_as(
-    void* instance,
     const char* directoryUri,
     const char* baseFileName,
     const char* ext,
@@ -315,12 +297,13 @@ void file_saver_open_write_as(
 /// - Error:      [2, errorCode, errorMessage]
 ///
 /// @param sessionId  Session ID from file_saver_open_write[_as]
-/// @param data       Byte array to write
+/// @param data       Byte array to write, allocated with malloc. The function
+///                   takes ownership and frees it with free().
 /// @param dataLength Length of data in bytes
 /// @param native_port Dart NativePort for result delivery
 void file_saver_write_chunk(
     uint64_t sessionId,
-    const uint8_t* data,
+    uint8_t* data,
     int64_t dataLength,
     int64_t native_port
 );

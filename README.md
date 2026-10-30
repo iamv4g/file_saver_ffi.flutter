@@ -110,7 +110,7 @@ Create `android/app/src/main/res/xml/file_saver_ffi_file_paths.xml`:
 <details>
 <summary><b>IOS Configuration</b></summary>
 
-**Supported:** IOS 13.0+ (Swift Package Manager and CocoaPods)
+**Supported:** iOS 13.4+ (Swift Package Manager and CocoaPods)
 
 Add to `ios/Runner/Info.plist`:
 

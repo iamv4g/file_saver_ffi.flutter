@@ -23,7 +23,7 @@ const String _kDocuments = '{FDD39AD0-238F-46AF-ADB4-6C85480369C7}';
 /// Extends [DesktopFileSaver] — only [resolveDirectory] and [launchFile] are
 /// platform-specific. Directory resolution uses [PathProviderWindows]
 /// (SHGetKnownFolderPath via dart:ffi); files are opened with ShellExecuteExW.
-class FileSaverWindows extends DesktopFileSaver {
+class FileSaverWindows extends DesktopFileSaver<WindowsSaveLocation> {
   /// Registers this class as the default instance of [FileSaverPlatform].
   static void registerWith() {
     FileSaverPlatform.instance = FileSaverWindows();
@@ -33,7 +33,7 @@ class FileSaverWindows extends DesktopFileSaver {
 
   @override
   Future<String> resolveDirectory(
-    SaveLocation? saveLocation,
+    WindowsSaveLocation? saveLocation,
     String? subDir,
   ) async {
     final folderGuid = switch (saveLocation) {
@@ -42,7 +42,7 @@ class FileSaverWindows extends DesktopFileSaver {
       WindowsSaveLocation.videos => _kVideos,
       WindowsSaveLocation.music => _kMusic,
       WindowsSaveLocation.documents => _kDocuments,
-      _ => _kDownloads,
+      null => _kDownloads,
     };
 
     final basePath = await _pathProvider.getPath(folderGuid);

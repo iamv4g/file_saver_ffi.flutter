@@ -24,7 +24,7 @@ A Flutter plugin for saving files to device storage using FFI. Supports iOS and 
   s.osx.dependency 'FlutterMacOS'
 
   # Platform-specific deployment targets
-  s.ios.deployment_target = '13.0'
+  s.ios.deployment_target = '13.4'
   s.osx.deployment_target = '10.15.4'
 
   # Preserve the module map for FileSaverDartApi module

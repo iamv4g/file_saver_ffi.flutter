@@ -25,7 +25,11 @@ const int _chunkSize = 1048576;
 /// All I/O logic is implemented here. Subclasses only need to implement
 /// [resolveDirectory] with platform-specific directory resolution and
 /// [launchFile] to open a file with the default application.
-abstract class DesktopFileSaver extends FileSaverPlatform {
+///
+/// [L] is the platform's save location enum. Any other location throws
+/// [InvalidInputException].
+abstract class DesktopFileSaver<L extends SaveLocation>
+    extends FileSaverPlatform {
   final _httpClient = HttpClient();
   int _nextTokenId = 1;
   final _activeTokens = <int, _CancellationToken>{};
@@ -57,8 +61,9 @@ abstract class DesktopFileSaver extends FileSaverPlatform {
       );
     }
 
+    final location = checkSaveLocation<L>(saveLocation);
     return _executeSave((token, controller) async {
-      final dir = await resolveDirectory(saveLocation, subDir);
+      final dir = await resolveDirectory(location, subDir);
       final filePath = p.join(dir, '$fileName.${fileType.ext}');
       final resolved = await _conflictResolver.resolve(
         filePath,
@@ -96,6 +101,7 @@ abstract class DesktopFileSaver extends FileSaverPlatform {
       );
     }
 
+    final location = checkSaveLocation<L>(saveLocation);
     return _executeSave((token, controller) async {
       final sourcePath = _toFilePath(filePath);
       final source = File(sourcePath);
@@ -103,7 +109,7 @@ abstract class DesktopFileSaver extends FileSaverPlatform {
         throw SourceFileNotFoundException(sourcePath);
       }
 
-      final dir = await resolveDirectory(saveLocation, subDir);
+      final dir = await resolveDirectory(location, subDir);
       final destPath = p.join(dir, '$fileName.${fileType.ext}');
       final resolved = await _conflictResolver.resolve(
         destPath,
@@ -145,8 +151,9 @@ abstract class DesktopFileSaver extends FileSaverPlatform {
       );
     }
 
+    final location = checkSaveLocation<L>(saveLocation);
     return _executeSave((token, controller) async {
-      final dir = await resolveDirectory(saveLocation, subDir);
+      final dir = await resolveDirectory(location, subDir);
       final destPath = p.join(dir, '$fileName.${fileType.ext}');
       final resolved = await _conflictResolver.resolve(
         destPath,
@@ -231,7 +238,10 @@ abstract class DesktopFileSaver extends FileSaverPlatform {
         totalSize: totalSize,
       );
     }
-    final dir = await resolveDirectory(saveLocation, subDir);
+    final dir = await resolveDirectory(
+      checkSaveLocation<L>(saveLocation),
+      subDir,
+    );
     final filePath = p.join(dir, '$fileName.${fileType.ext}');
     final resolved = await _conflictResolver.resolve(
       filePath,
@@ -306,7 +316,7 @@ abstract class DesktopFileSaver extends FileSaverPlatform {
   /// - Windows: Uses Known Folder GUIDs via [PathProviderWindows]
   /// - Linux: Uses XDG Base Directory Specification via `xdg_directories`
   @protected
-  Future<String> resolveDirectory(SaveLocation? saveLocation, String? subDir);
+  Future<String> resolveDirectory(L? saveLocation, String? subDir);
 
   // ─────────────────────────────────────────────────────────────────────────
   // SaveAs helpers
