@@ -56,9 +56,9 @@ extension type Foo._(jni$_.JObject _$this) implements jni$_.JObject {
       expect(
         lookups,
         containsAll([
-          'Lcom/vanvixi/file_saver_ffi/FileSaver;',
-          'Lcom/vanvixi/file_saver_ffi/FileSaver;-><init>:(J)V',
-          'Lcom/vanvixi/file_saver_ffi/models/ProgressCallback;->onEvent:(IDLjava/lang/String;Ljava/lang/String;)V',
+          'Lcom/iamv4g/file_saver_ffi/FileSaver;',
+          'Lcom/iamv4g/file_saver_ffi/FileSaver;-><init>:(J)V',
+          'Lcom/iamv4g/file_saver_ffi/models/ProgressCallback;->onEvent:(IDLjava/lang/String;Ljava/lang/String;)V',
         ]),
       );
     });
@@ -68,7 +68,7 @@ extension type Foo._(jni$_.JObject _$this) implements jni$_.JObject {
     // Trimmed from `dexdump app-release.apk`.
     const dexdump = '''
 Class #186            -
-  Class descriptor  : 'Lcom/vanvixi/file_saver_ffi/models/ProgressCallback;'
+  Class descriptor  : 'Lcom/iamv4g/file_saver_ffi/models/ProgressCallback;'
   Access flags      : 0x0601 (PUBLIC INTERFACE ABSTRACT)
   Superclass        : 'Ljava/lang/Object;'
   Interfaces        -
@@ -76,7 +76,7 @@ Class #186            -
   Instance fields   -
   Direct methods    -
   Virtual methods   -
-    #0              : (in Lcom/vanvixi/file_saver_ffi/models/ProgressCallback;)
+    #0              : (in Lcom/iamv4g/file_saver_ffi/models/ProgressCallback;)
       name          : 'onEvent'
       type          : '(IDLjava/lang/String;Ljava/lang/String;)V'
       access        : 0x0401 (PUBLIC ABSTRACT)
@@ -94,8 +94,8 @@ Class #187            -
 ''';
 
     expect(dexMembers(dexdump), {
-      'Lcom/vanvixi/file_saver_ffi/models/ProgressCallback;',
-      'Lcom/vanvixi/file_saver_ffi/models/ProgressCallback;->onEvent:(IDLjava/lang/String;Ljava/lang/String;)V',
+      'Lcom/iamv4g/file_saver_ffi/models/ProgressCallback;',
+      'Lcom/iamv4g/file_saver_ffi/models/ProgressCallback;->onEvent:(IDLjava/lang/String;Ljava/lang/String;)V',
       'Lr0/e;',
       'Lr0/e;->e:I',
     });

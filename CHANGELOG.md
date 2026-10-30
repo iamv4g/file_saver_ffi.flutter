@@ -2,6 +2,7 @@
 
 ### Changed
 
+- **Android:** the plugin's Kotlin package is now `com.iamv4g.file_saver_ffi` (was `com.vanvixi.file_saver_ffi`), matching the GitHub account rename. The Dart API is unchanged. Update any R8/ProGuard rules or native code in your app that refer to the old package. The podspec's homepage and author now point to `iamv4g` too.
 - **Android:** the consumer ProGuard/R8 rules now only keep what the JNI bindings look up by name: `FileSaver`, `FileSaver$Companion` and `ProgressCallback`, plus the names of two types in their signatures. Before, they kept all of `kotlinx.coroutines`, `kotlin.coroutines` and `kotlin.jvm.internal`, and turned on `-keepparameternames` and `-keepattributes … Signature, Exceptions, Metadata` for the whole app, so release builds of apps using the plugin shrank and obfuscated less.
 - **Android:** the plugin now declares `minSdk 24` (Android 7.0), and the README says so. This matches what apps already needed: the `dir_picker` dependency requires API 24, so an app with a lower `minSdk` failed at manifest merge. The README previously claimed API 21+.
 - **Android:** `openFile` of a file that no longer exists now throws `SourceFileNotFoundException`, as on iOS, macOS, Windows and Linux. Before, it threw `OpenFailedException('File is not accessible')`. A file that exists but can't be opened still throws `OpenFailedException`. Examples are a file with no app to open it, or a `file://` URI without the FileProvider setup. Its message now explains the cause, without the Java exception name and stack trace it used to include.

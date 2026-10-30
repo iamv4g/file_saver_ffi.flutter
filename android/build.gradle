@@ -1,6 +1,6 @@
 // The Android Gradle Plugin builds the native code with the Android NDK.
 
-group = "com.vanvixi.file_saver_ffi"
+group = "com.iamv4g.file_saver_ffi"
 version = "1.0"
 
 buildscript {
@@ -25,7 +25,7 @@ rootProject.allprojects {
 apply plugin: "com.android.library"
 
 android {
-    namespace = "com.vanvixi.file_saver_ffi"
+    namespace = "com.iamv4g.file_saver_ffi"
 
     // Bumping the plugin compileSdk version requires all clients of this plugin
     // to bump the version in their app.

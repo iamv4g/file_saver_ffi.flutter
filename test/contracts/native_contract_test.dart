@@ -11,9 +11,9 @@ import 'package:file_saver_ffi/file_saver_ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const _kotlinModels =
-    'android/src/main/kotlin/com/vanvixi/file_saver_ffi/models';
+    'android/src/main/kotlin/com/iamv4g/file_saver_ffi/models';
 const _kotlinConstants =
-    'android/src/main/kotlin/com/vanvixi/file_saver_ffi/utils/Constants.kt';
+    'android/src/main/kotlin/com/iamv4g/file_saver_ffi/utils/Constants.kt';
 const _swiftSources = 'darwin/file_saver_ffi/Sources/file_saver_ffi';
 
 String _read(String path) => File(path).readAsStringSync();

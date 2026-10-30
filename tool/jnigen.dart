@@ -46,7 +46,7 @@ Future<void> main(List<String> args) async {
       ),
       sourcePath: [
         packageRoot.resolve(
-          'android/src/main/kotlin/com/vanvixi/file_saver_ffi',
+          'android/src/main/kotlin/com/iamv4g/file_saver_ffi',
         ),
       ],
       // Output of compileDebugKotlin with AGP 9's built-in Kotlin support.
@@ -56,8 +56,8 @@ Future<void> main(List<String> args) async {
         ),
       ],
       classes: [
-        'com.vanvixi.file_saver_ffi.FileSaver',
-        'com.vanvixi.file_saver_ffi.models.ProgressCallback',
+        'com.iamv4g.file_saver_ffi.FileSaver',
+        'com.iamv4g.file_saver_ffi.models.ProgressCallback',
       ],
     ),
   );

@@ -147,7 +147,7 @@ final class WriteSession {
         self.securityScopedURL = securityScopedURL
         self.commit = commit
         self.serialQueue = DispatchQueue(
-            label: "com.vanvixi.file_saver.ws.\(fileURL.lastPathComponent)",
+            label: "com.iamv4g.file_saver.ws.\(fileURL.lastPathComponent)",
             qos: .userInitiated
         )
     }

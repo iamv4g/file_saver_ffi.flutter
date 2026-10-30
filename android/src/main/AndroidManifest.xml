@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-  package="com.vanvixi.file_saver_ffi">
+  package="com.iamv4g.file_saver_ffi">
     <!-- Legacy storage write permission (Android 9 and below only) -->
     <uses-permission
         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
