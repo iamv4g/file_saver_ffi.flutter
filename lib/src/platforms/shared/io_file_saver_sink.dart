@@ -11,8 +11,7 @@ import 'session_file_saver_sink.dart';
 /// [FileSaverSink] that writes a file with `dart:io`: on Windows and Linux,
 /// and for `PathLocation` on every IO platform.
 class IOFileSaverSink extends SessionFileSaverSink {
-  IOFileSaverSink._(WriteSession session, int? totalSize)
-    : super(session, totalSize);
+  IOFileSaverSink._(super.session, super.totalSize);
 
   /// Opens a sink that writes the file at [path].
   ///
