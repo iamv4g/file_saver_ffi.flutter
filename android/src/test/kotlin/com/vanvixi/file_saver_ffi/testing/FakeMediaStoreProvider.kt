@@ -55,6 +55,10 @@ class FakeMediaStoreProvider : ContentProvider() {
     @Volatile
     var beforeOpenFile: () -> Unit = {}
 
+    /** Opens every file read-only when true, so writes to its stream fail like a full or revoked volume. */
+    @Volatile
+    var readOnly = false
+
     override fun onCreate() = true
 
     override fun getType(uri: Uri): String? = rowFor(uri)?.values?.getAsString(MediaColumns.MIME_TYPE)
@@ -156,7 +160,7 @@ class FakeMediaStoreProvider : ContentProvider() {
     ): ParcelFileDescriptor {
         beforeOpenFile()
         val row = synchronized(this) { rowFor(uri) } ?: throw FileNotFoundException("No row for $uri")
-        return ParcelFileDescriptor.open(row.file, ParcelFileDescriptor.parseMode(mode))
+        return ParcelFileDescriptor.open(row.file, ParcelFileDescriptor.parseMode(if (readOnly) "r" else mode))
     }
 
     /** The row with [displayName], or null. */

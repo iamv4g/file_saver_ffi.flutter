@@ -116,4 +116,47 @@ void main() {
 
     expect(await FileSaver.canOpenFile(await sink.result), isTrue);
   });
+
+  Future<FileSaverSink> openSession(String name) async =>
+      (await FileSaver.openWrite(
+        fileName: name,
+        fileType: _text,
+        saveLocation: AndroidSaveLocation.downloads,
+        subDir: _subDir,
+        conflictResolution: ConflictResolution.overwrite,
+      ))!;
+
+  testWidgets('close while addStream runs throws StateError instead of '
+      'freezing the isolate', (_) async {
+    final sink = await openSession('close_during_add_stream');
+    Stream<List<int>> chunks() async* {
+      for (var i = 0; i < 3; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        yield 'line $i\n'.codeUnits;
+      }
+    }
+
+    final adding = sink.addStream(chunks());
+    expect(() => sink.close(), throwsStateError);
+    await adding;
+    await sink.close();
+
+    expect(await FileSaver.canOpenFile(await sink.result), isTrue);
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  testWidgets('chunks added without awaiting are all written and counted '
+      'before close completes', (_) async {
+    // 320 × 1 MB is more than the 256 MB heap limit of a typical app, so
+    // chunks added while a write is pending wait on the Dart side.
+    final sink = await openSession('add_loop');
+    var written = 0;
+    sink.bytesWritten.listen((bytes) => written = bytes);
+    final chunk = Uint8List(1024 * 1024);
+    for (var i = 0; i < 320; i++) {
+      sink.add(chunk);
+    }
+    await sink.close();
+
+    expect(written, 320 * chunk.length);
+  }, timeout: const Timeout(Duration(minutes: 3)));
 }

@@ -9,7 +9,7 @@ import 'dart:async';
 /// the partially written file.
 ///
 /// [progress] emits 0.0–1.0 only if [totalSize] was provided at open time.
-/// [bytesWritten] always emits the cumulative byte count after each [add].
+/// [bytesWritten] always emits the cumulative byte count as chunks are written.
 ///
 /// Example:
 /// ```dart
@@ -25,15 +25,16 @@ import 'dart:async';
 /// final uri = await sink.close();
 /// ```
 abstract interface class FileSaverSink implements StreamSink<List<int>> {
-  /// Emits fraction 0.0–1.0 after each [add] call.
+  /// Emits fraction 0.0–1.0 as chunks reach storage, like [bytesWritten].
   ///
   /// Only emits if [totalSize] was provided to [openWrite] or [openWriteAs].
   /// The stream is broadcast — multiple listeners are allowed.
   Stream<double> get progress;
 
-  /// Emits cumulative bytes written after each [add] call.
+  /// Emits cumulative bytes written as chunks reach storage.
   ///
-  /// Always emits regardless of whether [totalSize] was provided.
+  /// Chunks added while a write is running may be written, and counted,
+  /// together. Always emits regardless of whether [totalSize] was provided.
   /// The stream is broadcast — multiple listeners are allowed.
   Stream<int> get bytesWritten;
 
