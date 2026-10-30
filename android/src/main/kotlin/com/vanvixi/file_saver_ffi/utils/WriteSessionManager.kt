@@ -38,6 +38,14 @@ internal class WriteSessionManager(
         val totalSize: Long, // -1 if unknown
         val sessionScope: CoroutineScope, // limited(1) → guarantees chunk ordering
         var bytesWritten: Long = 0L,
+        // The first write or flush error. Later calls report it again, and
+        // close deletes the entry instead of publishing a truncated file.
+        var failure: Failure? = null,
+    )
+
+    private data class Failure(
+        val code: String,
+        val message: String?,
     )
 
     private val writeSessions = ConcurrentHashMap<Long, WriteSession>()
@@ -159,11 +167,13 @@ internal class WriteSessionManager(
                 ?: return callback.onEvent(2, 0.0, Constants.ERROR_INVALID_INPUT, "Session not found: $sessionId")
 
         session.sessionScope.launch {
+            session.failure?.let { return@launch callback.onEvent(2, 0.0, it.code, it.message) }
             try {
                 session.entry.outputStream.write(data)
                 session.bytesWritten += data.size
                 callback.onEvent(1, session.bytesWritten.toDouble(), null, null)
             } catch (e: Exception) {
+                session.failure = failureOf(e)
                 reportError(callback, e)
             }
         }
@@ -184,10 +194,12 @@ internal class WriteSessionManager(
                 ?: return callback.onEvent(2, 0.0, Constants.ERROR_INVALID_INPUT, "Session not found: $sessionId")
 
         session.sessionScope.launch {
+            session.failure?.let { return@launch callback.onEvent(2, 0.0, it.code, it.message) }
             try {
                 session.entry.outputStream.flush()
                 callback.onEvent(1, session.bytesWritten.toDouble(), null, null)
             } catch (e: Exception) {
+                session.failure = failureOf(e)
                 reportError(callback, e)
             }
         }
@@ -197,6 +209,7 @@ internal class WriteSessionManager(
      * Closes and finalizes an open write session.
      *
      * For MediaStore entries, marks the file as complete (removes IS_PENDING flag).
+     * If a write or flush failed, deletes the new entry and reports that error.
      * On success: callback(3, 1.0, uri, null)
      * On error:   callback(2, 0.0, errorCode, message)
      */
@@ -210,14 +223,22 @@ internal class WriteSessionManager(
                 ?: return callback.onEvent(2, 0.0, Constants.ERROR_INVALID_INPUT, "Session not found: $sessionId")
 
         session.sessionScope.launch {
+            // Only the new entry is removed; a file being overwritten stays intact.
+            session.failure?.let { failure ->
+                try {
+                    session.entry.outputStream.close()
+                } catch (_: Exception) {
+                }
+                session.entryFactory.deleteEntry(context, session.entry.uri)
+                return@launch callback.onEvent(2, 0.0, failure.code, failure.message)
+            }
             try {
                 session.entry.outputStream.close()
                 val uri = session.entryFactory.commitEntry(context, session.entry)
                 callback.onEvent(3, 1.0, uri.toString(), null)
             } catch (e: Exception) {
-                // Only the new entry is removed; a file being overwritten stays intact.
                 session.entryFactory.deleteEntry(context, session.entry.uri)
-                callback.onEvent(2, 0.0, Constants.ERROR_FILE_IO, e.message)
+                reportError(callback, e)
             }
         }
     }
@@ -277,6 +298,12 @@ internal class WriteSessionManager(
         callback: ProgressCallback,
         e: Exception,
     ) {
+        val failure = failureOf(e)
+        callback.onEvent(2, 0.0, failure.code, failure.message)
+    }
+
+    /** The error code and message for [e]. Rethrows [CancellationException]. */
+    private fun failureOf(e: Exception): Failure {
         val code =
             when (e) {
                 is CancellationException -> throw e
@@ -287,6 +314,6 @@ internal class WriteSessionManager(
                 is IllegalArgumentException -> Constants.ERROR_INVALID_INPUT
                 else -> Constants.ERROR_PLATFORM
             }
-        callback.onEvent(2, 0.0, code, e.message)
+        return Failure(code, e.message)
     }
 }
