@@ -24,6 +24,9 @@ cd example/android && ./gradlew :file_saver_ffi:testDebugUnitTest
 # Download/fsf_it/ (see the file header for the cleanup command).
 cd example && flutter test integration_test/android_test.dart -d <device>
 
+# Web tests (test/platforms/web, @TestOn('browser'); the VM run skips them)
+flutter test --platform chrome test/platforms/web
+
 # Swift unit tests (XCTest) of the shared Darwin source, on the macOS host
 cd darwin/file_saver_ffi && swift test
 
@@ -55,7 +58,7 @@ Never hand-edit `lib/src/platforms/{android,darwin}/bindings.g.dart`. `android/p
 - Every operation returns `Stream<SaveProgress>` (Started → Update* → Complete | Error | Cancelled). `saveAsync` and similar wrappers sit on top of these streams.
 - `PathLocation` (a raw filesystem path) skips native code on every IO platform and goes through `shared/path_location_writer.dart`.
 - Windows and Linux share `shared/desktop_file_saver.dart`. Subclasses implement only `resolveDirectory` (Known Folder GUIDs on Windows, XDG dirs on Linux) and `launchFile` (`ShellExecuteExW` via `windows/windows_shell.dart` on Windows, `xdg-open` on Linux). `launchFile` must never pass the path through a shell such as `cmd`.
-- Streaming write sessions (`openWrite`/`openWriteAs`) return a `FileSaverSink`. On Android, Darwin and `dart:io` (Windows, Linux, `PathLocation`) the sink is `shared/session_file_saver_sink.dart`, which owns the lifecycle (ordering, back-pressure, errors, cancel, the `Finalizer`); each platform's `*_file_saver_sink.dart` only implements its `WriteSession`. Web still has its own sink.
+- Streaming write sessions (`openWrite`/`openWriteAs`) return a `FileSaverSink`. Every platform's sink is `shared/session_file_saver_sink.dart`, which owns the lifecycle (ordering, back-pressure, errors, cancel, the `Finalizer`); each platform's `*_file_saver_sink.dart` only implements a `WriteSession` (JNI, FFI, `dart:io`, or File System Access / an in-memory buffer on web).
 
 ### Native bridges
 - **Darwin**: Dart calls the C ABI declared in `darwin/file_saver_ffi/Sources/file_saver_ffi/FFI/file_saver_ffi.h`, which is implemented in Swift (`FFI/FileSaverFFI.swift`). Progress goes back through a Dart `NativePort`, posted by the small C target `Sources/FileSaverDartApi` (`Dart_PostCObject` resolved from `NativeApi.initializeApiDLData`). Messages are arrays: `[0]` started, `[1, progress]`, `[2, code, msg]` error, `[3, uri]` success, `[4]` cancelled. The library loads via `DynamicLibrary.process()`, and a `NativeFinalizer` calls `file_saver_dispose`. Both SwiftPM (`Package.swift`) and CocoaPods (`file_saver_ffi.podspec`) are supported, so keep both working.

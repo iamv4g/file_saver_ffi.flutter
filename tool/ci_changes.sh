@@ -25,6 +25,7 @@ if ! $all; then
       # Covered by the Analyze job (publish dry run), which always runs.
       *.md | LICENSE | .gitignore | screenshots/* | .github/ISSUE_TEMPLATE/* | .github/pull_request_template.md) ;;
       test/platforms/windows/*) windows=true ;;
+      test/platforms/web/*) web=true ;;
       test/platforms/shared/* | test/helpers/*) desktop=true ;;
       # The rest of test/ (contracts, exceptions, facade) runs on Ubuntu, always.
       test/*) ;;
@@ -32,6 +33,8 @@ if ! $all; then
       darwin/* | lib/src/platforms/darwin/* | example/ios/* | example/macos/* | example/integration_test/ios_* | tool/ffigen.dart) darwin=true ;;
       lib/src/platforms/windows/* | example/windows/*) windows=true ;;
       lib/src/platforms/linux/* | example/linux/*) linux=true ;;
+      # The sink every platform builds on.
+      lib/src/platforms/shared/session_file_saver_sink.dart) all=true ;;
       lib/src/platforms/shared/*) desktop=true windows=true linux=true ;;
       lib/src/platforms/web/* | example/web/*) web=true ;;
       # The facade, models, conditional exports, pubspec, the example app,

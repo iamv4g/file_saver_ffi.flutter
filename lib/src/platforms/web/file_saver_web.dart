@@ -282,7 +282,7 @@ class FileSaverWeb extends FileSaverPlatform {
       throw const InvalidInputException('File name cannot be empty');
     }
     return WebFileSaverSink.buffer(
-      resolvedName: '$fileName.${fileType.ext}',
+      name: '$fileName.${fileType.ext}',
       mimeType: fileType.mimeType,
       totalSize: totalSize,
     );
@@ -310,6 +310,7 @@ class FileSaverWeb extends FileSaverPlatform {
         fileEntity,
       ).resolve(fullName, conflictResolution);
       if (resolvedName == null) return null;
+      final created = !await fileEntity.exists(resolvedName);
 
       final fileHandle = await handle
           .getFileHandle(resolvedName, FileSystemGetFileOptions(create: true))
@@ -317,15 +318,17 @@ class FileSaverWeb extends FileSaverPlatform {
       final writable = await fileHandle.createWritable().toDart;
 
       return WebFileSaverSink.fsa(
+        directory: handle,
+        name: resolvedName,
         writable: writable,
-        resolvedName: resolvedName,
+        created: created,
         totalSize: totalSize,
       );
     }
 
     // Fallback for browsers without FSA.
     return WebFileSaverSink.buffer(
-      resolvedName: fullName,
+      name: fullName,
       mimeType: fileType.mimeType,
       totalSize: totalSize,
     );

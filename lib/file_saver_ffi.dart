@@ -245,7 +245,7 @@ class FileSaver {
   ///   totalSize: expectedBytes,
   /// );
   ///
-  /// if (sink == null) return; // User cancelled or conflictResolution = ConflictResolution.skip.
+  /// if (sink == null) return; // conflictResolution is skip and the file exists.
   ///
   /// sink.progress.listen((p) => setState(() => _progress = p));
   /// sink.add(chunk);           // non-blocking

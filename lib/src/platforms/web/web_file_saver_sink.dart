@@ -6,200 +6,133 @@ import 'package:web/web.dart';
 
 import '../../exceptions/file_saver_exceptions.dart';
 import '../../models/file_saver_sink.dart';
+import '../shared/session_file_saver_sink.dart';
 import 'web_utils.dart';
 
 /// Web implementation of [FileSaverSink].
 ///
 /// Two modes:
 /// - **FSA mode**: Uses [FileSystemWritableFileStream] for zero-RAM streaming
-///   (Chrome/Edge 86+). Each [add] is written directly to disk.
+///   (Chrome/Edge 86+). Each chunk is written to disk before the next one.
 /// - **Buffer mode**: Accumulates all bytes in memory, triggers an anchor
 ///   download on [close] (Firefox / Safari / browsers without FSA).
-class WebFileSaverSink implements FileSaverSink {
-  /// Creates an FSA-backed sink that writes directly to [writable].
+class WebFileSaverSink extends SessionFileSaverSink {
+  /// Creates an FSA-backed sink that writes [name] in [directory] through
+  /// [writable].
+  ///
+  /// Set [created] when [name] didn't exist before, so cancelling deletes it.
+  /// An existing file keeps its content until [close], because the browser
+  /// writes to a swap file.
   WebFileSaverSink.fsa({
+    required FileSystemDirectoryHandle directory,
+    required String name,
     required FileSystemWritableFileStream writable,
-    required String resolvedName,
+    required bool created,
     required int? totalSize,
-  }) : _writable = writable,
-       _resolvedName = resolvedName,
-       _totalSize = totalSize,
-       _isFsa = true,
-       _buffer = null,
-       _mimeType = null;
+  }) : super(_FsaWriteSession(directory, name, writable, created), totalSize);
 
-  /// Creates an in-memory buffer sink that downloads on [close].
+  /// Creates an in-memory buffer sink that downloads [name] on [close].
   WebFileSaverSink.buffer({
-    required String resolvedName,
+    required String name,
     required String mimeType,
     required int? totalSize,
-  }) : _writable = null,
-       _resolvedName = resolvedName,
-       _totalSize = totalSize,
-       _isFsa = false,
-       _buffer = [],
-       _mimeType = mimeType;
+    void Function(Blob blob, String name) download =
+        WebUtils.triggerBlobDownload,
+  }) : super(_BufferWriteSession(name, mimeType, download), totalSize);
+}
 
-  final FileSystemWritableFileStream? _writable;
-  final List<int>? _buffer;
-  final String _resolvedName;
-  final String? _mimeType;
-  final int? _totalSize;
-  final bool _isFsa;
-
-  int _bytesWritten = 0;
-  bool _isClosed = false;
-  bool _isAddingStream = false;
-
-  // FSA writes are chained on this future to ensure ordering.
-  Future<void> _writeQueue = Future.value();
-
-  final _progressController = StreamController<double>.broadcast();
-  final _bytesController = StreamController<int>.broadcast();
-  final _resultCompleter = Completer<Uri>();
-  final _doneCompleter = Completer<dynamic>();
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // FileSaverSink interface
-  // ─────────────────────────────────────────────────────────────────────────
-
-  @override
-  Stream<double> get progress => _progressController.stream;
-
-  @override
-  Stream<int> get bytesWritten => _bytesController.stream;
-
-  @override
-  Future<Uri> get result => _resultCompleter.future;
-
-  @override
-  Future get done => _doneCompleter.future;
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // StreamSink<List<int>>
-  // ─────────────────────────────────────────────────────────────────────────
-
-  @override
-  void add(List<int> data) {
-    if (_isClosed) throw StateError('Cannot add to a closed FileSaverSink');
-    if (_isFsa) {
-      // Chain writes sequentially via promise queue.
-      final bytes = Uint8List.fromList(data);
-      _writeQueue = _writeQueue
-          .then((_) async {
-            await _writable!
-                .write(bytes.toJS as FileSystemWriteChunkType)
-                .toDart;
-            _trackBytes(bytes.length);
-          })
-          .catchError((Object e, StackTrace st) {
-            if (!_doneCompleter.isCompleted) {
-              _doneCompleter.completeError(e, st);
-            }
-          });
-    } else {
-      _buffer!.addAll(data);
-      _trackBytes(data.length);
-    }
+/// Converts a rejected File System Access call into a [FileSaverException].
+///
+/// Matches on the text, which names the `DOMException` under both dart2js
+/// and dart2wasm.
+FileSaverException _mapError(Object e) {
+  if (e is FileSaverException) return e;
+  final text = e.toString();
+  if (text.contains('QuotaExceededError')) return const StorageFullException();
+  if (text.contains('NotAllowedError') || text.contains('SecurityError')) {
+    return PermissionDeniedException(text);
   }
+  return FileIOException(text);
+}
 
-  void _trackBytes(int count) {
-    _bytesWritten += count;
-    _bytesController.add(_bytesWritten);
-    if (_totalSize != null && _totalSize > 0) {
-      _progressController.add(_bytesWritten / _totalSize);
-    }
-  }
+class _FsaWriteSession implements WriteSession {
+  _FsaWriteSession(this._directory, this._name, this._writable, this._created);
 
-  @override
-  void addError(Object error, [StackTrace? stackTrace]) {
-    if (!_doneCompleter.isCompleted) {
-      _doneCompleter.completeError(error, stackTrace);
-    }
-  }
+  final FileSystemDirectoryHandle _directory;
+  final String _name;
+  final FileSystemWritableFileStream _writable;
+  final bool _created;
+  var _bytesWritten = 0;
 
   @override
-  Future addStream(Stream<List<int>> stream) async {
-    if (_isAddingStream) throw StateError('Already adding a stream');
-    _isAddingStream = true;
+  Future<int> write(List<int> data) async {
+    // The write runs asynchronously, so it must not see later changes the
+    // caller makes to its buffer.
+    final bytes = Uint8List.fromList(data);
     try {
-      await for (final chunk in stream) {
-        if (_isClosed) break;
-        add(chunk);
-      }
-      // Wait for any queued FSA writes to finish.
-      if (_isFsa) await _writeQueue;
-    } finally {
-      _isAddingStream = false;
+      await _writable.write(bytes.toJS as FileSystemWriteChunkType).toDart;
+    } catch (e) {
+      throw _mapError(e);
     }
+    return _bytesWritten += bytes.length;
   }
+
+  /// FSA has no flush: written chunks are already in the swap file.
+  @override
+  Future<void> flush() async {}
 
   @override
-  Future<void> flush() async {
-    // FSA has no explicit flush — drain the write queue.
-    if (_isFsa) await _writeQueue;
-  }
-
-  @override
-  Future<void> close() async {
-    if (_isClosed) return;
-    _isClosed = true;
-
-    while (_isAddingStream) {
-      await Future.microtask(() {});
-    }
-
-    await _doClose();
-  }
-
-  Future<void> _doClose() async {
+  Future<Uri> close() async {
     try {
-      if (_isFsa) {
-        await _writeQueue;
-        await _writable!.close().toDart;
-        _complete(Uri(scheme: 'web-directory', path: _resolvedName));
-      } else {
-        final bytes = Uint8List.fromList(_buffer!);
-        WebUtils.triggerBytesDownload(bytes, _resolvedName, _mimeType!);
-        _complete(Uri(scheme: 'browser-download', path: _resolvedName));
-      }
-    } catch (e, st) {
-      _progressController.close().ignore();
-      _bytesController.close().ignore();
-      if (!_resultCompleter.isCompleted) _resultCompleter.completeError(e, st);
-      if (!_doneCompleter.isCompleted) _doneCompleter.completeError(e, st);
+      await _writable.close().toDart;
+    } catch (e) {
+      await cancel();
+      throw _mapError(e);
     }
+    return Uri(scheme: 'web-directory', path: _name);
   }
-
-  void _complete(Uri uri) {
-    _progressController.close().ignore();
-    _bytesController.close().ignore();
-    if (!_resultCompleter.isCompleted) _resultCompleter.complete(uri);
-    if (!_doneCompleter.isCompleted) _doneCompleter.complete(uri);
-  }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // cancel
-  // ─────────────────────────────────────────────────────────────────────────
 
   @override
   Future<void> cancel() async {
-    if (_isClosed) return;
-    _isClosed = true;
-    if (_isFsa) {
+    try {
+      await _writable.abort().toDart;
+    } catch (_) {}
+    if (_created) {
       try {
-        await _writable!.abort().toDart;
+        await _directory.removeEntry(_name).toDart;
       } catch (_) {}
-    } else {
-      _buffer!.clear();
     }
-    _progressController.close().ignore();
-    _bytesController.close().ignore();
-    const error = CancelledException();
-    if (!_resultCompleter.isCompleted) {
-      _resultCompleter.completeError(error);
-      _resultCompleter.future.ignore();
-    }
-    if (!_doneCompleter.isCompleted) _doneCompleter.complete();
   }
+}
+
+class _BufferWriteSession implements WriteSession {
+  _BufferWriteSession(this._name, this._mimeType, this._download);
+
+  final String _name;
+  final String _mimeType;
+  final void Function(Blob blob, String name) _download;
+
+  /// The chunks so far, joined into a [Blob] on close.
+  final _chunks = <JSUint8Array>[];
+  var _bytesWritten = 0;
+
+  @override
+  Future<int> write(List<int> data) async {
+    _chunks.add(Uint8List.fromList(data).toJS);
+    return _bytesWritten += data.length;
+  }
+
+  @override
+  Future<void> flush() async {}
+
+  @override
+  Future<Uri> close() async {
+    final blob = Blob(_chunks.toJS, BlobPropertyBag(type: _mimeType));
+    _chunks.clear();
+    _download(blob, _name);
+    return Uri(scheme: 'browser-download', path: _name);
+  }
+
+  @override
+  Future<void> cancel() async => _chunks.clear();
 }
