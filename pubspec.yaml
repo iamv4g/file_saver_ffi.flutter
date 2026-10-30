@@ -44,7 +44,7 @@ flutter:
     platforms:
       android:
         ffiPlugin: true
-        package: com.vanvixi.file_saver_ffi
+        package: com.iamv4g.file_saver_ffi
         pluginClass: FileSaverFfiPlugin
         dartPluginClass: FileSaverAndroid
       ios:

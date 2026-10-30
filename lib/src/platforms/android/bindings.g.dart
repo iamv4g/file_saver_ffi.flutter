@@ -38,11 +38,11 @@ import 'package:jni/jni.dart' as jni$_;
 
 const _$jniVersionCheck = jni$_.JniVersionCheck(1, 0);
 
-/// from: `com.vanvixi.file_saver_ffi.FileSaver$Companion`
+/// from: `com.iamv4g.file_saver_ffi.FileSaver$Companion`
 extension type FileSaver$Companion._(jni$_.JObject _$this)
     implements jni$_.JObject {
   static final _class = jni$_.JClass.forName(
-    r'com/vanvixi/file_saver_ffi/FileSaver$Companion',
+    r'com/iamv4g/file_saver_ffi/FileSaver$Companion',
   );
 
   /// The type which includes information such as the signature of this class.
@@ -90,7 +90,7 @@ extension FileSaver$Companion$$Methods on FileSaver$Companion {
   static final _id_get$storagePermissionHandler = FileSaver$Companion._class
       .instanceMethodId(
         r'getStoragePermissionHandler',
-        r'()Lcom/vanvixi/file_saver_ffi/utils/StoragePermissionHandler;',
+        r'()Lcom/iamv4g/file_saver_ffi/utils/StoragePermissionHandler;',
       );
 
   static final _get$storagePermissionHandler =
@@ -109,7 +109,7 @@ extension FileSaver$Companion$$Methods on FileSaver$Companion {
             )
           >();
 
-  /// from: `public final com.vanvixi.file_saver_ffi.utils.StoragePermissionHandler getStoragePermissionHandler()`
+  /// from: `public final com.iamv4g.file_saver_ffi.utils.StoragePermissionHandler getStoragePermissionHandler()`
   /// The returned object must be released after use, by calling the [release] method.
   StoragePermissionHandler? get storagePermissionHandler {
     final _$$selfRef = reference;
@@ -122,7 +122,7 @@ extension FileSaver$Companion$$Methods on FileSaver$Companion {
   static final _id_set$storagePermissionHandler = FileSaver$Companion._class
       .instanceMethodId(
         r'setStoragePermissionHandler',
-        r'(Lcom/vanvixi/file_saver_ffi/utils/StoragePermissionHandler;)V',
+        r'(Lcom/iamv4g/file_saver_ffi/utils/StoragePermissionHandler;)V',
       );
 
   static final _set$storagePermissionHandler =
@@ -143,7 +143,7 @@ extension FileSaver$Companion$$Methods on FileSaver$Companion {
             )
           >();
 
-  /// from: `public final void setStoragePermissionHandler(com.vanvixi.file_saver_ffi.utils.StoragePermissionHandler storagePermissionHandler)`
+  /// from: `public final void setStoragePermissionHandler(com.iamv4g.file_saver_ffi.utils.StoragePermissionHandler storagePermissionHandler)`
   set storagePermissionHandler(
     StoragePermissionHandler? storagePermissionHandler,
   ) {
@@ -165,23 +165,23 @@ final class $FileSaver$Companion$Type$
 
   @jni$_.internal
   @core$_.override
-  String get signature => r'Lcom/vanvixi/file_saver_ffi/FileSaver$Companion;';
+  String get signature => r'Lcom/iamv4g/file_saver_ffi/FileSaver$Companion;';
 }
 
-/// from: `com.vanvixi.file_saver_ffi.FileSaver`
+/// from: `com.iamv4g.file_saver_ffi.FileSaver`
 extension type FileSaver._(jni$_.JObject _$this) implements jni$_.JObject {
   static final _class = jni$_.JClass.forName(
-    r'com/vanvixi/file_saver_ffi/FileSaver',
+    r'com/iamv4g/file_saver_ffi/FileSaver',
   );
 
   /// The type which includes information such as the signature of this class.
   static const jni$_.JType<FileSaver> type = $FileSaver$Type$();
   static final _id_Companion = _class.staticFieldId(
     r'Companion',
-    r'Lcom/vanvixi/file_saver_ffi/FileSaver$Companion;',
+    r'Lcom/iamv4g/file_saver_ffi/FileSaver$Companion;',
   );
 
-  /// from: `static public final com.vanvixi.file_saver_ffi.FileSaver$Companion Companion`
+  /// from: `static public final com.iamv4g.file_saver_ffi.FileSaver$Companion Companion`
   /// The returned object must be released after use, by calling the [release] method.
   static FileSaver$Companion get Companion =>
       _id_Companion.get(_class, FileSaver$Companion.type)
@@ -218,7 +218,7 @@ extension type FileSaver._(jni$_.JObject _$this) implements jni$_.JObject {
 extension FileSaver$$Methods on FileSaver {
   static final _id_canOpenFile = FileSaver._class.instanceMethodId(
     r'canOpenFile',
-    r'(Ljava/lang/String;Lcom/vanvixi/file_saver_ffi/models/ProgressCallback;)V',
+    r'(Ljava/lang/String;Lcom/iamv4g/file_saver_ffi/models/ProgressCallback;)V',
   );
 
   static final _canOpenFile =
@@ -242,7 +242,7 @@ extension FileSaver$$Methods on FileSaver {
             )
           >();
 
-  /// from: `public fun canOpenFile(uri: kotlin.String, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
+  /// from: `public fun canOpenFile(uri: kotlin.String, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
   void canOpenFile(jni$_.JString string, ProgressCallback progressCallback) {
     final _$$selfRef = reference;
     final _$string = string.reference;
@@ -257,7 +257,7 @@ extension FileSaver$$Methods on FileSaver {
 
   static final _id_openFile = FileSaver._class.instanceMethodId(
     r'openFile',
-    r'(Ljava/lang/String;Ljava/lang/String;Lcom/vanvixi/file_saver_ffi/models/ProgressCallback;)V',
+    r'(Ljava/lang/String;Ljava/lang/String;Lcom/iamv4g/file_saver_ffi/models/ProgressCallback;)V',
   );
 
   static final _openFile =
@@ -286,7 +286,7 @@ extension FileSaver$$Methods on FileSaver {
             )
           >();
 
-  /// from: `public fun openFile(uri: kotlin.String, mimeType: kotlin.String?, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
+  /// from: `public fun openFile(uri: kotlin.String, mimeType: kotlin.String?, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
   void openFile(
     jni$_.JString string,
     jni$_.JString? string1,
@@ -340,7 +340,7 @@ extension FileSaver$$Methods on FileSaver {
 
   static final _id_saveBytes = FileSaver._class.instanceMethodId(
     r'saveBytes',
-    r'([BLjava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;ILcom/vanvixi/file_saver_ffi/models/ProgressCallback;)J',
+    r'([BLjava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;ILcom/iamv4g/file_saver_ffi/models/ProgressCallback;)J',
   );
 
   static final _saveBytes =
@@ -379,7 +379,7 @@ extension FileSaver$$Methods on FileSaver {
             )
           >();
 
-  /// from: `public fun saveBytes(fileData: kotlin.ByteArray, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, saveLocationIndex: kotlin.Int, subDir: kotlin.String?, conflictMode: kotlin.Int, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Long`
+  /// from: `public fun saveBytes(fileData: kotlin.ByteArray, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, saveLocationIndex: kotlin.Int, subDir: kotlin.String?, conflictMode: kotlin.Int, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Long`
   core$_.int saveBytes(
     jni$_.JByteArray bs,
     jni$_.JString string,
@@ -413,7 +413,7 @@ extension FileSaver$$Methods on FileSaver {
 
   static final _id_saveFile = FileSaver._class.instanceMethodId(
     r'saveFile',
-    r'(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;ILcom/vanvixi/file_saver_ffi/models/ProgressCallback;)J',
+    r'(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;ILcom/iamv4g/file_saver_ffi/models/ProgressCallback;)J',
   );
 
   static final _saveFile =
@@ -452,7 +452,7 @@ extension FileSaver$$Methods on FileSaver {
             )
           >();
 
-  /// from: `public fun saveFile(filePath: kotlin.String, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, saveLocationIndex: kotlin.Int, subDir: kotlin.String?, conflictMode: kotlin.Int, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Long`
+  /// from: `public fun saveFile(filePath: kotlin.String, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, saveLocationIndex: kotlin.Int, subDir: kotlin.String?, conflictMode: kotlin.Int, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Long`
   core$_.int saveFile(
     jni$_.JString string,
     jni$_.JString string1,
@@ -486,7 +486,7 @@ extension FileSaver$$Methods on FileSaver {
 
   static final _id_saveNetwork = FileSaver._class.instanceMethodId(
     r'saveNetwork',
-    r'(Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;ILcom/vanvixi/file_saver_ffi/models/ProgressCallback;)J',
+    r'(Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;ILcom/iamv4g/file_saver_ffi/models/ProgressCallback;)J',
   );
 
   static final _saveNetwork =
@@ -529,7 +529,7 @@ extension FileSaver$$Methods on FileSaver {
             )
           >();
 
-  /// from: `public fun saveNetwork(url: kotlin.String, headersJson: kotlin.String?, timeoutMs: kotlin.Int, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, saveLocationIndex: kotlin.Int, subDir: kotlin.String?, conflictMode: kotlin.Int, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Long`
+  /// from: `public fun saveNetwork(url: kotlin.String, headersJson: kotlin.String?, timeoutMs: kotlin.Int, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, saveLocationIndex: kotlin.Int, subDir: kotlin.String?, conflictMode: kotlin.Int, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Long`
   core$_.int saveNetwork(
     jni$_.JString string,
     jni$_.JString? string1,
@@ -568,7 +568,7 @@ extension FileSaver$$Methods on FileSaver {
 
   static final _id_saveBytesAs = FileSaver._class.instanceMethodId(
     r'saveBytesAs',
-    r'([BLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILcom/vanvixi/file_saver_ffi/models/ProgressCallback;)J',
+    r'([BLjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILcom/iamv4g/file_saver_ffi/models/ProgressCallback;)J',
   );
 
   static final _saveBytesAs =
@@ -605,7 +605,7 @@ extension FileSaver$$Methods on FileSaver {
             )
           >();
 
-  /// from: `public fun saveBytesAs(fileData: kotlin.ByteArray, directoryUri: kotlin.String, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, conflictMode: kotlin.Int, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Long`
+  /// from: `public fun saveBytesAs(fileData: kotlin.ByteArray, directoryUri: kotlin.String, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, conflictMode: kotlin.Int, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Long`
   core$_.int saveBytesAs(
     jni$_.JByteArray bs,
     jni$_.JString string,
@@ -637,7 +637,7 @@ extension FileSaver$$Methods on FileSaver {
 
   static final _id_saveFileAs = FileSaver._class.instanceMethodId(
     r'saveFileAs',
-    r'(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILcom/vanvixi/file_saver_ffi/models/ProgressCallback;)J',
+    r'(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILcom/iamv4g/file_saver_ffi/models/ProgressCallback;)J',
   );
 
   static final _saveFileAs =
@@ -674,7 +674,7 @@ extension FileSaver$$Methods on FileSaver {
             )
           >();
 
-  /// from: `public fun saveFileAs(filePath: kotlin.String, directoryUri: kotlin.String, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, conflictMode: kotlin.Int, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Long`
+  /// from: `public fun saveFileAs(filePath: kotlin.String, directoryUri: kotlin.String, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, conflictMode: kotlin.Int, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Long`
   core$_.int saveFileAs(
     jni$_.JString string,
     jni$_.JString string1,
@@ -706,7 +706,7 @@ extension FileSaver$$Methods on FileSaver {
 
   static final _id_saveNetworkAs = FileSaver._class.instanceMethodId(
     r'saveNetworkAs',
-    r'(Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILcom/vanvixi/file_saver_ffi/models/ProgressCallback;)J',
+    r'(Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILcom/iamv4g/file_saver_ffi/models/ProgressCallback;)J',
   );
 
   static final _saveNetworkAs =
@@ -747,7 +747,7 @@ extension FileSaver$$Methods on FileSaver {
             )
           >();
 
-  /// from: `public fun saveNetworkAs(url: kotlin.String, headersJson: kotlin.String?, timeoutMs: kotlin.Int, directoryUri: kotlin.String, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, conflictMode: kotlin.Int, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Long`
+  /// from: `public fun saveNetworkAs(url: kotlin.String, headersJson: kotlin.String?, timeoutMs: kotlin.Int, directoryUri: kotlin.String, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, conflictMode: kotlin.Int, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Long`
   core$_.int saveNetworkAs(
     jni$_.JString string,
     jni$_.JString? string1,
@@ -784,7 +784,7 @@ extension FileSaver$$Methods on FileSaver {
 
   static final _id_openWriteSession = FileSaver._class.instanceMethodId(
     r'openWriteSession',
-    r'(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;IJLcom/vanvixi/file_saver_ffi/models/ProgressCallback;)V',
+    r'(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;IJLcom/iamv4g/file_saver_ffi/models/ProgressCallback;)V',
   );
 
   static final _openWriteSession =
@@ -823,7 +823,7 @@ extension FileSaver$$Methods on FileSaver {
             )
           >();
 
-  /// from: `public fun openWriteSession(baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, saveLocationIndex: kotlin.Int, subDir: kotlin.String?, conflictMode: kotlin.Int, totalSize: kotlin.Long, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
+  /// from: `public fun openWriteSession(baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, saveLocationIndex: kotlin.Int, subDir: kotlin.String?, conflictMode: kotlin.Int, totalSize: kotlin.Long, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
   void openWriteSession(
     jni$_.JString string,
     jni$_.JString string1,
@@ -856,7 +856,7 @@ extension FileSaver$$Methods on FileSaver {
 
   static final _id_openWriteSessionAs = FileSaver._class.instanceMethodId(
     r'openWriteSessionAs',
-    r'(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IJLcom/vanvixi/file_saver_ffi/models/ProgressCallback;)V',
+    r'(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IJLcom/iamv4g/file_saver_ffi/models/ProgressCallback;)V',
   );
 
   static final _openWriteSessionAs =
@@ -893,7 +893,7 @@ extension FileSaver$$Methods on FileSaver {
             )
           >();
 
-  /// from: `public fun openWriteSessionAs(directoryUri: kotlin.String, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, conflictMode: kotlin.Int, totalSize: kotlin.Long, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
+  /// from: `public fun openWriteSessionAs(directoryUri: kotlin.String, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, conflictMode: kotlin.Int, totalSize: kotlin.Long, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
   void openWriteSessionAs(
     jni$_.JString string,
     jni$_.JString string1,
@@ -924,7 +924,7 @@ extension FileSaver$$Methods on FileSaver {
 
   static final _id_writeChunk = FileSaver._class.instanceMethodId(
     r'writeChunk',
-    r'(J[BLcom/vanvixi/file_saver_ffi/models/ProgressCallback;)V',
+    r'(J[BLcom/iamv4g/file_saver_ffi/models/ProgressCallback;)V',
   );
 
   static final _writeChunk =
@@ -953,7 +953,7 @@ extension FileSaver$$Methods on FileSaver {
             )
           >();
 
-  /// from: `public fun writeChunk(sessionId: kotlin.Long, data: kotlin.ByteArray, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
+  /// from: `public fun writeChunk(sessionId: kotlin.Long, data: kotlin.ByteArray, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
   void writeChunk(
     core$_.int j,
     jni$_.JByteArray bs,
@@ -973,7 +973,7 @@ extension FileSaver$$Methods on FileSaver {
 
   static final _id_flushSession = FileSaver._class.instanceMethodId(
     r'flushSession',
-    r'(JLcom/vanvixi/file_saver_ffi/models/ProgressCallback;)V',
+    r'(JLcom/iamv4g/file_saver_ffi/models/ProgressCallback;)V',
   );
 
   static final _flushSession =
@@ -995,7 +995,7 @@ extension FileSaver$$Methods on FileSaver {
             )
           >();
 
-  /// from: `public fun flushSession(sessionId: kotlin.Long, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
+  /// from: `public fun flushSession(sessionId: kotlin.Long, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
   void flushSession(core$_.int j, ProgressCallback progressCallback) {
     final _$$selfRef = reference;
     final _$progressCallback = progressCallback.reference;
@@ -1009,7 +1009,7 @@ extension FileSaver$$Methods on FileSaver {
 
   static final _id_closeSession = FileSaver._class.instanceMethodId(
     r'closeSession',
-    r'(JLcom/vanvixi/file_saver_ffi/models/ProgressCallback;)V',
+    r'(JLcom/iamv4g/file_saver_ffi/models/ProgressCallback;)V',
   );
 
   static final _closeSession =
@@ -1031,7 +1031,7 @@ extension FileSaver$$Methods on FileSaver {
             )
           >();
 
-  /// from: `public fun closeSession(sessionId: kotlin.Long, callback: com.vanvixi.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
+  /// from: `public fun closeSession(sessionId: kotlin.Long, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
   void closeSession(core$_.int j, ProgressCallback progressCallback) {
     final _$$selfRef = reference;
     final _$progressCallback = progressCallback.reference;
@@ -1079,14 +1079,14 @@ final class $FileSaver$Type$ extends jni$_.JType<FileSaver> {
 
   @jni$_.internal
   @core$_.override
-  String get signature => r'Lcom/vanvixi/file_saver_ffi/FileSaver;';
+  String get signature => r'Lcom/iamv4g/file_saver_ffi/FileSaver;';
 }
 
-/// from: `com.vanvixi.file_saver_ffi.models.ProgressCallback`
+/// from: `com.iamv4g.file_saver_ffi.models.ProgressCallback`
 extension type ProgressCallback._(jni$_.JObject _$this)
     implements jni$_.JObject {
   static final _class = jni$_.JClass.forName(
-    r'com/vanvixi/file_saver_ffi/models/ProgressCallback',
+    r'com/iamv4g/file_saver_ffi/models/ProgressCallback',
   );
 
   /// The type which includes information such as the signature of this class.
@@ -1151,7 +1151,7 @@ extension type ProgressCallback._(jni$_.JObject _$this)
       jni$_.ProtectedJniExtensions.returnResult($i.result, $r);
     });
     implementer.add(
-      r'com.vanvixi.file_saver_ffi.models.ProgressCallback',
+      r'com.iamv4g.file_saver_ffi.models.ProgressCallback',
       $p,
       _$invokePointer,
       [
@@ -1284,13 +1284,13 @@ final class $ProgressCallback$Type$ extends jni$_.JType<ProgressCallback> {
   @jni$_.internal
   @core$_.override
   String get signature =>
-      r'Lcom/vanvixi/file_saver_ffi/models/ProgressCallback;';
+      r'Lcom/iamv4g/file_saver_ffi/models/ProgressCallback;';
 }
 
-/// from: `com.vanvixi.file_saver_ffi.utils.StoragePermissionHandler`
+/// from: `com.iamv4g.file_saver_ffi.utils.StoragePermissionHandler`
 ///
 /// WARNING: StoragePermissionHandler is a stub. To generate bindings for this class, include
-/// com.vanvixi.file_saver_ffi.utils.StoragePermissionHandler in your config's classes list.
+/// com.iamv4g.file_saver_ffi.utils.StoragePermissionHandler in your config's classes list.
 ///
 extension type StoragePermissionHandler._(jni$_.JObject _$this)
     implements jni$_.JObject {
@@ -1306,7 +1306,7 @@ final class $StoragePermissionHandler$Type$
   @jni$_.internal
   @core$_.override
   String get signature =>
-      r'Lcom/vanvixi/file_saver_ffi/utils/StoragePermissionHandler;';
+      r'Lcom/iamv4g/file_saver_ffi/utils/StoragePermissionHandler;';
 }
 
 /// from: `kotlin.jvm.internal.DefaultConstructorMarker`

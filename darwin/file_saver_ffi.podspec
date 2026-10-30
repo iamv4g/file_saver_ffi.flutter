@@ -9,9 +9,9 @@ Pod::Spec.new do |s|
   s.description      = <<-DESC
 A Flutter plugin for saving files to device storage using FFI. Supports iOS and macOS.
                        DESC
-  s.homepage         = 'https://github.com/vanvixi/file_saver_ffi.flutter'
+  s.homepage         = 'https://github.com/iamv4g/file_saver_ffi.flutter'
   s.license          = { :file => '../LICENSE' }
-  s.author           = { 'Vanvixi' => 'vanvixi.dev@gmail.com' }
+  s.author           = { 'iamv4g' => 'iamv4g.dev@gmail.com' }
 
   # This will ensure the source files in Classes/ are included in the native
   # builds of apps using this FFI plugin.
