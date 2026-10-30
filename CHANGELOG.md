@@ -7,6 +7,7 @@
 - **Android:** the plugin now declares `minSdk 24` (Android 7.0), and the README says so. This matches what apps already needed: the `dir_picker` dependency requires API 24, so an app with a lower `minSdk` failed at manifest merge. The README previously claimed API 21+.
 - **Android:** `openFile` of a file that no longer exists now throws `SourceFileNotFoundException`, as on iOS, macOS, Windows and Linux. Before, it threw `OpenFailedException('File is not accessible')`. A file that exists but can't be opened still throws `OpenFailedException`. Examples are a file with no app to open it, or a `file://` URI without the FileProvider setup. Its message now explains the cause, without the Java exception name and stack trace it used to include.
 - `WriteSessionException` is no longer thrown. A failed write reports the native error, such as `FileIOException`, on every native platform, and using a closed sink throws `StateError`. The class is kept so existing `on WriteSessionException` clauses still compile.
+- `FileSaverSink.close()` now completes with the saved file's `Uri`, the same value as `result`, so `final uri = await sink.close();` (as in the docs) works. It throws when the save failed, and throws `CancelledException` after `cancel()`. Before, it completed with `null`, and `close()` after `cancel()` returned without an error. The `openWrite`/`openWriteAs` docs and README signatures are corrected too: `openWrite` returns `null` only for `skip`, and both take `totalSize`, not `input`.
 
 ### Fixed
 

@@ -467,28 +467,42 @@ Future<Uri?> saveAsAsync({
 ```
 
 #### `openWrite`
-Opens a file for interactive streaming write operations, allowing iterative data chunks to be written. Returns a `FileSaverSink`.
+Opens a file for streaming writes, so the data can be written chunk by chunk. Returns a `FileSaverSink`, or `null` when `conflictResolution` is `skip` and the file exists.
 
 ```dart
-Future<FileSaverSink> openWrite({
-  required SaveInput input,
+Future<FileSaverSink?> openWrite({
   required String fileName,
   required FileType fileType,
   SaveLocation? saveLocation,
   String? subDir,
+  int? totalSize,
   ConflictResolution conflictResolution,
 })
 ```
 
+`close()` finishes the file and returns its URI. `cancel()` deletes the partial file. If a write fails, `close()` throws that error and the partial file is deleted.
+
+```dart
+final sink = await FileSaver.openWrite(
+  fileName: 'recording',
+  fileType: VideoType.mp4,
+  totalSize: expectedBytes,
+);
+if (sink == null) return;
+sink.progress.listen((p) => print('${(p * 100).round()}%'));
+await sink.addStream(chunks); // waits for each chunk to be written
+final uri = await sink.close();
+```
+
 #### `openWriteAs`
-Interactive streaming write via system picker, allowing iterative data chunks to be written to a user-selected location. Returns a `FileSaverSink?`.
+Streaming writes to a user-selected directory (the system picker is shown when `saveLocation` is null). Returns a `FileSaverSink`, or `null` when the picker is cancelled or `skip` finds an existing file.
 
 ```dart
 Future<FileSaverSink?> openWriteAs({
-  required SaveInput input,
   required String fileName,
   required FileType fileType,
   PickedDirectoryLocation? saveLocation,
+  int? totalSize,
   ConflictResolution conflictResolution,
 })
 ```
