@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`file_saver_ffi` is a Flutter plugin (published on pub.dev) for saving bytes, local files, and network downloads to gallery/device storage or a user-picked directory, with progress streaming, cancellation, conflict resolution, and streaming write sessions. Platforms: Android (JNI → Kotlin), iOS/macOS (FFI → Swift, shared `darwin/` source), Windows/Linux (pure Dart + `dart:io`), Web (`package:web` / `dart:js_interop`). Dart tests live in `test/` (`flutter test`), Kotlin tests in `android/src/test` (Robolectric, with a fake MediaStore provider in `testing/`). The `example/` app is the manual test harness (its `widget_test.dart` is the default Flutter template and is stale). On-device tests of the Android JNI bridge live in `example/integration_test/android_test.dart`; CI doesn't run them. Every fix ships with tests for what it changes.
+`file_saver_ffi` is a Flutter plugin (published on pub.dev) for saving bytes, local files, and network downloads to gallery/device storage or a user-picked directory, with progress streaming, cancellation, conflict resolution, and streaming write sessions. Platforms: Android (JNI → Kotlin), iOS/macOS (FFI → Swift, shared `darwin/` source), Windows/Linux (pure Dart + `dart:io`), Web (`package:web` / `dart:js_interop`). Dart tests live in `test/` (`flutter test`), Kotlin tests in `android/src/test` (Robolectric, with a fake MediaStore provider in `testing/`), Swift tests in `darwin/file_saver_ffi/Tests` (XCTest, `swift test` on macOS). The `example/` app is the manual test harness (its `widget_test.dart` is the default Flutter template and is stale). On-device tests of the Android JNI bridge live in `example/integration_test/android_test.dart`, and of the Darwin FFI bridge on iOS in `ios_test.dart`; CI doesn't run them. Every fix ships with tests for what it changes.
 
 ## Commands
 
@@ -23,6 +23,12 @@ cd example/android && ./gradlew :file_saver_ffi:testDebugUnitTest
 # `flutter test` uninstalls the app afterwards; the saved files stay in
 # Download/fsf_it/ (see the file header for the cleanup command).
 cd example && flutter test integration_test/android_test.dart -d <device>
+
+# Swift unit tests (XCTest) of the shared Darwin source, on the macOS host
+cd darwin/file_saver_ffi && swift test
+
+# On-device tests of the Darwin FFI bridge (iOS simulator or device)
+cd example && flutter test integration_test/ios_test.dart -d <device>
 
 # Regenerate Darwin FFI bindings after editing the C header
 dart run tool/ffigen.dart

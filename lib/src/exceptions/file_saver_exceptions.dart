@@ -229,10 +229,9 @@ final class CancelledException extends FileSaverException {
 
 /// Write session error (openWrite / openWriteAs).
 ///
-/// This exception is thrown when:
-/// - A write session is not found (invalid or already closed session ID)
-/// - A chunk write fails due to a native I/O error
-/// - The sink is used after [FileSaverSink.close] or [FileSaverSink.cancel]
+/// The plugin no longer throws this. A failed write reports the native error,
+/// such as [FileIOException], and using a closed sink throws [StateError].
+/// It is kept so that existing `on WriteSessionException` clauses compile.
 final class WriteSessionException extends FileSaverException {
   const WriteSessionException(String reason)
     : super('Write session error: $reason', 'WRITE_SESSION_ERROR');
