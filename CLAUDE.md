@@ -30,7 +30,10 @@ flutter test --platform chrome test/platforms/web
 # Swift unit tests (XCTest) of the shared Darwin source, on the macOS host
 cd darwin/file_saver_ffi && swift test
 
-# On-device tests of the Darwin FFI bridge (iOS simulator or device)
+# On-device tests of the Darwin FFI bridge (iOS simulator or device). The
+# first Photos test opens the Photos permission dialog: answer "Allow Full
+# Access" after it has been open for 2 s (by hand, or with agent-device).
+# `simctl privacy grant` beforehand doesn't stick: flutter test reinstalls.
 cd example && flutter test integration_test/ios_test.dart -d <device>
 
 # Regenerate Darwin FFI bindings after editing the C header

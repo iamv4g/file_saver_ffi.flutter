@@ -13,6 +13,16 @@ enum FileSaverError: Error {
     case networkError(String, statusCode: Int? = nil)
     case platformError(String)
     case cancelled
+
+    #if os(iOS)
+    /// A file type that can't be saved to the Photos Library.
+    static func photosUnsupported(_ fileType: FileType) -> FileSaverError {
+        .invalidInput(
+            "\(fileType.mimeType) (.\(fileType.ext)) can't be saved to the Photos Library, "
+                + "which only takes images and videos. Save it to IosSaveLocation.documents instead."
+        )
+    }
+    #endif
     
     var code: String {
         switch self {

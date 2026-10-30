@@ -23,9 +23,19 @@ extension BaseFileSaver {
         let fileName = buildFileName(base: baseFileName, extension: fileType.ext)
 
         #if os(iOS)
-        let effectiveLocation = supportsPhotosLibrary ? saveLocation : .documents
+        do {
+            try checkPhotosSupport(saveLocation: saveLocation, fileType: fileType)
+        } catch let error as FileSaverError {
+            onError(error.code, error.message)
+            onComplete()
+            return
+        } catch {
+            onError(Constants.errorPlatform, error.localizedDescription)
+            onComplete()
+            return
+        }
 
-        switch effectiveLocation {
+        switch saveLocation {
         case .documents:
             saveNetworkToDocumentsImpl(
                 urlString: urlString,
@@ -243,12 +253,7 @@ extension BaseFileSaver {
             },
             cancellationToken: cancellationToken,
             onCancelHandlerReady: onCancelHandlerReady,
-            completion: { [weak self] result in
-                guard let self = self else {
-                    onComplete()
-                    return
-                }
-
+            completion: { result in
                 switch result {
                 case .success(let (tmpURL, _)):
                     if let token = cancellationToken, token.isCancelled {

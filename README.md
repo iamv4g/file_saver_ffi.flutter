@@ -588,7 +588,11 @@ When saving to `IosSaveLocation.photos`, the permission requested depends on the
 | `"MyAlbum"` | `.readWrite` | Full / Limited / Deny | Album creation, conflict resolution |
 | `null`      | `.addOnly`   | Allow / Deny          | Basic save only (no album)          |
 
+If the app already has `.readWrite` access (full or limited), a save without `subDir` uses it too, so conflict resolution works and `canOpenFile`/`openFile` accept the returned `ph://` URI. With `.addOnly` access, existing assets can't be looked up: every save adds a new asset, and the URI can't be opened.
+
 > **Important:** If `.readWrite` is denied, the save fails. There is no automatic fallback to `.addOnly`.
+
+Only images and videos can be saved to `IosSaveLocation.photos`. Audio and other files throw `InvalidInputException` with every API; save them to `IosSaveLocation.documents`.
 
 </details>
 
