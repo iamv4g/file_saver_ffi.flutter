@@ -2,7 +2,12 @@
 // load. Run from example/ on a simulator or device:
 //   flutter test integration_test/ios_test.dart -d <device-id>
 // They save to the app's Documents/fsf_it/<run>/, which is removed with the
-// app.
+// app. The first Photos test asks for Photos access: answer "Allow Full
+// Access". (`simctl privacy grant` doesn't help: `flutter test` reinstalls the
+// app, which drops the grant.) The assets stay in the library: delete them in
+// the Photos app.
+import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_saver_ffi/file_saver_ffi.dart';
@@ -11,6 +16,27 @@ import 'package:integration_test/integration_test.dart';
 
 final _subDir = 'fsf_it/${DateTime.now().millisecondsSinceEpoch}';
 const _text = CustomFileType(ext: 'txt', mimeType: 'text/plain');
+
+/// A 1×1 PNG, small enough to save to Photos quickly.
+final _png = base64Decode(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+);
+
+/// A Photos asset name that is unique to this run.
+String _photoName(String name) => 'fsf_${_subDir.split('/').last}_$name';
+
+Future<Uri> _saveToPhotos(
+  String name, {
+  String? album,
+  ConflictResolution conflictResolution = ConflictResolution.autoRename,
+}) => FileSaver.saveAsync(
+  input: SaveInput.bytes(_png),
+  fileName: _photoName(name),
+  fileType: ImageType.png,
+  saveLocation: IosSaveLocation.photos,
+  subDir: album,
+  conflictResolution: conflictResolution,
+);
 
 Future<FileSaverSink?> _openSession(
   String name, {
@@ -82,4 +108,66 @@ void main() {
 
     expect(written, 64 * chunk.length);
   }, timeout: const Timeout(Duration(minutes: 2)));
+
+  group('Photos', () {
+    // Runs first: its dialog grants the read/write access the others use.
+    testWidgets('a save to an album asks for read/write access', (_) async {
+      final uri = await _saveToPhotos('album', album: 'fsf_it');
+
+      expect(await FileSaver.canOpenFile(uri), isTrue);
+    }, timeout: const Timeout(Duration(minutes: 5)));
+
+    testWidgets('a save without subDir uses the read access the app has, so '
+        'its URI opens and conflict resolution works', (_) async {
+      final uri = await _saveToPhotos('read_access');
+
+      expect(await FileSaver.canOpenFile(uri), isTrue);
+      expect(
+        await _saveToPhotos(
+          'read_access',
+          conflictResolution: ConflictResolution.skip,
+        ),
+        uri,
+      );
+    });
+
+    testWidgets('a cancelled save adds no asset', (_) async {
+      final subscription = FileSaver.save(
+        input: SaveInput.bytes(_png),
+        fileName: _photoName('cancelled'),
+        fileType: ImageType.png,
+        saveLocation: IosSaveLocation.photos,
+      ).listen(null);
+      await subscription.cancel();
+      // Longer than a save of the PNG takes, had it gone ahead.
+      await Future<void>.delayed(const Duration(seconds: 2));
+
+      // `fail` throws FileExistsException if the cancelled save added it.
+      await _saveToPhotos(
+        'cancelled',
+        conflictResolution: ConflictResolution.fail,
+      );
+    });
+
+    testWidgets('audio and other files are rejected instead of being saved to '
+        'Documents', (_) async {
+      await expectLater(
+        FileSaver.saveAsync(
+          input: SaveInput.bytes(Uint8List.fromList('ID3'.codeUnits)),
+          fileName: _photoName('audio'),
+          fileType: AudioType.mp3,
+          saveLocation: IosSaveLocation.photos,
+        ),
+        throwsA(isA<InvalidInputException>()),
+      );
+      await expectLater(
+        FileSaver.openWrite(
+          fileName: _photoName('text'),
+          fileType: _text,
+          saveLocation: IosSaveLocation.photos,
+        ),
+        throwsA(isA<InvalidInputException>()),
+      );
+    });
+  });
 }

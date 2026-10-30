@@ -4,7 +4,7 @@ class CustomFileSaver: BaseFileSaver {
     // MARK: - Hooks
     
     // Uses all defaults:
-    // - supportsPhotosLibrary = false (Documents only)
+    // - supportsPhotosLibrary = false (can't be saved to Photos)
     // - validateFormat = no-op (accepts any file type)
     
     // MARK: - Core Methods (Delegate to Impl)

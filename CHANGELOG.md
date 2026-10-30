@@ -1,3 +1,15 @@
+## Unreleased
+
+### Changed
+
+- **iOS:** saving audio or another non-media file to `IosSaveLocation.photos` now throws `InvalidInputException` with every API, as `openWrite` already refused it. Before, `save` and `saveAsync` saved it to Documents without saying so, and `openWrite` threw `UnsupportedFormatException`. Save these files to `IosSaveLocation.documents`.
+
+### Fixed
+
+- **iOS:** a save to `IosSaveLocation.photos` without `subDir` now uses the Photos read/write access the app already has (full or limited). Before, it always asked for add-only access, so `overwrite`, `skip` and `fail` were silently ignored and every save added a new asset, and `canOpenFile`/`openFile` rejected the returned `ph://` URI.
+- **iOS:** cancelling a save to Photos now stops it if the asset isn't being added yet, for example while the permission dialog is open. Before, the cancel was ignored and the asset still appeared in Photos.
+- **iOS:** a save to Photos no longer waits an extra 0.5 s after the permission dialog.
+
 ## 0.11.0
 
 ### Changed

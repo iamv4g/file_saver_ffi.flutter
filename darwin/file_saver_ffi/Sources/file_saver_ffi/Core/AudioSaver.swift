@@ -3,7 +3,7 @@ import Foundation
 class AudioSaver: BaseFileSaver {
     // MARK: - Hooks
     
-    // supportsPhotosLibrary = false (default) - Audio saves to Documents only
+    // supportsPhotosLibrary = false (default): audio can't be saved to Photos
     
     func validateFormat(_ fileType: FileType) throws {
         try FormatValidator.validateAudioFormat(fileType)

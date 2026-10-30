@@ -5,59 +5,60 @@ import Photos
 class PhotosHelper {
     /// Requests photo library permission from the user.
     ///
-    /// - Parameter needAlbum: If `true`, requests `.readWrite` for album & conflict resolution support.
-    ///   If `false`, requests `.addOnly` for basic save without albums.
-    /// - Returns: `true` if read/write access granted (full or limited), `false` if add-only.
+    /// Read/write access the app already has (full or limited) is always used,
+    /// so conflict resolution works and the saved `ph://` URI can be opened.
+    /// Otherwise the dialog asks for `.readWrite` if `needAlbum` is `true`, and
+    /// for `.addOnly` if it is `false`.
+    ///
+    /// - Parameter needAlbum: Whether the save needs `.readWrite`, for album
+    ///   support.
+    /// - Returns: `true` if read/write access is granted (full or limited),
+    ///   `false` if only add-only access is.
     /// - Throws: `FileSaverError.permissionDenied` if the user denies access.
     static func requestPermission(needAlbum: Bool) throws -> Bool {
         if #available(iOS 14, *) {
-            let accessLevel: PHAccessLevel = needAlbum ? .readWrite : .addOnly
-            var status = PHPhotoLibrary.authorizationStatus(for: accessLevel)
-
-            if status == .notDetermined {
-                let semaphore = DispatchSemaphore(value: 0)
-
-                PHPhotoLibrary.requestAuthorization(for: accessLevel) { authStatus in
-                    status = authStatus
-                    semaphore.signal()
-                }
-
-                semaphore.wait()
-                Thread.sleep(forTimeInterval: 0.5)
-            }
-
-            if accessLevel == .readWrite {
-                guard status == .authorized || status == .limited else {
-                    throw FileSaverError.permissionDenied("Photo library access denied")
-                }
+            let readWrite = authorize(.readWrite, request: needAlbum)
+            if readWrite == .authorized || readWrite == .limited {
                 return true
-            } else {
-                guard status == .authorized else {
-                    throw FileSaverError.permissionDenied("Photo library access denied")
-                }
-                return false
             }
+            guard !needAlbum, authorize(.addOnly, request: true) == .authorized else {
+                throw FileSaverError.permissionDenied("Photo library access denied")
+            }
+            return false
         } else {
             var status = PHPhotoLibrary.authorizationStatus()
-
             if status == .notDetermined {
-                let semaphore = DispatchSemaphore(value: 0)
-
-                PHPhotoLibrary.requestAuthorization { authStatus in
-                    status = authStatus
-                    semaphore.signal()
-                }
-
-                semaphore.wait()
-                Thread.sleep(forTimeInterval: 0.5)
+                status = waitForAuthorization { PHPhotoLibrary.requestAuthorization($0) }
             }
-
             guard status == .authorized else {
                 throw FileSaverError.permissionDenied("Photo library access denied")
             }
-
             return true
         }
+    }
+
+    /// Returns the status of `accessLevel`, first asking the user if it is
+    /// undetermined and `request` is `true`.
+    @available(iOS 14, *)
+    private static func authorize(_ accessLevel: PHAccessLevel, request: Bool) -> PHAuthorizationStatus {
+        let status = PHPhotoLibrary.authorizationStatus(for: accessLevel)
+        guard request, status == .notDetermined else { return status }
+        return waitForAuthorization { PHPhotoLibrary.requestAuthorization(for: accessLevel, handler: $0) }
+    }
+
+    /// Blocks the calling (background) thread until `request` reports the
+    /// user's answer.
+    private static func waitForAuthorization(
+        _ request: (@escaping (PHAuthorizationStatus) -> Void) -> Void
+    ) -> PHAuthorizationStatus {
+        var status = PHAuthorizationStatus.notDetermined
+        let semaphore = DispatchSemaphore(value: 0)
+        request {
+            status = $0
+            semaphore.signal()
+        }
+        semaphore.wait()
+        return status
     }
 
     /// Find or create album with given name

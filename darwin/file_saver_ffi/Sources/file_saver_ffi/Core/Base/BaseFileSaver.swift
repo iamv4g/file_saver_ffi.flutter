@@ -13,7 +13,7 @@ protocol BaseFileSaver: AnyObject {
 
     #if os(iOS)
     /// Whether this saver supports Photos Library saves
-    /// Default is false (Documents only)
+    /// Default is false: saving to `.photos` throws `invalidInput`
     var supportsPhotosLibrary: Bool { get }
 
     /// Save data to Photos Library - only Image/Video override this
@@ -173,6 +173,13 @@ extension BaseFileSaver {
         )
         return (hasReadAccess, outcome)
     }
+
+    /// Throws for a file type the Photos Library doesn't take: only images and
+    /// videos can be saved to `.photos`, by every API.
+    func checkPhotosSupport(saveLocation: SaveLocation, fileType: FileType) throws {
+        guard saveLocation == .photos, !supportsPhotosLibrary else { return }
+        throw FileSaverError.photosUnsupported(fileType)
+    }
     #endif
 }
 
@@ -196,9 +203,9 @@ extension BaseFileSaver {
         let fileName = buildFileName(base: baseFileName, extension: fileType.ext)
 
         #if os(iOS)
-        let effectiveLocation = supportsPhotosLibrary ? saveLocation : .documents
+        try checkPhotosSupport(saveLocation: saveLocation, fileType: fileType)
 
-        switch effectiveLocation {
+        switch saveLocation {
         case .documents:
             try saveBytesToDocuments(
                 fileData: fileData,
@@ -226,6 +233,9 @@ extension BaseFileSaver {
                 return
             }
 
+            // The permission dialog can stay open for a while. Once the asset
+            // is being added, it can't be stopped.
+            try cancellationToken?.throwIfCancelled()
             let uri = try saveBytesToPhotos(
                 fileData: fileData,
                 fileName: fileName,
@@ -308,9 +318,9 @@ extension BaseFileSaver {
         let fileName = buildFileName(base: baseFileName, extension: fileType.ext)
 
         #if os(iOS)
-        let effectiveLocation = supportsPhotosLibrary ? saveLocation : .documents
+        try checkPhotosSupport(saveLocation: saveLocation, fileType: fileType)
 
-        switch effectiveLocation {
+        switch saveLocation {
         case .documents:
             try saveFileToDocuments(
                 filePath: filePath,
@@ -338,6 +348,7 @@ extension BaseFileSaver {
                 return
             }
 
+            try cancellationToken?.throwIfCancelled()
             let sourceFile = try FileHelper.openSourceFile(
                 at: filePath,
                 onDownloadProgress: downloadProgressHandler
@@ -346,6 +357,8 @@ extension BaseFileSaver {
 
             onProgress?(0.8)
 
+            // Once the asset is being added, it can't be stopped.
+            try cancellationToken?.throwIfCancelled()
             let uri = try saveFileToPhotos(
                 sourceURL: sourceFile.url,
                 fileName: fileName,

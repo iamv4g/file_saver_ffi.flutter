@@ -70,6 +70,9 @@ enum IosSaveLocation implements SaveLocation {
   ///
   /// Requires Photos permission. Files are saved to the user's Photos app
   /// and can optionally be organized into albums using the subDir parameter.
+  ///
+  /// Only images and videos can be saved here. Other file types throw
+  /// `InvalidInputException`.
   photos;
 
   const IosSaveLocation();

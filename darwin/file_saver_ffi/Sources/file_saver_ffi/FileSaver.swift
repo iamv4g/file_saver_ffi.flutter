@@ -308,12 +308,7 @@ class FileSaver {
         let fileType = FileHelper.getFileType(ext: ext, mimeType: mimeType)
         let saver = getSaver(for: fileType)
 
-        guard saver.supportsPhotosLibrary else {
-            throw FileSaverError.unsupportedFormat(
-                ext.uppercased(),
-                details: "Only images and videos can be saved to the Photos Library."
-            )
-        }
+        try saver.checkPhotosSupport(saveLocation: .photos, fileType: fileType)
 
         let fullFileName = FileHelper.buildFileName(fileName: baseFileName, extension: ext)
         let conflictResolution = ConflictResolution.fromInt(conflictMode)
