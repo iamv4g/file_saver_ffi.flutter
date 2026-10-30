@@ -5,6 +5,7 @@
 - **Android:** the consumer ProGuard/R8 rules now only keep what the JNI bindings look up by name: `FileSaver`, `FileSaver$Companion` and `ProgressCallback`, plus the names of two types in their signatures. Before, they kept all of `kotlinx.coroutines`, `kotlin.coroutines` and `kotlin.jvm.internal`, and turned on `-keepparameternames` and `-keepattributes … Signature, Exceptions, Metadata` for the whole app, so release builds of apps using the plugin shrank and obfuscated less.
 - **Android:** the plugin now declares `minSdk 24` (Android 7.0), and the README says so. This matches what apps already needed: the `dir_picker` dependency requires API 24, so an app with a lower `minSdk` failed at manifest merge. The README previously claimed API 21+.
 - **Android:** `openFile` of a file that no longer exists now throws `SourceFileNotFoundException`, as on iOS, macOS, Windows and Linux. Before, it threw `OpenFailedException('File is not accessible')`. A file that exists but can't be opened still throws `OpenFailedException`. Examples are a file with no app to open it, or a `file://` URI without the FileProvider setup. Its message now explains the cause, without the Java exception name and stack trace it used to include.
+- `WriteSessionException` is no longer thrown. A failed write reports the native error, such as `FileIOException`, on every native platform, and using a closed sink throws `StateError`. The class is kept so existing `on WriteSessionException` clauses still compile.
 
 ### Fixed
 
@@ -40,6 +41,10 @@
 - **iOS:** conflict lookup for a Photos album that doesn't exist yet no longer searches the whole library, so `skip`, `fail` and `overwrite` can't match (or delete) a same-named asset outside the album.
 - **iOS/macOS:** a failed save no longer leaves a partial file behind. Previously only cancellation removed it.
 - **iOS:** concurrent network or video saves with the same file name no longer share a temporary file.
+- **iOS/macOS:** calling `close()` on an `openWrite`/`openWriteAs` sink while `addStream` is still running now throws `StateError`, as on Android. Before, it froze the isolate. `flush`, `add` and `addError` throw `StateError` in that case too.
+- **iOS/macOS:** a write session whose write fails no longer reports success. Before, `close()` committed the file (or added it to the Photos Library) and `result` completed with its URI. Later chunks were also appended after the failed one, leaving a gap in the file. Now `close()`, `done` and `result` fail with the error of that write, such as `FileIOException`, and the file is deleted. `addStream` and `flush` fail with the same error, and later chunks are dropped. Errors from syncing or closing the file, and from a failed commit, are now reported too, and the file is deleted; they used to be ignored.
+- **iOS/macOS:** `bytesWritten` and `progress` of a write session now report every chunk, including chunks still being written when `close()` is called.
+- **iOS/macOS:** `addError` on a write session now ends it and deletes the file, and a sink that is garbage collected before `close` or `cancel` is cancelled, as on Android. A chunk that goes to Swift right away is now copied twice instead of three times.
 
 
 ## 0.10.1

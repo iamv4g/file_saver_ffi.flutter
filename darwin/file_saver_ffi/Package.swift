@@ -28,5 +28,11 @@ let package = Package(
             // Only used by ffigen (tool/ffigen.dart); the functions are defined via `@_cdecl`.
             exclude: ["FFI/file_saver_ffi.h"]
         ),
+        // Unit tests, run on macOS with `swift test`. Apps never build this target.
+        .testTarget(
+            name: "file_saver_ffiTests",
+            dependencies: ["file_saver_ffi"],
+            path: "Tests/file_saver_ffiTests"
+        ),
     ]
 )

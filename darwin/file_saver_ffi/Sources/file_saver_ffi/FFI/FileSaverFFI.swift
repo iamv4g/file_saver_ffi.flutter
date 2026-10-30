@@ -105,19 +105,34 @@ private func unregisterDownload(_ id: UInt) {
 
 // MARK: - Write Session Registry
 
-private final class WriteSession {
+/// Receives the replies of write-session calls. `ProgressReporter` sends them
+/// to Dart; tests record them.
+protocol WriteSessionReporter {
+    func sendBytes(_ bytes: Int64)
+    func sendError(code: String, message: String)
+    func sendSuccess(uri: String)
+}
+
+extension ProgressReporter: WriteSessionReporter {}
+
+/// One `openWrite`/`openWriteAs` session. Every operation runs on
+/// `serialQueue`, in the order it was called.
+final class WriteSession {
     let fileHandle: FileHandle
     /// File the chunks are written to. Never an existing file: for `overwrite` it
-    /// is a temp file, so `cancelWrite` can always delete it.
+    /// is a temp file, so `cancel` and a failed `close` can always delete it.
     let fileURL: URL
     let totalSize: Int64  // -1 if unknown
     let serialQueue: DispatchQueue
     let securityScopedURL: URL?  // non-nil for openWriteAs
-    var bytesWritten: Int64 = 0
-    /// Invoked on closeWrite: makes `fileURL` the saved file (replacing the
+    private(set) var bytesWritten: Int64 = 0
+    /// Invoked on close: makes `fileURL` the saved file (replacing the
     /// original for `overwrite`, or adding it to the Photos Library) and returns
     /// the URI to report.
     let commit: () throws -> String
+    /// The first write or flush error. Later writes and flushes report it
+    /// again, and `close` deletes the file instead of committing it.
+    private var failure: (code: String, message: String)?
 
     init(
         fileHandle: FileHandle,
@@ -135,6 +150,110 @@ private final class WriteSession {
             label: "com.vanvixi.file_saver.ws.\(fileURL.lastPathComponent)",
             qos: .userInitiated
         )
+    }
+
+    /// Appends `chunk` and reports the total bytes written.
+    func write(_ chunk: Data, reporter: WriteSessionReporter) {
+        serialQueue.async {
+            if let failure = self.failure {
+                return reporter.sendError(code: failure.code, message: failure.message)
+            }
+            do {
+                if #available(macOS 10.15.4, iOS 13.4, *) {
+                    try self.fileHandle.write(contentsOf: chunk)
+                } else {
+                    self.fileHandle.write(chunk)
+                }
+                self.bytesWritten += Int64(chunk.count)
+                reporter.sendBytes(self.bytesWritten)
+            } catch {
+                self.fail(code: Constants.errorFileIO, message: error.localizedDescription, reporter: reporter)
+            }
+        }
+    }
+
+    /// Flushes the written data to storage and reports the total bytes written.
+    func flush(reporter: WriteSessionReporter) {
+        serialQueue.async {
+            if let failure = self.failure {
+                return reporter.sendError(code: failure.code, message: failure.message)
+            }
+            do {
+                if #available(macOS 10.15.4, iOS 13.4, *) {
+                    try self.fileHandle.synchronize()
+                } else {
+                    self.fileHandle.synchronizeFile()
+                }
+                reporter.sendBytes(self.bytesWritten)
+            } catch {
+                self.fail(code: Constants.errorFileIO, message: error.localizedDescription, reporter: reporter)
+            }
+        }
+    }
+
+    /// Closes the file and commits it, reporting its URI. If a write failed,
+    /// or the file can't be closed or committed, deletes it and reports the
+    /// error instead.
+    func close(reporter: WriteSessionReporter) {
+        serialQueue.async {
+            // Commit while the security scope is still held: replacing a file in a
+            // user-picked directory needs access to it.
+            defer { self.securityScopedURL?.stopAccessingSecurityScopedResource() }
+
+            if let failure = self.failure {
+                self.closeHandle()
+                self.deleteFile()
+                return reporter.sendError(code: failure.code, message: failure.message)
+            }
+            do {
+                if #available(macOS 10.15.4, iOS 13.4, *) {
+                    try self.fileHandle.synchronize()
+                    try self.fileHandle.close()
+                } else {
+                    self.fileHandle.synchronizeFile()
+                    self.fileHandle.closeFile()
+                }
+            } catch {
+                self.closeHandle()
+                self.deleteFile()
+                return reporter.sendError(code: Constants.errorFileIO, message: error.localizedDescription)
+            }
+            do {
+                reporter.sendSuccess(uri: try self.commit())
+            } catch let fsError as FileSaverError {
+                self.deleteFile()
+                reporter.sendError(code: fsError.code, message: fsError.message)
+            } catch {
+                self.deleteFile()
+                reporter.sendError(code: Constants.errorFileIO, message: error.localizedDescription)
+            }
+        }
+    }
+
+    /// Closes and deletes the file. Reports nothing.
+    func cancel() {
+        serialQueue.async {
+            self.closeHandle()
+            self.securityScopedURL?.stopAccessingSecurityScopedResource()
+            self.deleteFile()
+        }
+    }
+
+    private func fail(code: String, message: String, reporter: WriteSessionReporter) {
+        failure = (code, message)
+        reporter.sendError(code: code, message: message)
+    }
+
+    private func closeHandle() {
+        if #available(macOS 10.15.4, iOS 13.4, *) {
+            try? fileHandle.close()
+        } else {
+            fileHandle.closeFile()
+        }
+    }
+
+    private func deleteFile() {
+        try? FileManager.default.removeItem(at: fileURL)
     }
 }
 
@@ -901,19 +1020,7 @@ public func fileSaverWriteChunk(
         reporter.sendError(code: Constants.errorInvalidInput, message: "Session not found: \(sessionId)")
         return
     }
-    session.serialQueue.async {
-        do {
-            if #available(macOS 10.15.4, iOS 13.4, *) {
-                try session.fileHandle.write(contentsOf: chunk)
-            } else {
-                session.fileHandle.write(chunk)
-            }
-            session.bytesWritten += Int64(chunk.count)
-            reporter.sendBytes(session.bytesWritten)
-        } catch {
-            reporter.sendError(code: Constants.errorFileIO, message: error.localizedDescription)
-        }
-    }
+    session.write(chunk, reporter: reporter)
 }
 
 @_cdecl("file_saver_flush_write")
@@ -923,14 +1030,7 @@ public func fileSaverFlushWrite(_ sessionId: UInt, _ nativePort: Int64) {
         reporter.sendError(code: Constants.errorInvalidInput, message: "Session not found: \(sessionId)")
         return
     }
-    session.serialQueue.async {
-        if #available(macOS 10.15.4, iOS 13.4, *) {
-            try? session.fileHandle.synchronize()
-        } else {
-            session.fileHandle.synchronizeFile()
-        }
-        reporter.sendBytes(session.bytesWritten)
-    }
+    session.flush(reporter: reporter)
 }
 
 @_cdecl("file_saver_close_write")
@@ -940,38 +1040,10 @@ public func fileSaverCloseWrite(_ sessionId: UInt, _ nativePort: Int64) {
         reporter.sendError(code: Constants.errorInvalidInput, message: "Session not found: \(sessionId)")
         return
     }
-    session.serialQueue.async {
-        if #available(macOS 10.15.4, iOS 13.4, *) {
-            try? session.fileHandle.synchronize()
-            try? session.fileHandle.close()
-        } else {
-            session.fileHandle.synchronizeFile()
-            session.fileHandle.closeFile()
-        }
-        // Commit while the security scope is still held: replacing a file in a
-        // user-picked directory needs access to it.
-        defer { session.securityScopedURL?.stopAccessingSecurityScopedResource() }
-
-        do {
-            reporter.sendSuccess(uri: try session.commit())
-        } catch let fsError as FileSaverError {
-            reporter.sendError(code: fsError.code, message: fsError.message)
-        } catch {
-            reporter.sendError(code: Constants.errorFileIO, message: error.localizedDescription)
-        }
-    }
+    session.close(reporter: reporter)
 }
 
 @_cdecl("file_saver_cancel_write")
 public func fileSaverCancelWrite(_ sessionId: UInt) {
-    guard let session = removeWriteSession(sessionId) else { return }
-    session.serialQueue.async {
-        if #available(macOS 10.15.4, iOS 13.4, *) {
-            try? session.fileHandle.close()
-        } else {
-            session.fileHandle.closeFile()
-        }
-        session.securityScopedURL?.stopAccessingSecurityScopedResource()
-        try? FileManager.default.removeItem(at: session.fileURL)
-    }
+    removeWriteSession(sessionId)?.cancel()
 }
