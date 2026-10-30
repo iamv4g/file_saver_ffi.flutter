@@ -7,7 +7,6 @@ import 'dart:typed_data';
 
 import 'package:file_saver_ffi/file_saver_ffi.dart';
 import 'package:file_saver_ffi/src/models/locations/web_save_location.dart';
-import 'package:file_saver_ffi/src/platforms/web/file_saver_web.dart';
 import 'package:file_saver_ffi/src/platforms/web/web_file_saver_sink.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web/web.dart';
