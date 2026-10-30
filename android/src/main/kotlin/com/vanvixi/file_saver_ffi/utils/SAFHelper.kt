@@ -53,14 +53,17 @@ object SAFHelper {
                 throw IOException("Cannot write to directory: $treeUri")
             }
 
-            // Check for existing file
-            val existingFile = docDir.findFile(fileName)
+            // One listing serves the conflict check and the unique name.
+            // DocumentFile.findFile would list the directory again for every
+            // name it checks, with an IPC call per entry.
+            val children = listChildren(context, docDir)
+            val existingUri = children[fileName]
 
-            if (existingFile != null && existingFile.exists()) {
+            if (existingUri != null) {
                 when (conflictResolution) {
                     ConflictResolution.AUTO_RENAME -> {
                         // Generate unique name: photo.jpg → photo (1).jpg
-                        val uniqueName = generateUniqueName(docDir, fileName)
+                        val uniqueName = generateUniqueName(children.keys, baseFileName, fileType.ext)
                         return@withContext createNewFile(context, docDir, uniqueName, mimeType)
                     }
 
@@ -68,12 +71,12 @@ object SAFHelper {
                         // Write a new document next to the existing one (the
                         // provider gives it a unique name). commitFile deletes
                         // the existing document only after the write succeeds.
-                        return@withContext createNewFile(context, docDir, fileName, mimeType, replaces = existingFile.uri)
+                        return@withContext createNewFile(context, docDir, fileName, mimeType, replaces = existingUri)
                     }
 
                     ConflictResolution.SKIP -> {
                         // Keep the existing document; nothing is written.
-                        return@withContext SaveEntry.Existing(existingFile.uri)
+                        return@withContext SaveEntry.Existing(existingUri)
                     }
 
                     ConflictResolution.FAIL -> {
@@ -148,27 +151,39 @@ object SAFHelper {
     }
 
     /**
-     * Generates a unique file name by appending (1), (2), etc.
+     * Lists the display names of [docDir]'s children with their document URIs,
+     * in one query.
+     *
+     * @throws IOException if the directory can't be listed
+     */
+    private fun listChildren(
+        context: Context,
+        docDir: DocumentFile,
+    ): Map<String, Uri> {
+        val childrenUri =
+            DocumentsContract.buildChildDocumentsUriUsingTree(docDir.uri, DocumentsContract.getDocumentId(docDir.uri))
+        val projection = arrayOf(DocumentsContract.Document.COLUMN_DOCUMENT_ID, DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+        val children = HashMap<String, Uri>()
+        context.contentResolver.query(childrenUri, projection, null, null, null)?.use { cursor ->
+            while (cursor.moveToNext()) {
+                val documentId = cursor.getString(0) ?: continue
+                val name = cursor.getString(1) ?: continue
+                children.putIfAbsent(name, DocumentsContract.buildDocumentUriUsingTree(docDir.uri, documentId))
+            }
+        } ?: throw IOException("Cannot list directory: ${docDir.uri}")
+        return children
+    }
+
+    /**
+     * Returns the first of `base (1).ext`, `base (2).ext`, … not in [takenNames].
+     * There always is one, because [takenNames] is finite.
      */
     private fun generateUniqueName(
-        docDir: DocumentFile,
-        originalName: String,
-    ): String {
-        val dotIndex = originalName.lastIndexOf('.')
-        val baseName = if (dotIndex > 0) originalName.substring(0, dotIndex) else originalName
-        val extension = if (dotIndex > 0) originalName.substring(dotIndex) else ""
-
-        var counter = 1
-        var newName: String
-        do {
-            newName = "$baseName ($counter)$extension"
-            counter++
-        } while (docDir.findFile(newName)?.exists() == true && counter < 1000)
-
-        if (counter >= 1000) {
-            throw IOException("Cannot generate unique name for: $originalName")
-        }
-
-        return newName
-    }
+        takenNames: Set<String>,
+        baseFileName: String,
+        extension: String,
+    ): String =
+        generateSequence(1) { it + 1 }
+            .map { FileHelper.buildFileName("$baseFileName ($it)", extension) }
+            .first { it !in takenNames }
 }
