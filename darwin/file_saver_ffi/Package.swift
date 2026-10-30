@@ -6,7 +6,7 @@ import PackageDescription
 let package = Package(
     name: "file_saver_ffi",
     platforms: [
-        .iOS("13.0"),
+        .iOS("13.4"),
         .macOS("10.15.4"),
     ],
     products: [
@@ -31,7 +31,7 @@ let package = Package(
         // Unit tests, run on macOS with `swift test`. Apps never build this target.
         .testTarget(
             name: "file_saver_ffiTests",
-            dependencies: ["file_saver_ffi"],
+            dependencies: ["file_saver_ffi", "FileSaverDartApi"],
             path: "Tests/file_saver_ffiTests"
         ),
     ]

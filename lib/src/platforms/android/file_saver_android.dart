@@ -55,6 +55,7 @@ class FileSaverAndroid extends FileSaverPlatform {
       );
     }
 
+    final jSaveLocationIndex = _saveLocationToIndex(saveLocation);
     return Stream.multi((controller) {
       // Releases the JNI arguments once the native call has returned; the JVM
       // keeps its own references for as long as the save runs.
@@ -67,7 +68,6 @@ class FileSaverAndroid extends FileSaverPlatform {
       final jExtension = fileType.ext.toJString()..releasedBy(arena);
       final jMimeType = fileType.mimeType.toJString()..releasedBy(arena);
       final jConflictMode = conflictResolution.index;
-      final jSaveLocationIndex = _saveLocationToIndex(saveLocation);
       final jSubDir = subDir?.toJString()?..releasedBy(arena);
 
       void cleanup() {
@@ -143,6 +143,7 @@ class FileSaverAndroid extends FileSaverPlatform {
       );
     }
 
+    final jSaveLocationIndex = _saveLocationToIndex(saveLocation);
     return Stream.multi((controller) {
       // Releases the JNI arguments once the native call has returned; the JVM
       // keeps its own references for as long as the save runs.
@@ -155,7 +156,6 @@ class FileSaverAndroid extends FileSaverPlatform {
       final jExtension = fileType.ext.toJString()..releasedBy(arena);
       final jMimeType = fileType.mimeType.toJString()..releasedBy(arena);
       final jConflictMode = conflictResolution.index;
-      final jSaveLocationIndex = _saveLocationToIndex(saveLocation);
       final jSubDir = subDir?.toJString()?..releasedBy(arena);
 
       void cleanup() {
@@ -235,6 +235,7 @@ class FileSaverAndroid extends FileSaverPlatform {
       );
     }
 
+    final jSaveLocationIndex = _saveLocationToIndex(saveLocation);
     return Stream.multi((controller) {
       // Releases the JNI arguments once the native call has returned; the JVM
       // keeps its own references for as long as the save runs.
@@ -251,7 +252,6 @@ class FileSaverAndroid extends FileSaverPlatform {
       final jExtension = fileType.ext.toJString()..releasedBy(arena);
       final jMimeType = fileType.mimeType.toJString()..releasedBy(arena);
       final jConflictMode = conflictResolution.index;
-      final jSaveLocationIndex = _saveLocationToIndex(saveLocation);
       final jSubDir = subDir?.toJString()?..releasedBy(arena);
 
       void cleanup() {
@@ -599,13 +599,14 @@ class FileSaverAndroid extends FileSaverPlatform {
       );
     }
 
+    final saveLocationIndex = _saveLocationToIndex(saveLocation);
     // Session id 0 means SKIP found an existing file and opened nothing.
     final result = await _callForResult(
       (arena, callback) => _fileSaver.openWriteSession(
         fileName.toJString()..releasedBy(arena),
         fileType.ext.toJString()..releasedBy(arena),
         fileType.mimeType.toJString()..releasedBy(arena),
-        _saveLocationToIndex(saveLocation),
+        saveLocationIndex,
         subDir?.toJString()?..releasedBy(arena),
         conflictResolution.index,
         totalSize ?? -1,
@@ -699,15 +700,13 @@ class FileSaverAndroid extends FileSaverPlatform {
     return completer.future;
   }
 
-  /// Returns the native index for a [SaveLocation].
+  /// Returns the native index of [saveLocation], and that of
+  /// [AndroidSaveLocation.downloads] for null.
   ///
-  /// Maps [AndroidSaveLocation] to its index value.
-  /// Defaults to [AndroidSaveLocation.downloads] index.
+  /// Throws [InvalidInputException] for another platform's location.
   int _saveLocationToIndex(SaveLocation? saveLocation) {
-    return switch (saveLocation) {
-      AndroidSaveLocation location => location.index,
-      _ => AndroidSaveLocation.downloads.index,
-    };
+    final location = checkSaveLocation<AndroidSaveLocation>(saveLocation);
+    return (location ?? AndroidSaveLocation.downloads).index;
   }
 
   /// Converts the JNI callback arguments to Dart and delegates to

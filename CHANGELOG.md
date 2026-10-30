@@ -3,6 +3,8 @@
 ### Changed
 
 - **iOS:** saving audio or another non-media file to `IosSaveLocation.photos` now throws `InvalidInputException` with every API, as `openWrite` already refused it. Before, `save` and `saveAsync` saved it to Documents without saying so, and `openWrite` threw `UnsupportedFormatException`. Save these files to `IosSaveLocation.documents`.
+- **iOS:** the minimum iOS version is now 13.4 (was 13.0), in the podspec, `Package.swift` and README. iOS 13.0–13.3 used `FileHandle` calls that crash the app on a write error instead of throwing.
+- A `saveLocation` of another platform, such as `IosSaveLocation.photos` on macOS or `AndroidSaveLocation.downloads` on iOS, now throws `InvalidInputException` from `save`, `saveAsync` and `openWrite` on Android, iOS, macOS, Windows and Linux, and so does a `PickedDirectoryLocation`, which belongs to `saveAs` and `openWriteAs`. Before, the location was replaced by the platform's default without a word, and on macOS `IosSaveLocation.photos` saved to `~/Pictures`. Pick the location per platform, or pass `null` for the default.
 
 ### Fixed
 
@@ -15,6 +17,9 @@
 - **iOS/macOS:** `saveAs` now tries to write when the picked directory's security scope can't be started, as `openWriteAs` already did, and fails with `PermissionDeniedException` only if the write is refused. Before, it failed at once, even for directories the app can write.
 - **iOS/macOS:** `SaveInput.file` with a plain path containing `#`, `?` or `%` now works. Before, the path was parsed as a URL, so `/x/a#1.mp4` became `/x/a` and failed with `SourceFileNotFoundException`.
 - **iOS/macOS:** cancelling a `SaveInput.file` save while it waits for an iCloud file to download now stops it. Before, the wait went on for up to 60 s. A file with only an older version on the device is now downloaded instead of waiting for the full 60 s, and the progress during the download no longer shows an invented 0–90%.
+- **iOS/macOS:** `SaveInput.bytes` saves and write-session chunks no longer keep extra copies of the bytes. Dart kept its native copy until the save finished, and Swift copied it once more on the calling thread, which is the UI thread. Swift now takes over the buffer Dart allocates.
+- **iOS/macOS:** a network download now sends about 100 progress events (a step of at least 1%, or 100 ms) instead of one per received packet, thousands for a large file.
+- **iOS/macOS:** the plugin now refuses to start on a Dart VM whose `Dart_CObject` layout it wasn't built for (another major version of the Dart DL API), instead of posting messages the VM can't read.
 
 ## 0.11.0
 

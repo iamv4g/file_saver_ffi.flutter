@@ -29,17 +29,14 @@ void main() {
     ),
     functions: Functions(
       include: Declarations.includeSet({
-        'file_saver_init',
         'file_saver_init_dart_api_dl',
         'file_saver_save_bytes',
         'file_saver_save_file',
         'file_saver_save_network',
-        'file_saver_pick_directory',
         'file_saver_save_bytes_as',
         'file_saver_save_file_as',
         'file_saver_save_network_as',
         'file_saver_cancel',
-        'file_saver_dispose',
         'file_saver_open_file',
         'file_saver_can_open_file',
         'file_saver_open_write',

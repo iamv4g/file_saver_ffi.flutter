@@ -1,23 +1,16 @@
 PODS:
-  - file_saver_ffi (0.0.1):
-    - Flutter
-    - FlutterMacOS
   - FlutterMacOS (1.0.0)
 
 DEPENDENCIES:
-  - file_saver_ffi (from `Flutter/ephemeral/.symlinks/plugins/file_saver_ffi/darwin`)
   - FlutterMacOS (from `Flutter/ephemeral`)
 
 EXTERNAL SOURCES:
-  file_saver_ffi:
-    :path: Flutter/ephemeral/.symlinks/plugins/file_saver_ffi/darwin
   FlutterMacOS:
     :path: Flutter/ephemeral
 
 SPEC CHECKSUMS:
-  file_saver_ffi: 75d0b891038d1d7e75e107057e5b7d1db615a1c5
-  FlutterMacOS: d0db08ddef1a9af05a5ec4b724367152bb0500b1
+  FlutterMacOS: c232990155153907050900a2e175c7773903ba4e
 
 PODFILE CHECKSUM: 01cbcb368aa4ef9cf3ea80dd0ba76176720857cd
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.17.0
