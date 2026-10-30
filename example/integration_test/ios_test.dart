@@ -2,10 +2,11 @@
 // load. Run from example/ on a simulator or device:
 //   flutter test integration_test/ios_test.dart -d <device-id>
 // They save to the app's Documents/fsf_it/<run>/, which is removed with the
-// app. The first Photos test asks for Photos access: answer "Allow Full
-// Access". (`simctl privacy grant` doesn't help: `flutter test` reinstalls the
-// app, which drops the grant.) The assets stay in the library: delete them in
-// the Photos app.
+// app. The first Photos test asks for Photos access: wait until it has been
+// shown for 2 s (the test cancels a save while it is open), then answer "Allow
+// Full Access". (`simctl privacy grant` doesn't help: `flutter test`
+// reinstalls the app, which drops the grant.) The assets stay in the library:
+// delete them in the Photos app.
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -110,11 +111,31 @@ void main() {
   }, timeout: const Timeout(Duration(minutes: 2)));
 
   group('Photos', () {
-    // Runs first: its dialog grants the read/write access the others use.
-    testWidgets('a save to an album asks for read/write access', (_) async {
-      final uri = await _saveToPhotos('album', album: 'fsf_it');
+    // Runs first: its permission dialog grants the access the others use.
+    testWidgets('a save cancelled while the permission dialog is open adds '
+        'no asset', (_) async {
+      final subscription = FileSaver.save(
+        input: SaveInput.bytes(_png),
+        fileName: _photoName('cancelled'),
+        fileType: ImageType.png,
+        saveLocation: IosSaveLocation.photos,
+        subDir: 'fsf_it',
+      ).listen(null);
+      await Future<void>.delayed(const Duration(seconds: 1));
+      await subscription.cancel();
 
+      // Waits for the dialog to be answered, with read/write access.
+      final uri = await _saveToPhotos('album', album: 'fsf_it');
       expect(await FileSaver.canOpenFile(uri), isTrue);
+      // The cancelled save, had it gone ahead after the dialog, is done by now.
+      await Future<void>.delayed(const Duration(seconds: 2));
+
+      // `fail` throws FileExistsException if the cancelled save added it.
+      await _saveToPhotos(
+        'cancelled',
+        album: 'fsf_it',
+        conflictResolution: ConflictResolution.fail,
+      );
     }, timeout: const Timeout(Duration(minutes: 5)));
 
     testWidgets('a save without subDir uses the read access the app has, so '
@@ -128,24 +149,6 @@ void main() {
           conflictResolution: ConflictResolution.skip,
         ),
         uri,
-      );
-    });
-
-    testWidgets('a cancelled save adds no asset', (_) async {
-      final subscription = FileSaver.save(
-        input: SaveInput.bytes(_png),
-        fileName: _photoName('cancelled'),
-        fileType: ImageType.png,
-        saveLocation: IosSaveLocation.photos,
-      ).listen(null);
-      await subscription.cancel();
-      // Longer than a save of the PNG takes, had it gone ahead.
-      await Future<void>.delayed(const Duration(seconds: 2));
-
-      // `fail` throws FileExistsException if the cancelled save added it.
-      await _saveToPhotos(
-        'cancelled',
-        conflictResolution: ConflictResolution.fail,
       );
     });
 
