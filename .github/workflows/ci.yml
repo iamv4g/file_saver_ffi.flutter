@@ -29,6 +29,7 @@ jobs:
     outputs:
       android: ${{ steps.scope.outputs.android }}
       darwin: ${{ steps.scope.outputs.darwin }}
+      web: ${{ steps.scope.outputs.web }}
       test: ${{ steps.scope.outputs.test }}
       build: ${{ steps.scope.outputs.build }}
     steps:
@@ -127,6 +128,24 @@ jobs:
           name: android-unit-test-report
           path: example/build/file_saver_ffi/reports/tests/testDebugUnitTest
 
+  web-test:
+    name: Web tests (Chrome)
+    needs: [changes, analyze]
+    if: needs.changes.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # The web tests need a browser; `flutter test` on the VM skips them.
+      - name: Run web tests (dart2js)
+        run: flutter test --platform chrome test/platforms/web
+      - name: Run web tests (dart2wasm)
+        run: flutter test --platform chrome --wasm test/platforms/web
+
   darwin-unit-test:
     name: Darwin unit tests
     needs: [changes, analyze]
@@ -205,6 +224,7 @@ jobs:
       - test
       - android-unit-test
       - darwin-unit-test
+      - web-test
       - build
     runs-on: ubuntu-latest
     steps:
