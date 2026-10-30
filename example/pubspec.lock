@@ -85,10 +85,10 @@ packages:
     dependency: transitive
     description:
       name: dir_picker
-      sha256: "760221e06fc0a261f4ec24db5e8cef8629c95e124e2d252b5368b239354e0124"
+      sha256: "28ca6392b9283374d41d81c1e16eeb59addb1179f081407fe9935f28fc8275b5"
       url: "https://pub.dev"
     source: hosted
-    version: "0.5.1"
+    version: "0.6.0"
   fake_async:
     dependency: transitive
     description:
@@ -167,7 +167,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "0.10.1"
+    version: "0.11.0"
   file_selector_linux:
     dependency: transitive
     description:

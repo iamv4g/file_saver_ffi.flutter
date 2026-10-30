@@ -1,7 +1,8 @@
-## Unreleased
+## 0.11.0
 
 ### Changed
 
+- `dir_picker` is raised to `^0.6.0`. It adds a privacy manifest (`PrivacyInfo.xcprivacy`) for iOS and macOS, so App Store Connect no longer flags apps with ITMS-91053 because of it. It also fixes `pickDirectory` in several cases where it never completed or looked like a cancel. On iOS, the picker now opens while another view controller (a sheet, an alert) is presented. On Android, a pick survives a configuration change of the Activity with a cached engine. On Windows, picking "This PC" or a Library no longer returns `null`. On Linux, the zenity fallback works with zenity 4. `pickDirectory` now throws `NativePlatformException` in cases that used to return `null` or hang: a second pick while one is open, a picker that can't be launched, a failed Windows COM call, or a zenity/kdialog error exit.
 - **Android:** the plugin's Kotlin package is now `com.iamv4g.file_saver_ffi` (was `com.vanvixi.file_saver_ffi`), matching the GitHub account rename. The Dart API is unchanged. Update any R8/ProGuard rules or native code in your app that refer to the old package. The podspec's homepage and author now point to `iamv4g` too.
 - **Android:** the consumer ProGuard/R8 rules now only keep what the JNI bindings look up by name: `FileSaver`, `FileSaver$Companion` and `ProgressCallback`, plus the names of two types in their signatures. Before, they kept all of `kotlinx.coroutines`, `kotlin.coroutines` and `kotlin.jvm.internal`, and turned on `-keepparameternames` and `-keepattributes … Signature, Exceptions, Metadata` for the whole app, so release builds of apps using the plugin shrank and obfuscated less.
 - **Android:** the plugin now declares `minSdk 24` (Android 7.0), and the README says so. This matches what apps already needed: the `dir_picker` dependency requires API 24, so an app with a lower `minSdk` failed at manifest merge. The README previously claimed API 21+.
