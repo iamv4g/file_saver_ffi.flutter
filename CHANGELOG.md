@@ -9,6 +9,12 @@
 - **iOS:** a save to `IosSaveLocation.photos` without `subDir` now uses the Photos read/write access the app already has (full or limited). Before, it always asked for add-only access, so `overwrite`, `skip` and `fail` were silently ignored and every save added a new asset, and `canOpenFile`/`openFile` rejected the returned `ph://` URI.
 - **iOS:** cancelling a save to Photos now stops it if the asset isn't being added yet, for example while the permission dialog is open. Before, the cancel was ignored and the asset still appeared in Photos.
 - **iOS:** a save to Photos no longer waits an extra 0.5 s after the permission dialog.
+- **iOS/macOS:** `autoRename` now claims the new name and creates the file in one step. Two saves of the same name at the same time no longer pick the same `name (1)`, where the second one truncated and overwrote the first.
+- **iOS/macOS:** `autoRename` of a name without an extension now gives `notes (1)` instead of `notes (1).`, and of a dot file `.env (1)` instead of `.env (1).`.
+- **iOS/macOS:** a save, `saveAs` or `openWriteAs` into a directory the app can't write now fails with `PermissionDeniedException`, and one that runs out of space with `StorageFullException`. Before, `openWriteAs` reported "file doesn't exist", and write errors came as a `NativePlatformException` ("Unexpected error").
+- **iOS/macOS:** `saveAs` now tries to write when the picked directory's security scope can't be started, as `openWriteAs` already did, and fails with `PermissionDeniedException` only if the write is refused. Before, it failed at once, even for directories the app can write.
+- **iOS/macOS:** `SaveInput.file` with a plain path containing `#`, `?` or `%` now works. Before, the path was parsed as a URL, so `/x/a#1.mp4` became `/x/a` and failed with `SourceFileNotFoundException`.
+- **iOS/macOS:** cancelling a `SaveInput.file` save while it waits for an iCloud file to download now stops it. Before, the wait went on for up to 60 s. A file with only an older version on the device is now downloaded instead of waiting for the full 60 s, and the progress during the download no longer shows an invented 0–90%.
 
 ## 0.11.0
 

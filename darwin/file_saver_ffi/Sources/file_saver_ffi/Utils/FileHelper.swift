@@ -28,12 +28,10 @@ enum FileHelper {
         onProgress: ((Double) -> Void)?,
         cancellationToken: CancellationToken? = nil
     ) throws {
-        // Create empty file first (FileHandle requires file to exist)
-        FileManager.default.createFile(atPath: url.path, contents: nil, attributes: nil)
+        let fileHandle = try openForWriting(url)
 
         if #available(iOS 13.4, *) {
             // iOS 13.4+ - Use modern write API with error handling
-            let fileHandle = try FileHandle(forWritingTo: url)
             defer { try? fileHandle.close() }
 
             var offset = 0
@@ -46,7 +44,11 @@ enum FileHelper {
 
                 let length = min(chunkSize, totalBytes - offset)
                 let chunk = data.subdata(in: offset..<(offset + length))
-                try fileHandle.write(contentsOf: chunk)
+                do {
+                    try fileHandle.write(contentsOf: chunk)
+                } catch {
+                    throw ioError(error, url: url)
+                }
                 offset += length
 
                 // Report progress
@@ -57,7 +59,6 @@ enum FileHelper {
             }
         } else {
             // iOS 13.0-13.3 fallback - Use legacy write API
-            let fileHandle = try FileHandle(forWritingTo: url)
             defer { fileHandle.closeFile() }
 
             var offset = 0
@@ -96,6 +97,60 @@ enum FileHelper {
             try fileManager.createDirectory(at: url, withIntermediateDirectories: true, attributes: nil)
         }
     }
+
+    // MARK: - Creating and Writing Files
+
+    /// Creates `url` as a new, empty file. Fails with `FileSaverError.fileExists`
+    /// if it exists, so two saves can never claim the same name.
+    static func createFileExclusively(at url: URL) throws {
+        let fd = open(url.path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC, 0o644)
+        guard fd >= 0 else { throw posixError(errno, url: url) }
+        close(fd)
+    }
+
+    /// Opens `url` for writing, creating it if needed and truncating it.
+    static func openForWriting(_ url: URL) throws -> FileHandle {
+        let fd = open(url.path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0o644)
+        guard fd >= 0 else { throw posixError(errno, url: url) }
+        return FileHandle(fileDescriptor: fd, closeOnDealloc: true)
+    }
+
+    /// Converts a failed write to `url` into a `FileSaverError`.
+    static func ioError(_ error: Error, url: URL) -> FileSaverError {
+        if let error = error as? FileSaverError { return error }
+        let nsError = error as NSError
+        if nsError.domain == NSPOSIXErrorDomain {
+            return posixError(Int32(nsError.code), url: url)
+        }
+        if let underlying = nsError.userInfo[NSUnderlyingErrorKey] as? NSError,
+           underlying.domain == NSPOSIXErrorDomain {
+            return posixError(Int32(underlying.code), url: url)
+        }
+        switch nsError.code {
+        case NSFileWriteOutOfSpaceError:
+            return .storageFull("Not enough storage to write \(url.lastPathComponent)")
+        case NSFileWriteNoPermissionError, NSFileWriteVolumeReadOnlyError:
+            return .permissionDenied("No permission to write \(url.path)")
+        default:
+            return .fileIO("Failed to write \(url.path): \(error.localizedDescription)")
+        }
+    }
+
+    /// Converts the `errno` of a failed call on `url` into a `FileSaverError`.
+    static func posixError(_ code: Int32, url: URL) -> FileSaverError {
+        let reason = String(cString: strerror(code))
+        switch code {
+        case EEXIST:
+            return .fileExists(url.lastPathComponent)
+        case EACCES, EPERM, EROFS:
+            // EPERM is what the sandbox reports outside the app's access.
+            return .permissionDenied("No permission to write \(url.path): \(reason)")
+        case ENOSPC, EDQUOT:
+            return .storageFull("Not enough storage to write \(url.lastPathComponent)")
+        default:
+            return .fileIO("Failed to write \(url.path): \(reason)")
+        }
+    }
     
     // MARK: - Source File Operations
     
@@ -128,19 +183,13 @@ enum FileHelper {
     /// - Throws: FileSaverError on failure
     static func openSourceFile(
         at filePath: String,
-        onDownloadProgress: ((Double) -> Void)? = nil
+        onDownloadProgress: ((Double) -> Void)? = nil,
+        cancellationToken: CancellationToken? = nil
     ) throws -> SourceFile {
-        // Try to create URL from string
-        let url: URL
-        if filePath.hasPrefix("file://") || filePath.hasPrefix("/") {
-            if let fileUrl = URL(string: filePath) {
-                url = fileUrl
-            } else {
-                url = URL(fileURLWithPath: filePath)
-            }
-        } else {
-            url = URL(fileURLWithPath: filePath)
-        }
+        // A plain path is taken as is: `#`, `?` and `%` are part of the name.
+        let url = filePath.hasPrefix("file://")
+            ? URL(string: filePath) ?? URL(fileURLWithPath: filePath)
+            : URL(fileURLWithPath: filePath)
         
         // Try to access security-scoped resource (for Files app, iCloud, etc.)
         let isSecurityScoped = url.startAccessingSecurityScopedResource()
@@ -153,7 +202,11 @@ enum FileHelper {
             }
             
             // Handle iCloud files that may need to be downloaded (with progress)
-            try waitForICloudDownload(at: url, onProgress: onDownloadProgress)
+            try waitForICloudDownload(
+                at: url,
+                onProgress: onDownloadProgress,
+                cancellationToken: cancellationToken
+            )
             
             // Get file size
             let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
@@ -184,12 +237,17 @@ enum FileHelper {
     /// - Parameters:
     ///   - url: The URL of the file to check
     ///   - timeout: Maximum time to wait for download (default 60 seconds)
-    ///   - onProgress: Optional progress callback (0.0 to 1.0) for download phase
-    /// - Throws: FileSaverError.iCloudDownloadFailed on timeout or failure
+    ///   - onProgress: Optional progress callback, called with 0.0 when the
+    ///     download starts and 1.0 when it is done. iOS doesn't report the
+    ///     progress in between.
+    ///   - cancellationToken: Checked between polls.
+    /// - Throws: FileSaverError.iCloudDownloadFailed on timeout or failure,
+    ///   FileSaverError.cancelled when cancelled
     static func waitForICloudDownload(
         at url: URL,
         timeout: TimeInterval = Constants.iCloudDownloadTimeout,
-        onProgress: ((Double) -> Void)? = nil
+        onProgress: ((Double) -> Void)? = nil,
+        cancellationToken: CancellationToken? = nil
     ) throws {
         // Check if file is in iCloud
         var isUbiquitous = false
@@ -215,10 +273,8 @@ enum FileHelper {
             return
         }
         
-        // Need to download
-        if downloadStatus == .notDownloaded {
-            try FileManager.default.startDownloadingUbiquitousItem(at: url)
-        }
+        // Not downloaded, or only an older version (`.downloaded`)
+        try FileManager.default.startDownloadingUbiquitousItem(at: url)
         
         // Report initial progress
         onProgress?(0.0)
@@ -228,6 +284,8 @@ enum FileHelper {
         let pollInterval: TimeInterval = 0.2  // Poll every 200ms
         
         while true {
+            try cancellationToken?.throwIfCancelled()
+
             // Check timeout
             let elapsed = Date().timeIntervalSince(startTime)
             if elapsed >= timeout {
@@ -250,12 +308,6 @@ enum FileHelper {
                     onProgress?(1.0)
                     break
                 }
-                
-                // Try to get download progress from NSProgress
-                // Note: iOS doesn't expose direct download progress, so we estimate based on time
-                // For better UX, we show indeterminate progress (oscillating between values)
-                let progressEstimate = min(elapsed / timeout * 0.9, 0.9)  // Cap at 90% until complete
-                onProgress?(progressEstimate)
             }
             
             // Wait before next poll
@@ -318,10 +370,7 @@ enum FileHelper {
         onProgress: ((Double) -> Void)?,
         cancellationToken: CancellationToken? = nil
     ) throws {
-        // Create empty file first
-        FileManager.default.createFile(atPath: destination.path, contents: nil, attributes: nil)
-
-        let destHandle = try FileHandle(forWritingTo: destination)
+        let destHandle = try openForWriting(destination)
         defer {
             if #available(iOS 13.4, *) {
                 try? destHandle.close()
@@ -342,7 +391,11 @@ enum FileHelper {
                     break
                 }
 
-                try destHandle.write(contentsOf: data)
+                do {
+                    try destHandle.write(contentsOf: data)
+                } catch {
+                    throw ioError(error, url: destination)
+                }
                 bytesWritten += Int64(data.count)
 
                 if let onProgress = onProgress, totalSize > 0 {

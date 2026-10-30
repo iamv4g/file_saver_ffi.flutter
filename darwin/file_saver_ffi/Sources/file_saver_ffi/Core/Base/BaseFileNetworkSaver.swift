@@ -135,6 +135,7 @@ extension BaseFileSaver {
         }
 
         if let token = cancellationToken, token.isCancelled {
+            target.discard()
             onCancelled()
             onComplete()
             return

@@ -15,11 +15,9 @@ extension BaseFileSaver {
     ) throws {
         try validateFileData(fileData)
 
-        // Start security-scoped access
-        guard directoryURL.startAccessingSecurityScopedResource() else {
-            throw FileSaverError.permissionDenied("Cannot access selected directory")
-        }
-        defer { directoryURL.stopAccessingSecurityScopedResource() }
+        // Without access, creating the file fails with permissionDenied.
+        let isScoped = directoryURL.startAccessingSecurityScopedResource()
+        defer { if isScoped { directoryURL.stopAccessingSecurityScopedResource() } }
 
         // Resolve conflict
         let target = try FileManagerConflictResolver.resolveConflict(
@@ -61,11 +59,9 @@ extension BaseFileSaver {
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
-        // Start security-scoped access
-        guard directoryURL.startAccessingSecurityScopedResource() else {
-            throw FileSaverError.permissionDenied("Cannot access selected directory")
-        }
-        defer { directoryURL.stopAccessingSecurityScopedResource() }
+        // Without access, creating the file fails with permissionDenied.
+        let isScoped = directoryURL.startAccessingSecurityScopedResource()
+        defer { if isScoped { directoryURL.stopAccessingSecurityScopedResource() } }
 
         // Resolve conflict before opening the source so a skip never reads it
         let target = try FileManagerConflictResolver.resolveConflict(
@@ -82,10 +78,17 @@ extension BaseFileSaver {
 
         let downloadProgressHandler = progressMapper(from: onProgress, startProgress: 0.0, endProgress: 0.8)
 
-        let sourceFile = try FileHelper.openSourceFile(
-            at: filePath,
-            onDownloadProgress: downloadProgressHandler
-        )
+        let sourceFile: FileHelper.SourceFile
+        do {
+            sourceFile = try FileHelper.openSourceFile(
+                at: filePath,
+                onDownloadProgress: downloadProgressHandler,
+                cancellationToken: cancellationToken
+            )
+        } catch {
+            target.discard()
+            throw error
+        }
         defer { sourceFile.close() }
 
         let copyProgressHandler = progressMapper(from: onProgress, startProgress: 0.8, endProgress: 1.0)
@@ -122,11 +125,10 @@ extension BaseFileSaver {
         onComplete: @escaping () -> Void,
         cancellationToken: CancellationToken?
     ) {
-        // Start security-scoped access
-        guard directoryURL.startAccessingSecurityScopedResource() else {
-            onError(Constants.errorPermissionDenied, "Cannot access selected directory")
-            onComplete()
-            return
+        // Without access, creating the file fails with permissionDenied.
+        let isScoped = directoryURL.startAccessingSecurityScopedResource()
+        func endAccess() {
+            if isScoped { directoryURL.stopAccessingSecurityScopedResource() }
         }
 
         // Resolve conflict first
@@ -138,19 +140,19 @@ extension BaseFileSaver {
                 conflictResolution: conflictResolution
             )
         } catch let error as FileSaverError {
-            directoryURL.stopAccessingSecurityScopedResource()
+            endAccess()
             onError(error.code, error.message)
             onComplete()
             return
         } catch {
-            directoryURL.stopAccessingSecurityScopedResource()
+            endAccess()
             onError(Constants.errorPlatform, error.localizedDescription)
             onComplete()
             return
         }
 
         if case .existing(let existingURL) = target {
-            directoryURL.stopAccessingSecurityScopedResource()
+            endAccess()
             onProgress?(1.0)
             onSuccess(existingURL.absoluteString)
             onComplete()
@@ -158,7 +160,8 @@ extension BaseFileSaver {
         }
 
         if let token = cancellationToken, token.isCancelled {
-            directoryURL.stopAccessingSecurityScopedResource()
+            target.discard()
+            endAccess()
             onCancelled()
             onComplete()
             return
@@ -178,7 +181,7 @@ extension BaseFileSaver {
             onCancelHandlerReady: onCancelHandlerReady,
             completion: { result in
                 defer {
-                    directoryURL.stopAccessingSecurityScopedResource()
+                    endAccess()
                     onComplete()
                 }
 
