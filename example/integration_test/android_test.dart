@@ -144,9 +144,10 @@ void main() {
     expect(await FileSaver.canOpenFile(await sink.result), isTrue);
   }, timeout: const Timeout(Duration(seconds: 30)));
 
-  testWidgets('add without awaiting does not exhaust the Java heap', (_) async {
-    // 320 × 1 MB is more than the 256 MB heap limit of a typical app. Chunks
-    // added while a write is pending must wait on the Dart side.
+  testWidgets('chunks added without awaiting are all written and counted '
+      'before close completes', (_) async {
+    // 320 × 1 MB is more than the 256 MB heap limit of a typical app, so
+    // chunks added while a write is pending wait on the Dart side.
     final sink = await openSession('add_loop');
     var written = 0;
     sink.bytesWritten.listen((bytes) => written = bytes);
