@@ -1,12 +1,12 @@
 import 'dart:async';
 
 import 'package:file_saver_ffi/file_saver_ffi.dart';
-import 'package:file_saver_ffi/src/platforms/shared/native_file_saver_sink.dart';
+import 'package:file_saver_ffi/src/platforms/shared/session_file_saver_sink.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// A [NativeWriteSession] whose replies arrive on the event queue, like the
+/// A [WriteSession] whose replies arrive on the event queue, like the
 /// port messages and JNI callbacks of the real sessions.
-class _FakeSession implements NativeWriteSession {
+class _FakeSession implements WriteSession {
   final bytes = <int>[];
   final writeSizes = <int>[];
   var flushes = 0;
@@ -56,18 +56,18 @@ class _FakeSession implements NativeWriteSession {
   }
 
   @override
-  void cancel() => cancels++;
+  Future<void> cancel() async => cancels++;
 
   Future<void> _reply() => Future<void>.delayed(Duration.zero);
 }
 
 void main() {
   late _FakeSession session;
-  late NativeFileSaverSink sink;
+  late SessionFileSaverSink sink;
 
   setUp(() {
     session = _FakeSession();
-    sink = NativeFileSaverSink(session, 6);
+    sink = SessionFileSaverSink(session, 6);
   });
 
   Stream<List<int>> chunks(List<List<int>> chunks) async* {
@@ -285,7 +285,7 @@ void main() {
   test('a sink dropped before close cancels its session', () async {
     final dropped = _FakeSession();
     // Created in a closure so no local variable keeps the sink alive.
-    final ref = (() => WeakReference(NativeFileSaverSink(dropped, null)))();
+    final ref = (() => WeakReference(SessionFileSaverSink(dropped, null)))();
 
     for (var i = 0; i < 1000 && dropped.cancels == 0; i++) {
       // Allocate garbage so the VM collects the sink and runs its finalizer.
@@ -300,7 +300,7 @@ void main() {
   test('a closed sink is not cancelled when it is dropped', () async {
     final closed = _FakeSession();
     await (() async {
-      final sink = NativeFileSaverSink(closed, null);
+      final sink = SessionFileSaverSink(closed, null);
       sink.add([1]);
       await sink.close();
     })();

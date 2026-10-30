@@ -51,7 +51,7 @@ abstract final class PathLocationWriter {
           controller.addSync(SaveProgressUpdate(1.0));
           controller.addSync(SaveProgressComplete(uri));
         } catch (e) {
-          controller.addSync(SaveProgressError(_mapException(e)));
+          controller.addSync(SaveProgressError(mapIOException(e)));
         } finally {
           if (!controller.isClosed) controller.closeSync();
         }
@@ -85,7 +85,7 @@ abstract final class PathLocationWriter {
           controller.addSync(SaveProgressUpdate(1.0));
           controller.addSync(SaveProgressComplete(uri));
         } catch (e) {
-          controller.addSync(SaveProgressError(_mapException(e)));
+          controller.addSync(SaveProgressError(mapIOException(e)));
         } finally {
           if (!controller.isClosed) controller.closeSync();
         }
@@ -165,7 +165,7 @@ abstract final class PathLocationWriter {
           controller.addSync(SaveProgressUpdate(1.0));
           controller.addSync(SaveProgressComplete(file.uri));
         } catch (e) {
-          controller.addSync(SaveProgressError(_mapException(e)));
+          controller.addSync(SaveProgressError(mapIOException(e)));
         } finally {
           client.close();
           if (!controller.isClosed) controller.closeSync();
@@ -191,12 +191,7 @@ abstract final class PathLocationWriter {
       conflictResolution,
     );
     if (resolved == null) return null;
-    final file = File(resolved);
-    return IOFileSaverSink(
-      sink: file.openWrite(),
-      file: file,
-      totalSize: totalSize,
-    );
+    return IOFileSaverSink.open(resolved, totalSize: totalSize);
   }
 
   // MARK: Private helpers
@@ -218,32 +213,5 @@ abstract final class PathLocationWriter {
   static String _resolveDirPath(String dirPath, String? subDir) {
     if (subDir == null || subDir.isEmpty) return dirPath;
     return p.join(dirPath, subDir);
-  }
-
-  static FileSaverException _mapException(Object e) {
-    if (e is FileSaverException) return e;
-
-    if (e is FileSystemException) {
-      final errno = e.osError?.errorCode;
-      final message = e.path == null ? e.message : '${e.message} (${e.path})';
-
-      return switch (errno) {
-        // POSIX: EACCES=13, Windows: ERROR_ACCESS_DENIED=5
-        13 || 5 => PermissionDeniedException(message),
-        // POSIX/Windows: ENOENT / ERROR_FILE_NOT_FOUND = 2
-        2 => SourceFileNotFoundException(e.path ?? message),
-        // POSIX: EEXIST=17, Windows: ERROR_ALREADY_EXISTS=183
-        17 || 183 => FileExistsException(e.path ?? message),
-        // POSIX: ENOSPC=28, Windows: ERROR_DISK_FULL=112
-        28 || 112 => const StorageFullException(),
-        _ => FileIOException(message),
-      };
-    }
-
-    if (e is SocketException || e is HttpException || e is HandshakeException) {
-      return NetworkException(e.toString());
-    }
-
-    return NativePlatformException(e.toString(), 'UNKNOWN');
   }
 }
