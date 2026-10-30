@@ -5,11 +5,12 @@ import 'dart:typed_data';
 import '../../exceptions/file_saver_exceptions.dart';
 import '../../models/file_saver_sink.dart';
 
-/// One native write session, as driven by [NativeFileSaverSink].
+/// One write session, as driven by [SessionFileSaverSink].
 ///
-/// Implemented over JNI on Android and FFI on Darwin. Kept free of
-/// `dart:ffi` / `package:jni` imports so the sink can be unit tested.
-abstract interface class NativeWriteSession {
+/// Implemented over JNI on Android, FFI on Darwin, and `dart:io` for
+/// Windows, Linux and `PathLocation`. Kept free of platform imports so the
+/// sink can be unit tested.
+abstract interface class WriteSession {
   /// Writes [data] and completes with the session's total bytes written.
   ///
   /// Copies [data] before returning, so the caller may reuse it. Fails with
@@ -26,12 +27,14 @@ abstract interface class NativeWriteSession {
   /// includes the case where an earlier write failed.
   Future<Uri> close();
 
-  /// Ends the session and deletes the file. Reports nothing.
-  void cancel();
+  /// Ends the session and deletes the file. Completes once the file is
+  /// deleted, or at once where the platform doesn't report it. Never fails.
+  ///
+  /// May be called while a write is pending.
+  Future<void> cancel();
 }
 
-/// The [FileSaverSink] of the native platforms, on top of a
-/// [NativeWriteSession].
+/// The [FileSaverSink] of a [WriteSession].
 ///
 /// Writes reach the session one at a time, in order. Chunks passed to [add]
 /// while a write is pending are copied and sent together once it completes,
@@ -43,9 +46,9 @@ abstract interface class NativeWriteSession {
 /// [addStream], [flush], [close], [done] and [result] report that error.
 /// A sink that is garbage collected before [close] or [cancel] cancels its
 /// session.
-class NativeFileSaverSink implements FileSaverSink {
+class SessionFileSaverSink implements FileSaverSink {
   /// [_totalSize] is the expected file size for [progress], if known.
-  NativeFileSaverSink(this._session, this._totalSize) {
+  SessionFileSaverSink(this._session, this._totalSize) {
     // A failure is reported by whichever of close(), done and result the
     // caller awaits, so none of them may count as unhandled.
     _result.future.ignore();
@@ -53,14 +56,14 @@ class NativeFileSaverSink implements FileSaverSink {
     _finalizer.attach(this, _session, detach: this);
   }
 
-  static final _finalizer = Finalizer<NativeWriteSession>(
-    (session) => session.cancel(),
+  static final _finalizer = Finalizer<WriteSession>(
+    (session) => session.cancel().ignore(),
   );
 
   /// Upper bound for chunks [add] combines into one native write.
   static const _maxBatchBytes = 1024 * 1024;
 
-  final NativeWriteSession _session;
+  final WriteSession _session;
   final int? _totalSize;
 
   /// Set by [close], [cancel] and [addError]; no more data is accepted.
@@ -111,7 +114,7 @@ class NativeFileSaverSink implements FileSaverSink {
   @override
   void addError(Object error, [StackTrace? stackTrace]) {
     _checkWritable('addError');
-    _discard();
+    _discard().ignore();
     _finishWithError(error, stackTrace ?? StackTrace.current);
   }
 
@@ -169,10 +172,11 @@ class NativeFileSaverSink implements FileSaverSink {
   @override
   Future<void> cancel() async {
     if (_isClosed) return;
-    _discard();
+    final discarded = _discard();
     _closeStreams();
     _result.completeError(const CancelledException());
     _done.complete();
+    await discarded;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -242,7 +246,7 @@ class NativeFileSaverSink implements FileSaverSink {
     await _writer;
     final failure = _failure;
     if (failure != null) {
-      _session.cancel();
+      await _session.cancel();
       return _finishWithError(failure.$1, failure.$2);
     }
     try {
@@ -256,12 +260,12 @@ class NativeFileSaverSink implements FileSaverSink {
   }
 
   /// Marks the sink closed and cancels the session, keeping no queued data.
-  void _discard() {
+  Future<void> _discard() {
     _isClosed = true;
     _isCancelled = true;
     _finalizer.detach(this);
     _queue.clear();
-    _session.cancel();
+    return _session.cancel();
   }
 
   void _finishWithError(Object error, StackTrace stackTrace) {

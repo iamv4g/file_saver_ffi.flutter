@@ -6,12 +6,12 @@ import 'package:ffi/ffi.dart';
 
 import '../../exceptions/file_saver_exceptions.dart';
 import '../../models/file_saver_sink.dart';
-import '../shared/native_file_saver_sink.dart';
+import '../shared/session_file_saver_sink.dart';
 import 'bindings.g.dart';
 
 /// Darwin (iOS / macOS) implementation of [FileSaverSink], over an FFI write
 /// session in `FileSaverFFI.swift`.
-class DarwinFileSaverSink extends NativeFileSaverSink {
+class DarwinFileSaverSink extends SessionFileSaverSink {
   DarwinFileSaverSink({
     required FileSaverFFI fileSaver,
     required int sessionId,
@@ -24,7 +24,7 @@ class DarwinFileSaverSink extends NativeFileSaverSink {
 /// Each call uses a one-shot [ReceivePort] that is closed after its message
 /// arrives. It must not reference the sink, so the sink can be garbage
 /// collected and its session cancelled.
-class _DarwinWriteSession implements NativeWriteSession {
+class _DarwinWriteSession implements WriteSession {
   _DarwinWriteSession(this._fileSaver, this._sessionId);
 
   final FileSaverFFI _fileSaver;
@@ -57,7 +57,7 @@ class _DarwinWriteSession implements NativeWriteSession {
   }
 
   @override
-  void cancel() => _fileSaver.cancelWrite(_sessionId);
+  Future<void> cancel() async => _fileSaver.cancelWrite(_sessionId);
 
   /// Runs [start] synchronously with a native port and completes with the
   /// message it receives, or fails with the [FileSaverException] of an error

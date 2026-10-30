@@ -4,12 +4,12 @@ import 'package:jni/jni.dart';
 
 import '../../exceptions/file_saver_exceptions.dart';
 import '../../models/file_saver_sink.dart';
-import '../shared/native_file_saver_sink.dart';
+import '../shared/session_file_saver_sink.dart';
 import 'bindings.g.dart' as bindings;
 
 /// Android implementation of [FileSaverSink], over a JNI write session in
 /// `FileSaver.kt`.
-class AndroidFileSaverSink extends NativeFileSaverSink {
+class AndroidFileSaverSink extends SessionFileSaverSink {
   AndroidFileSaverSink({
     required bindings.FileSaver fileSaver,
     required int sessionId,
@@ -22,7 +22,7 @@ class AndroidFileSaverSink extends NativeFileSaverSink {
 /// Each call uses a one-shot [bindings.ProgressCallback] that is released via
 /// [Future.microtask] after its event fires. It must not reference the sink,
 /// so the sink can be garbage collected and its session cancelled.
-class _AndroidWriteSession implements NativeWriteSession {
+class _AndroidWriteSession implements WriteSession {
   _AndroidWriteSession(this._fileSaver, this._sessionId);
 
   final bindings.FileSaver _fileSaver;
@@ -53,7 +53,7 @@ class _AndroidWriteSession implements NativeWriteSession {
   }
 
   @override
-  void cancel() => _fileSaver.cancelSession(_sessionId);
+  Future<void> cancel() async => _fileSaver.cancelSession(_sessionId);
 
   /// Runs [start] synchronously with a callback and completes with the
   /// progress and data of the event it reports, or fails with the
