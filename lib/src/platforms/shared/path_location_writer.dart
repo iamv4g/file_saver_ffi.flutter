@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:path/path.dart' as p;
@@ -6,24 +8,28 @@ import 'package:path/path.dart' as p;
 import '../../exceptions/file_saver_exceptions.dart';
 import '../../models/conflict_resolution.dart';
 import '../../models/file_saver_sink.dart';
+import '../../models/save_input.dart';
 import '../../models/save_progress.dart';
 import 'conflict_resolver.dart';
 import 'io_file_entity.dart';
 import 'io_file_saver_sink.dart';
 
-/// Shared dart:io implementation for [PathLocation] saves.
+/// The size of the chunks [SaveBytesInput] bytes are written in.
+const int _chunkSize = 1024 * 1024;
+
+/// Saves with `dart:io` into a directory: [PathLocation] on every IO platform,
+/// and every save on Windows and Linux.
 ///
-/// Used by all platforms. When a filesystem path is already known,
-/// dart:io can write to it directly without going through native code.
-///
-/// All methods are async and non-blocking — they schedule work on the
-/// Dart I/O thread pool via `Future(() async {...})` inside `Stream.multi`.
+/// A save writes through an [IOWriteSession], one chunk at a time, so
+/// progress counts bytes in the file and the source is paused while a chunk
+/// is written. Cancelling the subscription stops the save, and a cancelled or
+/// failed save deletes what it wrote and keeps a file it would overwrite.
 abstract final class PathLocationWriter {
   PathLocationWriter._();
 
   static final _conflictResolver = ConflictResolver(const IOFileEntity());
 
-  // MARK: Public API
+  // MARK: PathLocation
 
   static Stream<SaveProgress> saveBytes({
     required Uint8List fileBytes,
@@ -32,32 +38,13 @@ abstract final class PathLocationWriter {
     required String baseName,
     required String ext,
     required ConflictResolution conflictResolution,
-  }) {
-    return Stream.multi((controller) {
-      Future(() async {
-        try {
-          controller.addSync(const SaveProgressStarted());
-          final targetDirPath = _resolveDirPath(dirPath, subDir);
-          await Directory(targetDirPath).create(recursive: true);
-          final resolved = await _resolveConflict(
-            targetDirPath,
-            baseName,
-            ext,
-            conflictResolution,
-          );
-          final uri = resolved == null
-              ? File(p.join(targetDirPath, '$baseName.$ext')).uri
-              : (await File(resolved).writeAsBytes(fileBytes)).uri;
-          controller.addSync(SaveProgressUpdate(1.0));
-          controller.addSync(SaveProgressComplete(uri));
-        } catch (e) {
-          controller.addSync(SaveProgressError(mapIOException(e)));
-        } finally {
-          if (!controller.isClosed) controller.closeSync();
-        }
-      });
-    });
-  }
+  }) => save(
+    input: SaveBytesInput(fileBytes),
+    directory: () => _createDirectory(dirPath, subDir),
+    baseName: baseName,
+    ext: ext,
+    conflictResolution: conflictResolution,
+  );
 
   static Stream<SaveProgress> saveFile({
     required String filePath,
@@ -66,32 +53,13 @@ abstract final class PathLocationWriter {
     required String baseName,
     required String ext,
     required ConflictResolution conflictResolution,
-  }) {
-    return Stream.multi((controller) {
-      Future(() async {
-        try {
-          controller.addSync(const SaveProgressStarted());
-          final targetDirPath = _resolveDirPath(dirPath, subDir);
-          await Directory(targetDirPath).create(recursive: true);
-          final resolved = await _resolveConflict(
-            targetDirPath,
-            baseName,
-            ext,
-            conflictResolution,
-          );
-          final uri = resolved == null
-              ? File(p.join(targetDirPath, '$baseName.$ext')).uri
-              : (await File(filePath).copy(resolved)).uri;
-          controller.addSync(SaveProgressUpdate(1.0));
-          controller.addSync(SaveProgressComplete(uri));
-        } catch (e) {
-          controller.addSync(SaveProgressError(mapIOException(e)));
-        } finally {
-          if (!controller.isClosed) controller.closeSync();
-        }
-      });
-    });
-  }
+  }) => save(
+    input: SaveFileInput(filePath),
+    directory: () => _createDirectory(dirPath, subDir),
+    baseName: baseName,
+    ext: ext,
+    conflictResolution: conflictResolution,
+  );
 
   static Stream<SaveProgress> saveNetwork({
     required String url,
@@ -102,77 +70,13 @@ abstract final class PathLocationWriter {
     required String baseName,
     required String ext,
     required ConflictResolution conflictResolution,
-  }) {
-    return Stream.multi((controller) {
-      Future(() async {
-        final client = HttpClient()..connectionTimeout = timeout;
-        try {
-          controller.addSync(const SaveProgressStarted());
-          final targetDirPath = _resolveDirPath(dirPath, subDir);
-          await Directory(targetDirPath).create(recursive: true);
-          final resolved = await _resolveConflict(
-            targetDirPath,
-            baseName,
-            ext,
-            conflictResolution,
-          );
-          if (resolved == null) {
-            // SKIP — file exists, return existing URI
-            controller.addSync(SaveProgressUpdate(1.0));
-            controller.addSync(
-              SaveProgressComplete(
-                File(p.join(targetDirPath, '$baseName.$ext')).uri,
-              ),
-            );
-            return;
-          }
-          final request = await client.getUrl(Uri.parse(url));
-          headers?.forEach(request.headers.set);
-          final response = await request.close();
-          if (response.statusCode < 200 || response.statusCode >= 300) {
-            await response.drain<void>();
-            throw NetworkException(
-              'HTTP ${response.statusCode}',
-              response.statusCode,
-            );
-          }
-
-          final file = File(resolved);
-          final sink = file.openWrite();
-          int received = 0;
-          final contentLength = response.contentLength;
-
-          try {
-            await for (final chunk in response) {
-              sink.add(chunk);
-              received += chunk.length;
-              if (contentLength > 0) {
-                controller.addSync(
-                  SaveProgressUpdate(received / contentLength),
-                );
-              }
-            }
-            await sink.flush();
-            await sink.close();
-          } catch (e) {
-            await sink.close();
-            try {
-              if (await file.exists()) await file.delete();
-            } catch (_) {}
-            rethrow;
-          }
-
-          controller.addSync(SaveProgressUpdate(1.0));
-          controller.addSync(SaveProgressComplete(file.uri));
-        } catch (e) {
-          controller.addSync(SaveProgressError(mapIOException(e)));
-        } finally {
-          client.close();
-          if (!controller.isClosed) controller.closeSync();
-        }
-      });
-    });
-  }
+  }) => save(
+    input: SaveNetworkInput(url: url, headers: headers, timeout: timeout),
+    directory: () => _createDirectory(dirPath, subDir),
+    baseName: baseName,
+    ext: ext,
+    conflictResolution: conflictResolution,
+  );
 
   static Future<FileSaverSink?> openWrite({
     required String dirPath,
@@ -182,36 +86,265 @@ abstract final class PathLocationWriter {
     required ConflictResolution conflictResolution,
     int? totalSize,
   }) async {
-    final targetDirPath = _resolveDirPath(dirPath, subDir);
-    await Directory(targetDirPath).create(recursive: true);
-    final resolved = await _resolveConflict(
-      targetDirPath,
-      baseName,
-      ext,
+    final targetDirPath = await _createDirectory(dirPath, subDir);
+    final resolved = await _conflictResolver.resolve(
+      p.join(targetDirPath, '$baseName.$ext'),
       conflictResolution,
     );
     if (resolved == null) return null;
     return IOFileSaverSink.open(resolved, totalSize: totalSize);
   }
 
+  // MARK: Any directory
+
+  /// Saves [input] as `baseName.ext` into the directory that [directory]
+  /// returns. The input must be validated already.
+  ///
+  /// Emits [SaveProgressStarted], [SaveProgressUpdate]s and then
+  /// [SaveProgressComplete] or [SaveProgressError]. Once the subscription is
+  /// cancelled nothing more is emitted, and the cancel completes when the
+  /// partial file has been deleted.
+  static Stream<SaveProgress> save({
+    required SaveInput input,
+    required Future<String> Function() directory,
+    required String baseName,
+    required String ext,
+    required ConflictResolution conflictResolution,
+  }) {
+    return Stream.multi((controller) {
+      final cancellation = _Cancellation();
+
+      void emit(SaveProgress event) {
+        if (!cancellation.isCancelled) controller.addSync(event);
+      }
+
+      Future<void> run() async {
+        try {
+          if (input case SaveFileInput(:final filePath)) {
+            final path = _sourcePath(filePath);
+            if (!await File(path).exists()) {
+              throw SourceFileNotFoundException(path);
+            }
+          }
+
+          final path = p.join(await directory(), '$baseName.$ext');
+          final resolved = await _conflictResolver.resolve(
+            path,
+            conflictResolution,
+          );
+          if (cancellation.isCancelled) return;
+          if (resolved == null) {
+            emit(SaveProgressComplete(Uri.file(path)));
+            return;
+          }
+
+          final source = await _open(input, cancellation);
+          IOWriteSession? opened;
+          try {
+            if (!cancellation.isCancelled) {
+              opened = await IOWriteSession.open(resolved);
+            }
+          } finally {
+            // Closes the connection of a download that won't be read.
+            if (opened == null) await source.data.listen(null).cancel();
+          }
+          final session = opened;
+          if (session == null) return;
+          try {
+            await _pipe(source.data, session, cancellation, (written) {
+              if (source.length case final length? when length > 0) {
+                emit(SaveProgressUpdate(written / length));
+              }
+            });
+            if (cancellation.isCancelled) {
+              await session.cancel();
+              return;
+            }
+            emit(SaveProgressComplete(await session.close()));
+          } catch (_) {
+            await session.cancel();
+            rethrow;
+          }
+        } catch (e) {
+          emit(SaveProgressError(mapIOException(e)));
+        } finally {
+          if (!controller.isClosed) controller.closeSync();
+        }
+      }
+
+      controller.addSync(const SaveProgressStarted());
+      final done = run();
+      controller.onCancel = () {
+        cancellation.cancel();
+        return done;
+      };
+    });
+  }
+
   // MARK: Private helpers
 
-  /// Resolves naming conflict and returns the final file path.
-  /// Returns `null` for [ConflictResolution.skip] when file exists.
-  static Future<String?> _resolveConflict(
-    String dirPath,
-    String baseName,
-    String ext,
-    ConflictResolution resolution,
+  static Future<String> _createDirectory(String dirPath, String? subDir) async {
+    final path = subDir == null || subDir.isEmpty
+        ? dirPath
+        : p.join(dirPath, subDir);
+    await Directory(path).create(recursive: true);
+    return path;
+  }
+
+  /// [filePath] as a path, decoding a `file://` URI.
+  static String _sourcePath(String filePath) => filePath.startsWith('file://')
+      ? Uri.parse(filePath).toFilePath()
+      : filePath;
+
+  /// Opens the bytes to save and their length, if known. A download is
+  /// requested here, so an HTTP error fails before a file is created.
+  static Future<({Stream<List<int>> data, int? length})> _open(
+    SaveInput input,
+    _Cancellation cancellation,
   ) async {
-    return _conflictResolver.resolve(
-      p.join(dirPath, '$baseName.$ext'),
-      resolution,
+    switch (input) {
+      case SaveBytesInput(:final fileBytes):
+        return (
+          data: Stream.fromIterable([
+            for (
+              var offset = 0;
+              offset < fileBytes.length;
+              offset += _chunkSize
+            )
+              Uint8List.sublistView(
+                fileBytes,
+                offset,
+                min(offset + _chunkSize, fileBytes.length),
+              ),
+          ]),
+          length: fileBytes.length,
+        );
+      case SaveFileInput(:final filePath):
+        final file = File(_sourcePath(filePath));
+        return (data: file.openRead(), length: await file.length());
+      case SaveNetworkInput(:final url, :final headers, :final timeout):
+        return _request(url, headers, timeout, cancellation);
+    }
+  }
+
+  /// Requests [url] with a client of its own, so [timeout] applies to this
+  /// download only, and closes the client when the body has been read or the
+  /// save is cancelled.
+  ///
+  /// [timeout] limits connecting, waiting for the response headers, and each
+  /// wait for more of the body. Every failure is a [NetworkException].
+  static Future<({Stream<List<int>> data, int? length})> _request(
+    String url,
+    Map<String, String>? headers,
+    Duration timeout,
+    _Cancellation cancellation,
+  ) async {
+    final client = HttpClient()..connectionTimeout = timeout;
+    cancellation.onCancel = () => client.close(force: true);
+    final HttpClientResponse response;
+    try {
+      final request = await client.getUrl(Uri.parse(url)).timeout(timeout);
+      headers?.forEach(request.headers.set);
+      response = await request.close().timeout(timeout);
+    } catch (e) {
+      client.close(force: true);
+      throw e is TimeoutException
+          ? NetworkException('No response within ${timeout.inSeconds}s')
+          : NetworkException('Connection failed: $e');
+    } finally {
+      cancellation.onCancel = null;
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      client.close(force: true);
+      throw NetworkException(
+        'HTTP ${response.statusCode}',
+        response.statusCode,
+      );
+    }
+
+    final data = response
+        .timeout(timeout)
+        .handleError(
+          (Object e) => throw e is TimeoutException
+              ? NetworkException('No data received for ${timeout.inSeconds}s')
+              : NetworkException('Download failed: $e'),
+        );
+    return (
+      data: _onDone(data, () => client.close(force: true)),
+      length: response.contentLength >= 0 ? response.contentLength : null,
     );
   }
 
-  static String _resolveDirPath(String dirPath, String? subDir) {
-    if (subDir == null || subDir.isEmpty) return dirPath;
-    return p.join(dirPath, subDir);
+  /// [stream], calling [onDone] once it ends or its subscription is
+  /// cancelled.
+  static Stream<T> _onDone<T>(Stream<T> stream, void Function() onDone) {
+    final controller = StreamController<T>(sync: true);
+    controller.onListen = () {
+      final subscription = stream.listen(
+        controller.add,
+        onError: controller.addError,
+        onDone: () {
+          onDone();
+          controller.close();
+        },
+      );
+      controller
+        ..onPause = subscription.pause
+        ..onResume = subscription.resume
+        ..onCancel = () {
+          onDone();
+          return subscription.cancel();
+        };
+    };
+    return controller.stream;
+  }
+
+  /// Writes [source] to [session] one chunk at a time, pausing [source] while
+  /// a chunk is written, and calls [onWritten] with the bytes written so far.
+  ///
+  /// Completes when [source] ends or [cancellation] is cancelled, and fails
+  /// with the first error of [source] or of a write.
+  static Future<void> _pipe(
+    Stream<List<int>> source,
+    IOWriteSession session,
+    _Cancellation cancellation,
+    void Function(int written) onWritten,
+  ) {
+    final done = Completer<void>();
+    late final StreamSubscription<List<int>> subscription;
+
+    void fail(Object e, StackTrace st) {
+      if (done.isCompleted) return;
+      subscription.cancel();
+      done.completeError(e, st);
+    }
+
+    subscription = source.listen(
+      (chunk) => subscription.pause(
+        session.write(chunk).then(onWritten, onError: fail),
+      ),
+      onError: fail,
+      onDone: () {
+        if (!done.isCompleted) done.complete();
+      },
+      cancelOnError: true,
+    );
+    cancellation.onCancel = () {
+      subscription.cancel();
+      if (!done.isCompleted) done.complete();
+    };
+    return done.future.whenComplete(() => cancellation.onCancel = null);
+  }
+}
+
+/// Cancellation of one save. [onCancel] stops what the save is waiting for.
+class _Cancellation {
+  bool isCancelled = false;
+  void Function()? onCancel;
+
+  void cancel() {
+    isCancelled = true;
+    onCancel?.call();
   }
 }

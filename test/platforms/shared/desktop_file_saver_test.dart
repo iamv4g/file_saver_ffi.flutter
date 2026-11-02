@@ -46,17 +46,6 @@ class _TestDesktopFileSaver extends DesktopFileSaver<LinuxSaveLocation> {
   }
 }
 
-/// Polls [condition] until it holds or [timeout] passes.
-Future<void> _waitUntil(
-  bool Function() condition, {
-  Duration timeout = const Duration(seconds: 5),
-}) async {
-  final deadline = DateTime.now().add(timeout);
-  while (!condition() && DateTime.now().isBefore(deadline)) {
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-  }
-}
-
 T _last<T>(List<SaveProgress> events) {
   expect(events.last, isA<T>(), reason: '$events');
   return events.last as T;
@@ -101,6 +90,36 @@ void main() {
       final uri = _last<SaveProgressComplete>(events).uri;
       expect(p.equals(uri.toFilePath(), inTmp('data.bin')), isTrue);
       expect(await File.fromUri(uri).readAsBytes(), bytes);
+    });
+
+    test('reports progress once the bytes are in the file', () async {
+      final target = File(inTmp('data.bin'));
+      final inFile = <int>[];
+      await saver
+          .saveBytes(fileBytes: bytes, fileName: 'data', fileType: fileType)
+          .forEach((event) {
+            if (event is SaveProgressUpdate) inFile.add(target.lengthSync());
+          });
+
+      expect(inFile, [1024 * 1024, 2 * 1024 * 1024, bytes.length]);
+    });
+
+    test('cancelling stops the write and deletes the partial file', () async {
+      final firstUpdate = Completer<void>();
+      final events = <SaveProgress>[];
+      final subscription = saver
+          .saveBytes(fileBytes: bytes, fileName: 'data', fileType: fileType)
+          .listen((event) {
+            events.add(event);
+            if (event is SaveProgressUpdate && !firstUpdate.isCompleted) {
+              firstUpdate.complete();
+            }
+          });
+      await firstUpdate.future;
+
+      await subscription.cancel();
+      expect(File(inTmp('data.bin')).existsSync(), isFalse);
+      expect(events.whereType<SaveProgressComplete>(), isEmpty);
     });
 
     test('honours subDir', () async {
@@ -259,6 +278,68 @@ void main() {
       );
     });
 
+    test(
+      'a server that sends no response times out with NetworkException',
+      () async {
+        final events = await saver
+            .saveNetwork(
+              url: server.url('/no-headers'),
+              fileName: 'download',
+              fileType: fileType,
+              timeout: const Duration(seconds: 1),
+            )
+            .toList()
+            .timeout(const Duration(seconds: 10));
+
+        expect(
+          _last<SaveProgressError>(events).exception,
+          isA<NetworkException>(),
+        );
+        expect(File(inTmp('download.bin')).existsSync(), isFalse);
+      },
+    );
+
+    test('a refused connection emits NetworkException', () async {
+      final closed = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final port = closed.port;
+      await closed.close();
+
+      final events = await saver
+          .saveNetwork(
+            url: 'http://127.0.0.1:$port/file',
+            fileName: 'download',
+            fileType: fileType,
+          )
+          .toList();
+
+      expect(
+        _last<SaveProgressError>(events).exception,
+        isA<NetworkException>(),
+      );
+    });
+
+    test('a cancelled overwrite keeps the original file', () async {
+      final original = File(inTmp('download.bin'))..writeAsStringSync('old');
+      final firstUpdate = Completer<void>();
+      final subscription = saver
+          .saveNetwork(
+            url: server.url('/slow'),
+            fileName: 'download',
+            fileType: fileType,
+            conflictResolution: ConflictResolution.overwrite,
+          )
+          .listen((event) {
+            if (event is SaveProgressUpdate && !firstUpdate.isCompleted) {
+              firstUpdate.complete();
+            }
+          });
+      await firstUpdate.future.timeout(const Duration(seconds: 5));
+
+      await subscription.cancel();
+      expect(original.readAsStringSync(), 'old');
+      expect(tmp.listSync().map((e) => p.basename(e.path)), ['download.bin']);
+    });
+
     test('stalled download times out with NetworkException', () async {
       final events = await saver
           .saveNetwork(
@@ -287,20 +368,36 @@ void main() {
 
       await firstChunk.future.timeout(const Duration(seconds: 5));
 
-      // IOSink creates the file asynchronously, so it can appear after the
-      // first progress event on a slow runner.
       final partial = File(inTmp('download.bin'));
-      await _waitUntil(partial.existsSync);
       expect(partial.existsSync(), isTrue);
 
+      // The cancel completes once the partial file is deleted.
       await subscription.cancel();
-
-      await _waitUntil(() => !partial.existsSync());
       expect(partial.existsSync(), isFalse);
     });
   });
 
   group('saveAs', () {
+    test('throws synchronously on invalid input', () {
+      final picked = PickedDirectoryLocation(uri: tmp.uri);
+      for (final input in [
+        SaveInput.bytes(Uint8List(0)),
+        SaveInput.file(''),
+        SaveInput.network(url: 'ftp://example.com/a.bin'),
+      ]) {
+        expect(
+          () => saver.saveAs(
+            input: input,
+            fileType: fileType,
+            fileName: 'picked',
+            saveLocation: picked,
+          ),
+          throwsA(isA<InvalidInputException>()),
+          reason: '$input',
+        );
+      }
+    });
+
     test('writes into the picked directory', () async {
       final picked = Directory(inTmp('picked'))..createSync();
       final events = await saver
