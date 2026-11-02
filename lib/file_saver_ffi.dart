@@ -330,7 +330,8 @@ class FileSaver {
   ///
   /// [shouldPersist] is Android-only: if true, calls takePersistableUriPermission
   /// so the app can write to the selected directory across restarts without re-picking.
-  /// Ignored on all other platforms.
+  /// Ignored on all other platforms. To keep access after a restart on every
+  /// platform but web, use [persistDirectory].
   ///
   /// Returns [PickedDirectoryLocation], or null if cancelled.
   /// Throws [UnsupportedError] on browsers that do not support the File System Access API.
@@ -338,6 +339,89 @@ class FileSaver {
     bool shouldPersist = true,
   }) {
     return _platform.pickDirectory(shouldPersist: shouldPersist);
+  }
+
+  /// Keeps access to [location] after the app restarts, and returns a token
+  /// to store, for example in shared preferences. On a later launch, pass it
+  /// to [restoreDirectory] to save to the same directory without asking the
+  /// user again.
+  ///
+  /// **Platforms:** Android · iOS · macOS · Windows · Linux
+  /// **Web:** throws [UnsupportedError]
+  ///
+  /// [location] has to come from [pickDirectory] or [restoreDirectory].
+  ///
+  /// | Platform | Token | Keeps |
+  /// |----------|-------|-------|
+  /// | Android  | The `content://` URI | A persistable URI permission. The system keeps at most 128 per app (512 from Android 11) and drops the oldest, so [releaseDirectory] the ones you no longer need. |
+  /// | iOS      | Bookmark data (base64) | A bookmark of the directory. |
+  /// | macOS    | Security-scoped bookmark data (base64) | A security-scoped bookmark. A sandboxed app needs the `com.apple.security.files.user-selected.read-write` entitlement. |
+  /// | Windows, Linux | The `file://` URI | Nothing: the path stays usable. |
+  ///
+  /// ```dart
+  /// final location = await FileSaver.pickDirectory();
+  /// if (location != null) {
+  ///   prefs.setString('exportDir', await FileSaver.persistDirectory(location));
+  /// }
+  /// ```
+  ///
+  /// Throws [InvalidInputException] for a location the platform can't
+  /// persist, such as a `file://` URI on Android, and
+  /// [NativePlatformException] when the platform refuses, for example on
+  /// Android when the app no longer has access to the directory.
+  static Future<String> persistDirectory(PickedDirectoryLocation location) {
+    return _platform.persistDirectory(location);
+  }
+
+  /// Returns the directory a [persistDirectory] token points to, with access
+  /// to it restored, or null when the token no longer gives access: the
+  /// directory was deleted or moved out of reach, the permission was revoked
+  /// or released with [releaseDirectory], or the token isn't from this
+  /// platform. Ask the user with [pickDirectory] again then.
+  ///
+  /// **Platforms:** Android · iOS · macOS · Windows · Linux
+  /// **Web:** throws [UnsupportedError]
+  ///
+  /// On iOS and macOS a bookmark goes stale when the directory is moved or
+  /// renamed. It still restores, so persist the restored location and store
+  /// the new token:
+  ///
+  /// ```dart
+  /// final token = prefs.getString('exportDir');
+  /// final location =
+  ///     token == null ? null : await FileSaver.restoreDirectory(token);
+  /// if (location != null) {
+  ///   prefs.setString('exportDir', await FileSaver.persistDirectory(location));
+  ///   await FileSaver.saveAsAsync(
+  ///     input: SaveInput.bytes(bytes),
+  ///     fileName: 'report',
+  ///     fileType: CustomFileType(ext: 'pdf', mimeType: 'application/pdf'),
+  ///     saveLocation: location,
+  ///   );
+  /// }
+  /// ```
+  ///
+  /// Throws [NativePlatformException] if the platform call fails.
+  static Future<PickedDirectoryLocation?> restoreDirectory(String token) {
+    return _platform.restoreDirectory(token);
+  }
+
+  /// Gives up the access a [persistDirectory] token keeps, for a directory
+  /// the app no longer needs. Delete the stored token too.
+  ///
+  /// **Platforms:** Android · iOS · macOS · Windows · Linux
+  /// **Web:** throws [UnsupportedError]
+  ///
+  /// - **Android**: releases the persisted permission, so [restoreDirectory]
+  ///   returns null for the token.
+  /// - **iOS, macOS**: a bookmark can't be revoked. This ends the access that
+  ///   [restoreDirectory] (and on iOS, [pickDirectory]) started, which
+  ///   otherwise lasts until the app exits.
+  /// - **Windows, Linux**: does nothing.
+  ///
+  /// Throws [NativePlatformException] if the platform call fails.
+  static Future<void> releaseDirectory(String token) {
+    return _platform.releaseDirectory(token);
   }
 
   /// Checks whether the file at [uri] is accessible for reading.

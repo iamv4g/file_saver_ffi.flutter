@@ -200,6 +200,53 @@ abstract class FileSaverPlatform {
     }
   }
 
+  /// Keeps access to [location] after the app restarts and returns a token
+  /// for [restoreDirectory]. See [DirPicker.persist].
+  ///
+  /// **Platforms:** Android · iOS · macOS · Windows · Linux
+  /// **Web:** throws [UnsupportedError]
+  ///
+  /// Throws [InvalidInputException] for a location the platform can't
+  /// persist, and [NativePlatformException] when the platform refuses.
+  Future<String> persistDirectory(PickedDirectoryLocation location) async {
+    try {
+      return await DirPicker.persist(IOPickedLocation(location.uri));
+    } on ArgumentError catch (e) {
+      throw InvalidInputException('Persist directory failed: ${e.message}');
+    } catch (e) {
+      throw NativePlatformException('Persist directory failed: $e');
+    }
+  }
+
+  /// Returns the directory a [persistDirectory] token points to, with access
+  /// to it restored, or null when the token no longer gives access. See
+  /// [DirPicker.restore].
+  ///
+  /// **Platforms:** Android · iOS · macOS · Windows · Linux
+  /// **Web:** throws [UnsupportedError]
+  Future<PickedDirectoryLocation?> restoreDirectory(String token) async {
+    try {
+      final location = await DirPicker.restore(token);
+      if (location == null) return null;
+      return PickedDirectoryLocation(uri: location.uri!);
+    } catch (e) {
+      throw NativePlatformException('Restore directory failed: $e');
+    }
+  }
+
+  /// Gives up the access a [persistDirectory] token keeps. See
+  /// [DirPicker.release].
+  ///
+  /// **Platforms:** Android · iOS · macOS · Windows · Linux
+  /// **Web:** throws [UnsupportedError]
+  Future<void> releaseDirectory(String token) async {
+    try {
+      await DirPicker.release(token);
+    } catch (e) {
+      throw NativePlatformException('Release directory failed: $e');
+    }
+  }
+
   /// Checks whether the file at [uri] is accessible for reading.
   ///
   /// **Platforms:** Android · iOS · macOS · Windows · Linux

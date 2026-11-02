@@ -159,4 +159,25 @@ void main() {
 
     expect(written, 320 * chunk.length);
   }, timeout: const Timeout(Duration(minutes: 3)));
+
+  testWidgets('a directory the app has no access to is neither persisted nor '
+      'restored', (_) async {
+    // Granting access needs the system picker, so only refusals are tested.
+    final tree = Uri.parse(
+      'content://com.android.externalstorage.documents/tree/primary%3ADownload',
+    );
+
+    await expectLater(
+      FileSaver.persistDirectory(PickedDirectoryLocation(uri: tree)),
+      throwsA(isA<NativePlatformException>()),
+    );
+    await expectLater(
+      FileSaver.persistDirectory(
+        PickedDirectoryLocation(uri: Uri.directory('/sdcard/Download')),
+      ),
+      throwsA(isA<InvalidInputException>()),
+    );
+    expect(await FileSaver.restoreDirectory(tree.toString()), isNull);
+    expect(await FileSaver.restoreDirectory('not a uri'), isNull);
+  });
 }

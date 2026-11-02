@@ -98,6 +98,21 @@ class FileSaverWeb extends FileSaverPlatform {
     );
   }
 
+  @override
+  Future<String> persistDirectory(PickedDirectoryLocation location) {
+    throw UnsupportedError('persistDirectory is not supported on Web.');
+  }
+
+  @override
+  Future<PickedDirectoryLocation?> restoreDirectory(String token) {
+    throw UnsupportedError('restoreDirectory is not supported on Web.');
+  }
+
+  @override
+  Future<void> releaseDirectory(String token) {
+    throw UnsupportedError('releaseDirectory is not supported on Web.');
+  }
+
   // saveFile
   // ─────────────────────────────────────────────────────────────────────────
 
