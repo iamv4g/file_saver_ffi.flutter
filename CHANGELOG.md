@@ -11,6 +11,7 @@
 - A `saveLocation` of another platform, such as `IosSaveLocation.photos` on macOS or `AndroidSaveLocation.downloads` on iOS, now throws `InvalidInputException` from `save`, `saveAsync` and `openWrite` on Android, iOS, macOS, Windows and Linux, and so does a `PickedDirectoryLocation`, which belongs to `saveAs` and `openWriteAs`. Before, the location was replaced by the platform's default without a word, and on macOS `IosSaveLocation.photos` saved to `~/Pictures`. Pick the location per platform, or pass `null` for the default.
 - A `fileName` that already ends with the extension of its `fileType` is no longer saved with it twice, on every platform and API: `photo.png` (or `photo.PNG`) with `ImageType.png` gives `photo.png` instead of `photo.png.png`. Other names are unchanged, so `photo.jpg` with `ImageType.png` still gives `photo.jpg.png`.
 - **Windows/Linux, and `PathLocation` on every platform:** a file name that the system can't take now throws `InvalidInputException` before anything is written: `/`, NUL, `.` and `..` everywhere, and on Windows also `\ < > : " | ? *`, control characters and device names such as `CON` or `nul.txt`. A `subDir` that is absolute (`/x`, `C:\x`) or contains `..` throws too. Before, such names failed with a `FileSystemException` or wrote outside the save location.
+- **Linux:** the plugin no longer depends on `xdg_directories`; it runs `xdg-user-dir` itself.
 
 ### Fixed
 
@@ -36,6 +37,8 @@
 - **Windows/Linux:** custom `headers` now replace the default value of a header, as with `PathLocation`, instead of adding a second value. A custom `User-Agent` is sent alone.
 - **Windows/Linux, and `PathLocation` on every platform:** `autoRename` now claims the new name and creates the file in one step, so saves of the same name at the same time each get their own file. Before, they could all pick the same name and overwrite each other.
 - **Windows/Linux, web, and `PathLocation` on every platform:** `autoRename` of a name without an extension in a directory with a dot (`/data.v2/README`) now gives `README (1)` instead of renaming the directory part, and of a dot file `.env (1)` instead of ` (1).env`.
+- **Linux:** a `LinuxSaveLocation` whose XDG directory isn't configured, or is set to `$HOME` (which disables it), now saves to its usual folder: `~/Downloads`, `~/Pictures`, `~/Videos`, `~/Music` or `~/Documents`. Before, `xdg-user-dir` printed `$HOME` for it and files landed in the home directory, and without `xdg-user-dir` every location fell back to `~/Downloads`. Empty or relative output from `xdg-user-dir` is ignored too, instead of saving relative to the working directory, and without `HOME` and an XDG directory the save fails with `NativePlatformException`.
+- **Linux:** each location is looked up once, with `xdg-user-dir` running in the background. Before, every save ran it synchronously and blocked the UI isolate.
 
 ## 0.11.0
 
