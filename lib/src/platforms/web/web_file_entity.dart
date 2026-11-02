@@ -21,4 +21,9 @@ class WebFileEntity implements FileEntity {
 
   @override
   Future<JSAny?> delete(String name) => _handle.removeEntry(name).toDart;
+
+  /// Only checks that [name] is free: the File System Access API has no
+  /// exclusive create.
+  @override
+  Future<bool> claim(String name) async => !await exists(name);
 }

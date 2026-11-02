@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../../exceptions/file_saver_exceptions.dart';
 import '../../models/file_saver_sink.dart';
+import 'conflict_resolver.dart';
 import 'session_file_saver_sink.dart';
 
 /// [FileSaverSink] that writes a file with `dart:io`: on Windows and Linux,
@@ -13,13 +14,15 @@ import 'session_file_saver_sink.dart';
 class IOFileSaverSink extends SessionFileSaverSink {
   IOFileSaverSink._(super.session, super.totalSize);
 
-  /// Opens a sink that writes the file at [path].
+  /// Opens a sink that writes the file at [target]'s path.
   ///
-  /// If [path] exists (`overwrite`), the chunks go to a temporary file next
-  /// to it, which replaces it on close. Cancelling or a failed write keeps
-  /// the original.
-  static Future<IOFileSaverSink> open(String path, {int? totalSize}) async =>
-      IOFileSaverSink._(await IOWriteSession.open(path), totalSize);
+  /// If it is an existing file (`overwrite`), the chunks go to a temporary
+  /// file next to it, which replaces it on close. Cancelling or a failed
+  /// write keeps the original.
+  static Future<IOFileSaverSink> open(
+    ResolvedPath target, {
+    int? totalSize,
+  }) async => IOFileSaverSink._(await IOWriteSession.open(target), totalSize);
 }
 
 /// Converts an error from `dart:io` into a [FileSaverException].
@@ -54,24 +57,32 @@ FileSaverException mapIOException(Object e) {
 /// the order they are called, because a [RandomAccessFile] rejects a call
 /// while another is pending.
 ///
-/// If the target exists, the bytes go to a temporary file next to it, which
+/// A new target, claimed by `ConflictResolver.claim`, is written in place.
+/// An existing one gets the bytes in a temporary file next to it, which
 /// replaces it on [close]. [cancel] and a failed [close] delete the file being
 /// written, so the original is kept. `PathLocationWriter` saves through it
 /// too.
 class IOWriteSession implements WriteSession {
   IOWriteSession._(this._target, this._writePath, this._file);
 
-  static Future<IOWriteSession> open(String target) async {
-    final writePath = await File(target).exists()
-        ? p.join(
-            p.dirname(target),
-            '.${p.basename(target)}.${DateTime.now().microsecondsSinceEpoch}.part',
-          )
-        : target;
+  static Future<IOWriteSession> open(ResolvedPath target) async {
+    final path = target.path;
+    final writePath = target.isNew
+        ? path
+        : p.join(
+            p.dirname(path),
+            '.${p.basename(path)}.${DateTime.now().microsecondsSinceEpoch}.part',
+          );
     try {
       final file = await File(writePath).open(mode: FileMode.writeOnly);
-      return IOWriteSession._(target, writePath, file);
+      return IOWriteSession._(path, writePath, file);
     } catch (e) {
+      // Releases the name the resolver claimed.
+      if (target.isNew) {
+        try {
+          await File(path).delete();
+        } catch (_) {}
+      }
       throw mapIOException(e);
     }
   }

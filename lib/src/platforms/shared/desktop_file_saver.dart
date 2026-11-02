@@ -12,6 +12,7 @@ import '../../models/save_input.dart';
 import '../../models/save_progress.dart';
 import '../../platform_interface/file_saver_platform.dart';
 import 'conflict_resolver.dart';
+import 'file_name.dart';
 import 'io_file_entity.dart';
 import 'io_file_saver_sink.dart';
 import 'path_location_writer.dart';
@@ -137,6 +138,7 @@ abstract class DesktopFileSaver<L extends SaveLocation>
     }
 
     final location = checkSaveLocation<L>(saveLocation);
+    checkSubDir(subDir);
     return PathLocationWriter.save(
       input: input,
       directory: () => resolveDirectory(location, subDir),
@@ -204,12 +206,12 @@ abstract class DesktopFileSaver<L extends SaveLocation>
         totalSize: totalSize,
       );
     }
-    final dir = await resolveDirectory(
-      checkSaveLocation<L>(saveLocation),
-      subDir,
-    );
+    final location = checkSaveLocation<L>(saveLocation);
+    checkFileName('$fileName.${fileType.ext}');
+    checkSubDir(subDir);
+    final dir = await resolveDirectory(location, subDir);
     final filePath = p.join(dir, '$fileName.${fileType.ext}');
-    final resolved = await _conflictResolver.resolve(
+    final resolved = await _conflictResolver.claim(
       filePath,
       conflictResolution,
     );
@@ -228,9 +230,10 @@ abstract class DesktopFileSaver<L extends SaveLocation>
     if (fileName.isEmpty) {
       throw const InvalidInputException('File name cannot be empty');
     }
+    checkFileName('$fileName.${fileType.ext}');
     final dirPath = saveLocation.uri.toFilePath();
     final filePath = p.join(dirPath, '$fileName.${fileType.ext}');
-    final resolved = await _conflictResolver.resolve(
+    final resolved = await _conflictResolver.claim(
       filePath,
       conflictResolution,
     );

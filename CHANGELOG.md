@@ -9,6 +9,8 @@
 - **iOS:** saving audio or another non-media file to `IosSaveLocation.photos` now throws `InvalidInputException` with every API, as `openWrite` already refused it. Before, `save` and `saveAsync` saved it to Documents without saying so, and `openWrite` threw `UnsupportedFormatException`. Save these files to `IosSaveLocation.documents`.
 - **iOS:** the minimum iOS version is now 13.4 (was 13.0), in the podspec, `Package.swift` and README. iOS 13.0–13.3 used `FileHandle` calls that crash the app on a write error instead of throwing.
 - A `saveLocation` of another platform, such as `IosSaveLocation.photos` on macOS or `AndroidSaveLocation.downloads` on iOS, now throws `InvalidInputException` from `save`, `saveAsync` and `openWrite` on Android, iOS, macOS, Windows and Linux, and so does a `PickedDirectoryLocation`, which belongs to `saveAs` and `openWriteAs`. Before, the location was replaced by the platform's default without a word, and on macOS `IosSaveLocation.photos` saved to `~/Pictures`. Pick the location per platform, or pass `null` for the default.
+- A `fileName` that already ends with the extension of its `fileType` is no longer saved with it twice, on every platform and API: `photo.png` (or `photo.PNG`) with `ImageType.png` gives `photo.png` instead of `photo.png.png`. Other names are unchanged, so `photo.jpg` with `ImageType.png` still gives `photo.jpg.png`.
+- **Windows/Linux, and `PathLocation` on every platform:** a file name that the system can't take now throws `InvalidInputException` before anything is written: `/`, NUL, `.` and `..` everywhere, and on Windows also `\ < > : " | ? *`, control characters and device names such as `CON` or `nul.txt`. A `subDir` that is absolute (`/x`, `C:\x`) or contains `..` throws too. Before, such names failed with a `FileSystemException` or wrote outside the save location.
 
 ### Fixed
 
@@ -32,6 +34,8 @@
 - **Windows/Linux, and `PathLocation` on every platform:** progress now counts bytes in the file. Each chunk is written before the next one is read, so a slow disk no longer makes the whole download pile up in memory. `SaveInput.bytes` is written in 1 MB steps without copying the whole payload first, and a cancel stops it between steps.
 - **Windows/Linux:** `saveAs` now rejects empty bytes, an empty file path or a non-HTTP URL with `InvalidInputException`, as `save` does. Before, it accepted them.
 - **Windows/Linux:** custom `headers` now replace the default value of a header, as with `PathLocation`, instead of adding a second value. A custom `User-Agent` is sent alone.
+- **Windows/Linux, and `PathLocation` on every platform:** `autoRename` now claims the new name and creates the file in one step, so saves of the same name at the same time each get their own file. Before, they could all pick the same name and overwrite each other.
+- **Windows/Linux, web, and `PathLocation` on every platform:** `autoRename` of a name without an extension in a directory with a dot (`/data.v2/README`) now gives `README (1)` instead of renaming the directory part, and of a dot file `.env (1)` instead of ` (1).env`.
 
 ## 0.11.0
 
