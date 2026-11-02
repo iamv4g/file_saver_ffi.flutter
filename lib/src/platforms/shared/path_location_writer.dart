@@ -11,6 +11,7 @@ import '../../models/file_saver_sink.dart';
 import '../../models/save_input.dart';
 import '../../models/save_progress.dart';
 import 'conflict_resolver.dart';
+import 'file_name.dart';
 import 'io_file_entity.dart';
 import 'io_file_saver_sink.dart';
 
@@ -40,7 +41,7 @@ abstract final class PathLocationWriter {
     required ConflictResolution conflictResolution,
   }) => save(
     input: SaveBytesInput(fileBytes),
-    directory: () => _createDirectory(dirPath, subDir),
+    directory: _directory(dirPath, subDir),
     baseName: baseName,
     ext: ext,
     conflictResolution: conflictResolution,
@@ -55,7 +56,7 @@ abstract final class PathLocationWriter {
     required ConflictResolution conflictResolution,
   }) => save(
     input: SaveFileInput(filePath),
-    directory: () => _createDirectory(dirPath, subDir),
+    directory: _directory(dirPath, subDir),
     baseName: baseName,
     ext: ext,
     conflictResolution: conflictResolution,
@@ -72,7 +73,7 @@ abstract final class PathLocationWriter {
     required ConflictResolution conflictResolution,
   }) => save(
     input: SaveNetworkInput(url: url, headers: headers, timeout: timeout),
-    directory: () => _createDirectory(dirPath, subDir),
+    directory: _directory(dirPath, subDir),
     baseName: baseName,
     ext: ext,
     conflictResolution: conflictResolution,
@@ -86,8 +87,9 @@ abstract final class PathLocationWriter {
     required ConflictResolution conflictResolution,
     int? totalSize,
   }) async {
-    final targetDirPath = await _createDirectory(dirPath, subDir);
-    final resolved = await _conflictResolver.resolve(
+    checkFileName('$baseName.$ext');
+    final targetDirPath = await _directory(dirPath, subDir)();
+    final resolved = await _conflictResolver.claim(
       p.join(targetDirPath, '$baseName.$ext'),
       conflictResolution,
     );
@@ -98,7 +100,8 @@ abstract final class PathLocationWriter {
   // MARK: Any directory
 
   /// Saves [input] as `baseName.ext` into the directory that [directory]
-  /// returns. The input must be validated already.
+  /// returns. The input must be validated already; the file name is checked
+  /// here, with [checkFileName].
   ///
   /// Emits [SaveProgressStarted], [SaveProgressUpdate]s and then
   /// [SaveProgressComplete] or [SaveProgressError]. Once the subscription is
@@ -111,6 +114,7 @@ abstract final class PathLocationWriter {
     required String ext,
     required ConflictResolution conflictResolution,
   }) {
+    checkFileName('$baseName.$ext');
     return Stream.multi((controller) {
       final cancellation = _Cancellation();
 
@@ -128,34 +132,31 @@ abstract final class PathLocationWriter {
           }
 
           final path = p.join(await directory(), '$baseName.$ext');
-          final resolved = await _conflictResolver.resolve(
+          if (cancellation.isCancelled) return;
+          final resolved = await _conflictResolver.claim(
             path,
             conflictResolution,
           );
-          if (cancellation.isCancelled) return;
           if (resolved == null) {
             emit(SaveProgressComplete(Uri.file(path)));
             return;
           }
 
-          final source = await _open(input, cancellation);
-          IOWriteSession? opened;
+          // Opened before the source, so a failed request deletes the file
+          // the resolver claimed.
+          final session = await IOWriteSession.open(resolved);
           try {
+            final source = await _open(input, cancellation);
             if (!cancellation.isCancelled) {
-              opened = await IOWriteSession.open(resolved);
+              await _pipe(source.data, session, cancellation, (written) {
+                if (source.length case final length? when length > 0) {
+                  emit(SaveProgressUpdate(written / length));
+                }
+              });
+            } else {
+              // Closes the connection of a download that won't be read.
+              await source.data.listen(null).cancel();
             }
-          } finally {
-            // Closes the connection of a download that won't be read.
-            if (opened == null) await source.data.listen(null).cancel();
-          }
-          final session = opened;
-          if (session == null) return;
-          try {
-            await _pipe(source.data, session, cancellation, (written) {
-              if (source.length case final length? when length > 0) {
-                emit(SaveProgressUpdate(written / length));
-              }
-            });
             if (cancellation.isCancelled) {
               await session.cancel();
               return;
@@ -183,12 +184,17 @@ abstract final class PathLocationWriter {
 
   // MARK: Private helpers
 
-  static Future<String> _createDirectory(String dirPath, String? subDir) async {
-    final path = subDir == null || subDir.isEmpty
-        ? dirPath
-        : p.join(dirPath, subDir);
-    await Directory(path).create(recursive: true);
-    return path;
+  /// Checks [subDir] with [checkSubDir] and returns a function that creates
+  /// `dirPath/subDir`.
+  static Future<String> Function() _directory(String dirPath, String? subDir) {
+    checkSubDir(subDir);
+    return () async {
+      final path = subDir == null || subDir.isEmpty
+          ? dirPath
+          : p.join(dirPath, subDir);
+      await Directory(path).create(recursive: true);
+      return path;
+    };
   }
 
   /// [filePath] as a path, decoding a `file://` URI.
@@ -196,8 +202,7 @@ abstract final class PathLocationWriter {
       ? Uri.parse(filePath).toFilePath()
       : filePath;
 
-  /// Opens the bytes to save and their length, if known. A download is
-  /// requested here, so an HTTP error fails before a file is created.
+  /// Opens the bytes to save and their length, if known.
   static Future<({Stream<List<int>> data, int? length})> _open(
     SaveInput input,
     _Cancellation cancellation,

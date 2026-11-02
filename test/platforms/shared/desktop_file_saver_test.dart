@@ -377,6 +377,85 @@ void main() {
     });
   });
 
+  group('file names', () {
+    test('concurrent autoRename saves of one name get a file each', () async {
+      final results = await Future.wait([
+        for (var i = 0; i < 20; i++)
+          saver
+              .saveBytes(
+                fileBytes: Uint8List.fromList([i]),
+                fileName: 'same',
+                fileType: fileType,
+              )
+              .last,
+      ]);
+
+      final paths = {
+        for (final result in results)
+          (result as SaveProgressComplete).uri.toFilePath(),
+      };
+      expect(paths, hasLength(20));
+      expect(
+        {for (final path in paths) ...File(path).readAsBytesSync()},
+        {for (var i = 0; i < 20; i++) i},
+      );
+    });
+
+    test(
+      'an invalid name or subDir throws before anything is written',
+      () async {
+        expect(
+          () => saver.saveBytes(
+            fileBytes: bytes,
+            fileName: 'a/b',
+            fileType: fileType,
+          ),
+          throwsA(isA<InvalidInputException>()),
+        );
+        for (final subDir in ['..', '../escape', '/abs']) {
+          expect(
+            () => saver.saveBytes(
+              fileBytes: bytes,
+              fileName: 'data',
+              fileType: fileType,
+              subDir: subDir,
+            ),
+            throwsA(isA<InvalidInputException>()),
+            reason: subDir,
+          );
+          await expectLater(
+            saver.openWrite(
+              fileName: 'data',
+              fileType: fileType,
+              subDir: subDir,
+            ),
+            throwsA(isA<InvalidInputException>()),
+            reason: subDir,
+          );
+        }
+        await expectLater(
+          saver.openWriteAs(
+            fileName: '../data',
+            fileType: fileType,
+            saveLocation: PickedDirectoryLocation(uri: tmp.uri),
+          ),
+          throwsA(isA<InvalidInputException>()),
+        );
+        expect(
+          () => saver.saveAs(
+            input: SaveInput.bytes(bytes),
+            fileName: '../data',
+            fileType: fileType,
+            saveLocation: PickedDirectoryLocation(uri: tmp.uri),
+          ),
+          throwsA(isA<InvalidInputException>()),
+        );
+        expect(saver.resolvedLocations, isEmpty);
+        expect(tmp.listSync(), isEmpty);
+      },
+    );
+  });
+
   group('saveAs', () {
     test('throws synchronously on invalid input', () {
       final picked = PickedDirectoryLocation(uri: tmp.uri);

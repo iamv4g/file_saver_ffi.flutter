@@ -90,6 +90,84 @@ void main() {
     });
   });
 
+  group('file names', () {
+    test('concurrent autoRename saves of one name get a file each', () async {
+      final results = await Future.wait([
+        for (var i = 0; i < 20; i++)
+          PathLocationWriter.saveBytes(
+            fileBytes: Uint8List.fromList([i]),
+            dirPath: tmp.path,
+            baseName: 'same',
+            ext: 'bin',
+            conflictResolution: ConflictResolution.autoRename,
+          ).last,
+      ]);
+
+      final paths = {
+        for (final result in results)
+          (result as SaveProgressComplete).uri.toFilePath(),
+      };
+      expect(paths, hasLength(20));
+      expect(
+        {for (final path in paths) ...File(path).readAsBytesSync()},
+        {for (var i = 0; i < 20; i++) i},
+      );
+    });
+
+    test('a name with a separator throws synchronously', () {
+      expect(
+        () => PathLocationWriter.saveBytes(
+          fileBytes: bytes,
+          dirPath: tmp.path,
+          baseName: '../escape',
+          ext: 'bin',
+          conflictResolution: ConflictResolution.autoRename,
+        ),
+        throwsA(isA<InvalidInputException>()),
+      );
+    });
+
+    test('a subDir that leaves the directory throws synchronously', () {
+      for (final subDir in ['..', '../escape', '/abs', 'a/../../escape']) {
+        expect(
+          () => saveBytes(subDir: subDir),
+          throwsA(isA<InvalidInputException>()),
+          reason: subDir,
+        );
+        expect(
+          PathLocationWriter.openWrite(
+            dirPath: tmp.path,
+            subDir: subDir,
+            baseName: 'data',
+            ext: 'bin',
+            conflictResolution: ConflictResolution.autoRename,
+          ),
+          throwsA(isA<InvalidInputException>()),
+          reason: subDir,
+        );
+      }
+      expect(tmp.listSync(), isEmpty);
+    });
+
+    test('a failed download releases the name it claimed', () async {
+      final server = await TestHttpServer.start(bytes);
+      addTearDown(server.close);
+
+      final events = await PathLocationWriter.saveNetwork(
+        url: server.url('/404'),
+        headers: null,
+        timeout: const Duration(seconds: 5),
+        dirPath: tmp.path,
+        baseName: 'download',
+        ext: 'bin',
+        conflictResolution: ConflictResolution.autoRename,
+      ).toList();
+
+      expect(events.last, isA<SaveProgressError>());
+      expect(tmp.listSync(), isEmpty);
+    });
+  });
+
   group('saveFile', () {
     test('copies the source file', () async {
       final source = File(p.join(tmp.path, 'source.bin'));

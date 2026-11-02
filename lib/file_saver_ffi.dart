@@ -29,6 +29,18 @@ class FileSaver {
 
   static FileSaverPlatform get _platform => FileSaverPlatform.instance;
 
+  /// [fileName] without a trailing `.ext` of [fileType], which every
+  /// platform appends: `photo.png` and `photo.PNG` become `photo` for
+  /// [ImageType.png], so the file isn't saved as `photo.png.png`.
+  static String _baseName(String fileName, FileType fileType) {
+    final ext = fileType.ext;
+    if (ext.isEmpty || fileName.length <= ext.length + 1) return fileName;
+    final suffix = fileName.substring(fileName.length - ext.length - 1);
+    return suffix.toLowerCase() == '.${ext.toLowerCase()}'
+        ? fileName.substring(0, fileName.length - suffix.length)
+        : fileName;
+  }
+
   /// Saves a file to device storage with progress streaming.
   ///
   /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
@@ -54,6 +66,13 @@ class FileSaver {
   /// A location of another platform, such as [IosSaveLocation.photos] on
   /// macOS, throws [InvalidInputException], and so does a
   /// [PickedDirectoryLocation]: pass it to [saveAs].
+  ///
+  /// [fileName] is the name without the extension, which [fileType] adds. A
+  /// name that already ends with it is saved once: `photo.png` with
+  /// [ImageType.png] gives `photo.png`. On Windows, Linux and with a
+  /// [PathLocation], a name with `/` (on Windows also `\ < > : " | ? *` or a
+  /// device name such as `CON`), and a [subDir] that is absolute or contains
+  /// `..`, throw [InvalidInputException].
   static Stream<SaveProgress> save({
     required SaveInput input,
     required FileType fileType,
@@ -66,7 +85,7 @@ class FileSaver {
       SaveBytesInput(:final fileBytes) => _platform.saveBytes(
         fileBytes: fileBytes,
         fileType: fileType,
-        fileName: fileName,
+        fileName: _baseName(fileName, fileType),
         saveLocation: saveLocation,
         subDir: subDir,
         conflictResolution: conflictResolution,
@@ -74,7 +93,7 @@ class FileSaver {
       SaveFileInput(:final filePath) => _platform.saveFile(
         filePath: filePath,
         fileType: fileType,
-        fileName: fileName,
+        fileName: _baseName(fileName, fileType),
         saveLocation: saveLocation,
         subDir: subDir,
         conflictResolution: conflictResolution,
@@ -83,7 +102,7 @@ class FileSaver {
         _platform.saveNetwork(
           url: url,
           fileType: fileType,
-          fileName: fileName,
+          fileName: _baseName(fileName, fileType),
           headers: headers,
           timeout: timeout,
           saveLocation: saveLocation,
@@ -148,6 +167,8 @@ class FileSaver {
   /// Yields [SaveProgressCancelled] if the picker is dismissed.
   ///
   /// Web: falls back to anchor-download if the browser does not support FSA.
+  ///
+  /// [fileName] works as in [save].
   static Stream<SaveProgress> saveAs({
     required SaveInput input,
     required FileType fileType,
@@ -180,7 +201,7 @@ class FileSaver {
     yield* _platform.saveAs(
       input: input,
       fileType: fileType,
-      fileName: fileName,
+      fileName: _baseName(fileName, fileType),
       saveLocation: resolvedLocation,
       conflictResolution: conflictResolution,
     );
@@ -260,6 +281,8 @@ class FileSaver {
   /// await sink.addStream(src); // back-pressure friendly
   /// final uri = await sink.close();
   /// ```
+  ///
+  /// [fileName] works as in [save].
   static Future<FileSaverSink?> openWrite({
     required String fileName,
     required FileType fileType,
@@ -269,7 +292,7 @@ class FileSaver {
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
   }) {
     return _platform.openWrite(
-      fileName: fileName,
+      fileName: _baseName(fileName, fileType),
       fileType: fileType,
       saveLocation: saveLocation,
       subDir: subDir,
@@ -289,6 +312,8 @@ class FileSaver {
   ///
   /// Web: uses [FileSystemWritableFileStream] (FSA) when the browser supports it,
   /// falls back to in-memory buffering otherwise.
+  ///
+  /// [fileName] works as in [save].
   static Future<FileSaverSink?> openWriteAs({
     required String fileName,
     required FileType fileType,
@@ -312,7 +337,7 @@ class FileSaver {
       }
     }
     return _platform.openWriteAs(
-      fileName: fileName,
+      fileName: _baseName(fileName, fileType),
       fileType: fileType,
       saveLocation: resolvedLocation,
       totalSize: totalSize,
