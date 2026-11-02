@@ -28,7 +28,6 @@ dependencies:
   jni: ^1.0.0
   path: ^1.9.1
   path_provider_windows: ^2.3.0
-  xdg_directories: ^1.1.0
   dir_picker: ^0.6.0
   web: ^1.1.1
 
