@@ -9,6 +9,7 @@ import 'dart:typed_data';
 /// - `/auth`  → [payload] only if `X-Token: secret`, otherwise 401
 /// - `/404`   → 404
 /// - `/slow`  → first 64 KiB of [payload], then hangs until [close]
+/// - `/no-headers` → accepts the request and sends nothing until [close]
 class TestHttpServer {
   TestHttpServer._(this._server, this.payload);
 
@@ -42,6 +43,8 @@ class TestHttpServer {
         response.contentLength = payload.length;
         response.add(payload.sublist(0, 64 * 1024));
         await response.flush();
+        await _hang.future;
+      case '/no-headers':
         await _hang.future;
       default:
         response.statusCode = HttpStatus.notFound;

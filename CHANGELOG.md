@@ -24,6 +24,14 @@
 - **iOS/macOS:** `SaveInput.bytes` saves and write-session chunks no longer keep extra copies of the bytes. Dart kept its native copy until the save finished, and Swift copied it once more on the calling thread, which is the UI thread. Swift now takes over the buffer Dart allocates.
 - **iOS/macOS:** a network download now sends about 100 progress events (a step of at least 1%, or 100 ms) instead of one per received packet, thousands for a large file.
 - **iOS/macOS:** the plugin now refuses to start on a Dart VM whose `Dart_CObject` layout it wasn't built for (another major version of the Dart DL API), instead of posting messages the VM can't read.
+- **`PathLocation` on every platform:** cancelling a save (cancelling the subscription or leaving an `await for`) now stops it and deletes the partial file. Before, the copy or download ran to the end and the file was kept.
+- **`PathLocation` on every platform:** `SaveInput.file` with a `file://` URI now works. Before, the URI was used as a path and the save failed with `SourceFileNotFoundException`.
+- **`PathLocation` on every platform:** a download now times out after `timeout` while connecting, while waiting for the response and whenever the body stops arriving. Before, it had no timeout and could wait forever.
+- **Windows/Linux:** a download from a server that accepts the connection but never answers now fails with `NetworkException` after `timeout`. Before, it waited forever. A refused connection or a DNS failure is now a `NetworkException` too, instead of a `NativePlatformException`, and an error while the body is received is a `NetworkException` instead of a `FileIOException`. Each download now has its own HTTP client, so the `timeout` of one download no longer changes another one running at the same time.
+- **Windows/Linux, and `PathLocation` on every platform:** a save that fails or is cancelled no longer leaves a partial file, and an `overwrite` that fails or is cancelled keeps the original file. The file is written in place only when it is new; otherwise the bytes go to a temporary file that replaces the original at the end, as `openWrite` does. Cancelling now completes once the partial file is deleted.
+- **Windows/Linux, and `PathLocation` on every platform:** progress now counts bytes in the file. Each chunk is written before the next one is read, so a slow disk no longer makes the whole download pile up in memory. `SaveInput.bytes` is written in 1 MB steps without copying the whole payload first, and a cancel stops it between steps.
+- **Windows/Linux:** `saveAs` now rejects empty bytes, an empty file path or a non-HTTP URL with `InvalidInputException`, as `save` does. Before, it accepted them.
+- **Windows/Linux:** custom `headers` now replace the default value of a header, as with `PathLocation`, instead of adding a second value. A custom `User-Agent` is sent alone.
 
 ## 0.11.0
 

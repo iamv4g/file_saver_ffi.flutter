@@ -1,6 +1,7 @@
 @TestOn('vm')
 library;
 
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -107,6 +108,54 @@ void main() {
       expect(await File.fromUri(uri).readAsBytes(), bytes);
     });
 
+    test('copies from a file:// URI', () async {
+      final source = File(p.join(tmp.path, 'a#1 50%.bin'));
+      await source.writeAsBytes(bytes);
+
+      final events = await PathLocationWriter.saveFile(
+        filePath: source.uri.toString(),
+        dirPath: tmp.path,
+        subDir: 'out',
+        baseName: 'copy',
+        ext: 'bin',
+        conflictResolution: ConflictResolution.autoRename,
+      ).toList();
+
+      final uri = (events.last as SaveProgressComplete).uri;
+      expect(await File.fromUri(uri).readAsBytes(), bytes);
+    });
+
+    test('cancelling stops the copy and deletes the partial file', () async {
+      final source = File(p.join(tmp.path, 'large.bin'));
+      await source.writeAsBytes(Uint8List(32 * 1024 * 1024));
+      final target = File(p.join(tmp.path, 'out', 'copy.bin'));
+
+      final firstUpdate = Completer<void>();
+      final events = <SaveProgress>[];
+      final subscription =
+          PathLocationWriter.saveFile(
+            filePath: source.path,
+            dirPath: tmp.path,
+            subDir: 'out',
+            baseName: 'copy',
+            ext: 'bin',
+            conflictResolution: ConflictResolution.autoRename,
+          ).listen((event) {
+            events.add(event);
+            if (event is SaveProgressUpdate && !firstUpdate.isCompleted) {
+              firstUpdate.complete();
+            }
+          });
+      await firstUpdate.future;
+      expect(target.existsSync(), isTrue);
+
+      // The cancel completes once the partial file is deleted.
+      await subscription.cancel();
+      expect(target.existsSync(), isFalse);
+      expect(events.whereType<SaveProgressUpdate>().last.progress, lessThan(1));
+      expect(events.whereType<SaveProgressComplete>(), isEmpty);
+    });
+
     test('missing source emits SourceFileNotFoundException', () async {
       final events = await PathLocationWriter.saveFile(
         filePath: p.join(tmp.path, 'missing.bin'),
@@ -124,25 +173,122 @@ void main() {
   });
 
   group('saveNetwork', () {
+    // More than the 64 KiB that `/slow` sends before it stalls.
+    final payload = Uint8List.fromList(
+      List.generate(256 * 1024, (i) => i % 251),
+    );
     late TestHttpServer server;
 
     setUp(() async {
-      server = await TestHttpServer.start(bytes);
+      server = await TestHttpServer.start(payload);
     });
 
     tearDown(() => server.close());
 
-    Stream<SaveProgress> download(String path, {Map<String, String>? headers}) {
+    Stream<SaveProgress> download(
+      String path, {
+      Map<String, String>? headers,
+      Duration timeout = const Duration(seconds: 5),
+      ConflictResolution conflictResolution = ConflictResolution.autoRename,
+    }) {
       return PathLocationWriter.saveNetwork(
         url: server.url(path),
         headers: headers,
+        timeout: timeout,
+        dirPath: tmp.path,
+        baseName: 'download',
+        ext: 'bin',
+        conflictResolution: conflictResolution,
+      );
+    }
+
+    File target() => File(p.join(tmp.path, 'download.bin'));
+
+    /// Listens to [stream] until its first progress event.
+    Future<StreamSubscription<SaveProgress>> listenUntilProgress(
+      Stream<SaveProgress> stream,
+    ) async {
+      final firstUpdate = Completer<void>();
+      final subscription = stream.listen((event) {
+        if (event is SaveProgressUpdate && !firstUpdate.isCompleted) {
+          firstUpdate.complete();
+        }
+      });
+      await firstUpdate.future.timeout(const Duration(seconds: 5));
+      return subscription;
+    }
+
+    test(
+      'cancelling deletes the partial file before the cancel completes',
+      () async {
+        final subscription = await listenUntilProgress(download('/slow'));
+        expect(target().existsSync(), isTrue);
+
+        await subscription.cancel();
+        expect(target().existsSync(), isFalse);
+      },
+    );
+
+    test('a cancelled overwrite keeps the original file', () async {
+      await target().writeAsString('original');
+      final subscription = await listenUntilProgress(
+        download('/slow', conflictResolution: ConflictResolution.overwrite),
+      );
+
+      await subscription.cancel();
+      expect(await target().readAsString(), 'original');
+      expect(tmp.listSync().map((e) => p.basename(e.path)), ['download.bin']);
+    });
+
+    test(
+      'a server that sends no response times out with NetworkException',
+      () async {
+        final events = await download(
+          '/no-headers',
+          timeout: const Duration(seconds: 1),
+        ).toList().timeout(const Duration(seconds: 10));
+
+        expect(
+          (events.last as SaveProgressError).exception,
+          isA<NetworkException>(),
+        );
+        expect(target().existsSync(), isFalse);
+      },
+    );
+
+    test('a stalled body times out with NetworkException', () async {
+      final events = await download(
+        '/slow',
+        timeout: const Duration(seconds: 1),
+      ).toList().timeout(const Duration(seconds: 10));
+
+      expect(
+        (events.last as SaveProgressError).exception,
+        isA<NetworkException>(),
+      );
+      expect(target().existsSync(), isFalse);
+    });
+
+    test('a refused connection emits NetworkException', () async {
+      final closed = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final port = closed.port;
+      await closed.close();
+
+      final events = await PathLocationWriter.saveNetwork(
+        url: 'http://127.0.0.1:$port/file',
+        headers: null,
         timeout: const Duration(seconds: 5),
         dirPath: tmp.path,
         baseName: 'download',
         ext: 'bin',
         conflictResolution: ConflictResolution.autoRename,
+      ).toList();
+
+      expect(
+        (events.last as SaveProgressError).exception,
+        isA<NetworkException>(),
       );
-    }
+    });
 
     test('downloads with increasing progress', () async {
       final events = await download('/file').toList();
@@ -158,7 +304,7 @@ void main() {
         expect(progress[i], greaterThanOrEqualTo(progress[i - 1]));
       }
       final uri = (events.last as SaveProgressComplete).uri;
-      expect(await File.fromUri(uri).readAsBytes(), bytes);
+      expect(await File.fromUri(uri).readAsBytes(), payload);
     });
 
     test('forwards headers', () async {

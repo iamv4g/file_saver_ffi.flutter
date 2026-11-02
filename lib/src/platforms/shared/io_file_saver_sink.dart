@@ -19,7 +19,7 @@ class IOFileSaverSink extends SessionFileSaverSink {
   /// to it, which replaces it on close. Cancelling or a failed write keeps
   /// the original.
   static Future<IOFileSaverSink> open(String path, {int? totalSize}) async =>
-      IOFileSaverSink._(await _IOWriteSession.open(path), totalSize);
+      IOFileSaverSink._(await IOWriteSession.open(path), totalSize);
 }
 
 /// Converts an error from `dart:io` into a [FileSaverException].
@@ -53,10 +53,15 @@ FileSaverException mapIOException(Object e) {
 /// A write session on a [RandomAccessFile]. Operations run one at a time, in
 /// the order they are called, because a [RandomAccessFile] rejects a call
 /// while another is pending.
-class _IOWriteSession implements WriteSession {
-  _IOWriteSession(this._target, this._writePath, this._file);
+///
+/// If the target exists, the bytes go to a temporary file next to it, which
+/// replaces it on [close]. [cancel] and a failed [close] delete the file being
+/// written, so the original is kept. `PathLocationWriter` saves through it
+/// too.
+class IOWriteSession implements WriteSession {
+  IOWriteSession._(this._target, this._writePath, this._file);
 
-  static Future<_IOWriteSession> open(String target) async {
+  static Future<IOWriteSession> open(String target) async {
     final writePath = await File(target).exists()
         ? p.join(
             p.dirname(target),
@@ -65,7 +70,7 @@ class _IOWriteSession implements WriteSession {
         : target;
     try {
       final file = await File(writePath).open(mode: FileMode.writeOnly);
-      return _IOWriteSession(target, writePath, file);
+      return IOWriteSession._(target, writePath, file);
     } catch (e) {
       throw mapIOException(e);
     }
