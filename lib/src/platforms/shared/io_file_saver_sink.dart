@@ -93,6 +93,10 @@ class IOWriteSession implements WriteSession {
   /// [_target], or the temporary file that replaces it on close.
   final String _writePath;
   final RandomAccessFile _file;
+
+  /// The file being written: the target, or the temporary file that replaces
+  /// it on [close].
+  String get path => _writePath;
   var _bytesWritten = 0;
 
   /// Completes when the last operation has ended.

@@ -20,9 +20,11 @@ import com.iamv4g.file_saver_ffi.models.ProgressCallback
 import com.iamv4g.file_saver_ffi.models.SaveLocation
 import com.iamv4g.file_saver_ffi.models.SaveProgressEvent
 import com.iamv4g.file_saver_ffi.utils.Constants
+import com.iamv4g.file_saver_ffi.utils.FileHelper
 import com.iamv4g.file_saver_ffi.utils.FileOpener
 import com.iamv4g.file_saver_ffi.utils.StoragePermissionHandler
 import com.iamv4g.file_saver_ffi.utils.WriteSessionManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,8 +36,12 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
+import java.io.FileNotFoundException
+import java.io.FileOutputStream
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 
@@ -278,6 +284,94 @@ class FileSaver(
                 customFileSaver.saveNetwork(url, headersJson, timeoutMs, ef, cr)
             },
         )
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Copy into a file path (PathLocation)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Copies the file at [sourceUri] (`content://` or `file://`) into the
+     * existing file at [targetPath]: a `PathLocation` save of a source that
+     * `dart:io` can't read. The Dart side creates [targetPath], and renames or
+     * deletes it once this has ended.
+     *
+     * Reports progress (1), then success (3) with [targetPath] or an error (2).
+     * After [cancelOperation] it reports cancelled (4) once it has stopped
+     * writing. [targetPath] is opened before the source, whose provider may
+     * block, so a copy that is still running only writes to the file it has
+     * open and never creates [targetPath] again.
+     *
+     * @return The operation ID for [cancelOperation].
+     */
+    fun copyToPath(
+        sourceUri: String,
+        targetPath: String,
+        callback: ProgressCallback,
+    ): Long {
+        val operationId = operationIdCounter.incrementAndGet()
+        val job =
+            scope.launch {
+                try {
+                    copy(sourceUri, targetPath, callback)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    callback.onEvent(2, 0.0, Constants.ERROR_PLATFORM, "Unexpected error: ${e.message ?: "Unknown error"}")
+                }
+            }
+        activeJobs[operationId] = job
+        job.invokeOnCompletion { cause ->
+            activeJobs.remove(operationId)
+            // Not after dispose(): no Dart code is left to receive it.
+            if (cause is CancellationException && scope.isActive) callback.onEvent(4, 0.0, null, null)
+        }
+        return operationId
+    }
+
+    private suspend fun copy(
+        sourceUri: String,
+        targetPath: String,
+        callback: ProgressCallback,
+    ) {
+        val output =
+            try {
+                FileOutputStream(targetPath)
+            } catch (e: IOException) {
+                callback.onEvent(2, 0.0, Constants.ERROR_FILE_IO, "Cannot write $targetPath: ${e.message}")
+                return
+            }
+        output.use {
+            val source =
+                try {
+                    FileHelper.openSourceFile(context, sourceUri)
+                } catch (_: FileNotFoundException) {
+                    // The Dart exception adds "Source file not found: ".
+                    callback.onEvent(2, 0.0, Constants.ERROR_FILE_NOT_FOUND, sourceUri)
+                    return
+                } catch (e: SecurityException) {
+                    callback.onEvent(2, 0.0, Constants.ERROR_PERMISSION_DENIED, "Permission denied: ${e.message}")
+                    return
+                } catch (e: IllegalArgumentException) {
+                    callback.onEvent(2, 0.0, Constants.ERROR_INVALID_INPUT, e.message ?: "Invalid file path")
+                    return
+                }
+
+            // In steps of 1%, as the other saves report it.
+            var reported = 0.0
+            try {
+                FileHelper.copyStream(source.inputStream, output, source.totalSize) { progress ->
+                    if (progress - reported >= 0.01 || progress >= 1.0) {
+                        reported = progress
+                        callback.onEvent(1, progress, null, null)
+                    }
+                }
+            } catch (e: IOException) {
+                callback.onEvent(2, 0.0, Constants.ERROR_FILE_IO, "Failed to copy file: ${e.message}")
+                return
+            }
+        }
+        callback.onEvent(3, 1.0, targetPath, null)
+    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Streaming write sessions

@@ -5,11 +5,14 @@
 // They save to Download/fsf_it/<run>/; remove it afterwards with
 //   adb shell content delete --uri content://media/external/file \
 //     --where "\"_data LIKE '%/Download/fsf_it/%'\""
+import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_saver_ffi/file_saver_ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:path_provider/path_provider.dart';
 
 // `flutter test` uninstalls the app afterwards, and files of an uninstalled
 // app are invisible to the next install, so `overwrite` and `skip` could not
@@ -84,6 +87,89 @@ void main() {
 
     expect(error, isA<OpenFailedException>());
     expect((error! as OpenFailedException).message, contains('FileProvider'));
+  });
+
+  // PathLocation with a content:// source, which dart:io can't read: Kotlin
+  // copies it into the file the Dart side claimed.
+  group('saveFile of a content:// URI to a PathLocation', () {
+    late Directory dir;
+
+    setUp(() async {
+      dir = await (await getTemporaryDirectory()).createTemp('fsf_it');
+    });
+
+    tearDown(() => dir.delete(recursive: true));
+
+    Stream<SaveProgress> saveTo(Uri source) => FileSaver.save(
+      input: SaveInput.file(source.toString()),
+      fileType: _text,
+      fileName: 'copy',
+      saveLocation: PathLocation(dir.path),
+      subDir: 'out',
+    );
+
+    testWidgets('copies the MediaStore file into the directory', (_) async {
+      final source = await _saveText('content_source', 'from MediaStore');
+
+      final events = await saveTo(source).toList();
+
+      final uri = (events.last as SaveProgressComplete).uri;
+      expect(uri.toFilePath(), '${dir.path}/out/copy.txt');
+      expect(await File.fromUri(uri).readAsString(), 'from MediaStore');
+      expect(dir.listSync(recursive: true).whereType<File>(), hasLength(1));
+    });
+
+    testWidgets('cancelling stops the copy and deletes the partial file', (
+      _,
+    ) async {
+      final source = await FileSaver.saveAsync(
+        input: SaveInput.bytes(Uint8List(64 * 1024 * 1024)),
+        fileType: _text,
+        fileName: 'content_large',
+        saveLocation: AndroidSaveLocation.downloads,
+        subDir: _subDir,
+        conflictResolution: ConflictResolution.overwrite,
+      );
+
+      // Cancelled at the first update, before the copy of 64 MB can end.
+      final cancelled = Completer<void>();
+      final events = <SaveProgress>[];
+      late final StreamSubscription<SaveProgress> subscription;
+      subscription = saveTo(source).listen(
+        (event) {
+          events.add(event);
+          if (event is SaveProgressUpdate && !cancelled.isCompleted) {
+            cancelled.complete(subscription.cancel());
+          }
+        },
+        onDone: () {
+          if (cancelled.isCompleted) return;
+          cancelled.completeError(StateError('Ended with no update: $events'));
+        },
+      );
+      await cancelled.future;
+
+      expect(events.whereType<SaveProgressComplete>(), isEmpty);
+      expect(dir.listSync(recursive: true).whereType<File>(), isEmpty);
+    });
+
+    testWidgets('a missing content URI throws SourceFileNotFoundException', (
+      _,
+    ) async {
+      final source = await _saveText('content_missing', 'x');
+
+      await expectLater(
+        saveTo(Uri.parse('${source}999')).last,
+        completion(
+          isA<SaveProgressError>().having(
+            (e) => e.exception,
+            'exception',
+            isA<SourceFileNotFoundException>(),
+          ),
+        ),
+      );
+      expect(dir.listSync(recursive: true).whereType<File>(), isEmpty);
+    });
   });
 
   testWidgets('openWrite with skip returns null for an existing file', (

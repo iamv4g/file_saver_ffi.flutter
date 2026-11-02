@@ -140,6 +140,8 @@ class FileSaverAndroid extends FileSaverPlatform {
         baseName: fileName,
         ext: fileType.ext,
         conflictResolution: conflictResolution,
+        // dart:io can't open a content:// URI: the ContentResolver reads it.
+        copySource: filePath.startsWith('content:') ? _copyToPath : null,
       );
     }
 
@@ -698,6 +700,73 @@ class FileSaverAndroid extends FileSaverPlatform {
       rethrow;
     }
     return completer.future;
+  }
+
+  /// Copies [source] into the file at [path] in Kotlin, which reads a
+  /// `content://` URI through the `ContentResolver`. See [SourceCopier].
+  ({Future<void> done, void Function() cancel}) _copyToPath(
+    String source,
+    String path,
+    void Function(double progress) onProgress,
+  ) {
+    final done = Completer<void>();
+    late final bindings.ProgressCallback callback;
+    callback = bindings.ProgressCallback.implement(
+      bindings.$ProgressCallback(
+        onEvent: (eventType, progress, data, message) {
+          final dataStr = data?.toDartString(releaseOriginal: true);
+          final messageStr = message?.toDartString(releaseOriginal: true);
+          if (done.isCompleted) return;
+          switch (eventType) {
+            case 1:
+              onProgress(progress);
+              return;
+            case 3 || 4:
+              done.complete();
+            case 2:
+              done.completeError(
+                FileSaverException.fromErrorResult(
+                  dataStr ?? 'UNKNOWN',
+                  messageStr ?? '',
+                ),
+              );
+            default:
+              return;
+          }
+          // Defer release out of [callback]'s own stack.
+          Future.microtask(callback.release);
+        },
+        onEvent$async: true,
+      ),
+    );
+
+    final int operationId;
+    try {
+      operationId = using(
+        (arena) => _fileSaver.copyToPath(
+          source.toJString()..releasedBy(arena),
+          path.toJString()..releasedBy(arena),
+          callback,
+        ),
+      );
+    } catch (_) {
+      callback.release();
+      rethrow;
+    }
+
+    return (
+      done: done.future,
+      cancel: () {
+        _fileSaver.cancelOperation(operationId);
+        // Kotlin opens [path] before it reads the source, so once a copy
+        // stuck in the provider is given up on, it can't recreate the file.
+        Future.delayed(const Duration(seconds: 1), () {
+          if (done.isCompleted) return;
+          done.complete();
+          callback.release();
+        });
+      },
+    );
   }
 
   /// Returns the native index of [saveLocation], and that of

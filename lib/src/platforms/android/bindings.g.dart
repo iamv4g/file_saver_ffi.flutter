@@ -782,6 +782,56 @@ extension FileSaver$$Methods on FileSaver {
     ).long;
   }
 
+  static final _id_copyToPath = FileSaver._class.instanceMethodId(
+    r'copyToPath',
+    r'(Ljava/lang/String;Ljava/lang/String;Lcom/iamv4g/file_saver_ffi/models/ProgressCallback;)J',
+  );
+
+  static final _copyToPath =
+      jni$_.ProtectedJniExtensions.lookup<
+            jni$_.NativeFunction<
+              jni$_.JniResult Function(
+                jni$_.Pointer<jni$_.Void>,
+                jni$_.JMethodIDPtr,
+                jni$_.VarArgs<
+                  (
+                    jni$_.Pointer<jni$_.Void>,
+                    jni$_.Pointer<jni$_.Void>,
+                    jni$_.Pointer<jni$_.Void>,
+                  )
+                >,
+              )
+            >
+          >('globalEnv_CallLongMethod')
+          .asFunction<
+            jni$_.JniResult Function(
+              jni$_.Pointer<jni$_.Void>,
+              jni$_.JMethodIDPtr,
+              jni$_.Pointer<jni$_.Void>,
+              jni$_.Pointer<jni$_.Void>,
+              jni$_.Pointer<jni$_.Void>,
+            )
+          >();
+
+  /// from: `public fun copyToPath(sourceUri: kotlin.String, targetPath: kotlin.String, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Long`
+  core$_.int copyToPath(
+    jni$_.JString string,
+    jni$_.JString string1,
+    ProgressCallback progressCallback,
+  ) {
+    final _$$selfRef = reference;
+    final _$string = string.reference;
+    final _$string1 = string1.reference;
+    final _$progressCallback = progressCallback.reference;
+    return _copyToPath(
+      _$$selfRef.pointer,
+      _id_copyToPath.pointer,
+      _$string.pointer,
+      _$string1.pointer,
+      _$progressCallback.pointer,
+    ).long;
+  }
+
   static final _id_openWriteSession = FileSaver._class.instanceMethodId(
     r'openWriteSession',
     r'(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;IJLcom/iamv4g/file_saver_ffi/models/ProgressCallback;)V',

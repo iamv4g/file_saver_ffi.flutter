@@ -18,6 +18,20 @@ import 'io_file_saver_sink.dart';
 /// The size of the chunks [SaveBytesInput] bytes are written in.
 const int _chunkSize = 1024 * 1024;
 
+/// Copies a source that `dart:io` can't read, such as an Android `content://`
+/// URI, into the existing file at `path`, calling `onProgress` with the
+/// fraction copied.
+///
+/// `done` completes when the copy has ended, or fails with a
+/// [FileSaverException]. After `cancel` it completes once the copy no longer
+/// writes to `path`.
+typedef SourceCopier =
+    ({Future<void> done, void Function() cancel}) Function(
+      String source,
+      String path,
+      void Function(double progress) onProgress,
+    );
+
 /// Saves with `dart:io` into a directory: [PathLocation] on every IO platform,
 /// and every save on Windows and Linux.
 ///
@@ -47,6 +61,9 @@ abstract final class PathLocationWriter {
     conflictResolution: conflictResolution,
   );
 
+  /// Saves the file at [filePath], a path or `file://` URI. With
+  /// [copySource], the source is copied by it instead, for a source `dart:io`
+  /// can't read.
   static Stream<SaveProgress> saveFile({
     required String filePath,
     required String dirPath,
@@ -54,12 +71,14 @@ abstract final class PathLocationWriter {
     required String baseName,
     required String ext,
     required ConflictResolution conflictResolution,
+    SourceCopier? copySource,
   }) => save(
     input: SaveFileInput(filePath),
     directory: _directory(dirPath, subDir),
     baseName: baseName,
     ext: ext,
     conflictResolution: conflictResolution,
+    copySource: copySource,
   );
 
   static Stream<SaveProgress> saveNetwork({
@@ -103,6 +122,9 @@ abstract final class PathLocationWriter {
   /// returns. The input must be validated already; the file name is checked
   /// here, with [checkFileName].
   ///
+  /// A [SaveFileInput] is copied by [copySource] when it is given, and read
+  /// with `dart:io` otherwise.
+  ///
   /// Emits [SaveProgressStarted], [SaveProgressUpdate]s and then
   /// [SaveProgressComplete] or [SaveProgressError]. Once the subscription is
   /// cancelled nothing more is emitted, and the cancel completes when the
@@ -113,7 +135,9 @@ abstract final class PathLocationWriter {
     required String baseName,
     required String ext,
     required ConflictResolution conflictResolution,
+    SourceCopier? copySource,
   }) {
+    assert(copySource == null || input is SaveFileInput);
     checkFileName('$baseName.$ext');
     return Stream.multi((controller) {
       final cancellation = _Cancellation();
@@ -124,7 +148,9 @@ abstract final class PathLocationWriter {
 
       Future<void> run() async {
         try {
-          if (input case SaveFileInput(:final filePath)) {
+          if (input case SaveFileInput(
+            :final filePath,
+          ) when copySource == null) {
             final path = _sourcePath(filePath);
             if (!await File(path).exists()) {
               throw SourceFileNotFoundException(path);
@@ -146,16 +172,28 @@ abstract final class PathLocationWriter {
           // the resolver claimed.
           final session = await IOWriteSession.open(resolved);
           try {
-            final source = await _open(input, cancellation);
-            if (!cancellation.isCancelled) {
-              await _pipe(source.data, session, cancellation, (written) {
-                if (source.length case final length? when length > 0) {
-                  emit(SaveProgressUpdate(written / length));
-                }
-              });
+            if (input case SaveFileInput(
+              :final filePath,
+            ) when copySource != null) {
+              await _copy(
+                copySource,
+                filePath,
+                session,
+                cancellation,
+                (progress) => emit(SaveProgressUpdate(progress)),
+              );
             } else {
-              // Closes the connection of a download that won't be read.
-              await source.data.listen(null).cancel();
+              final source = await _open(input, cancellation);
+              if (!cancellation.isCancelled) {
+                await _pipe(source.data, session, cancellation, (written) {
+                  if (source.length case final length? when length > 0) {
+                    emit(SaveProgressUpdate(written / length));
+                  }
+                });
+              } else {
+                // Closes the connection of a download that won't be read.
+                await source.data.listen(null).cancel();
+              }
             }
             if (cancellation.isCancelled) {
               await session.cancel();
@@ -303,6 +341,26 @@ abstract final class PathLocationWriter {
         };
     };
     return controller.stream;
+  }
+
+  /// Copies [source] into the file of [session] with [copySource], unless
+  /// the save is cancelled already. Cancelling the save cancels the copy, and
+  /// this completes once the copy has stopped.
+  static Future<void> _copy(
+    SourceCopier copySource,
+    String source,
+    IOWriteSession session,
+    _Cancellation cancellation,
+    void Function(double progress) onProgress,
+  ) async {
+    if (cancellation.isCancelled) return;
+    final copy = copySource(source, session.path, onProgress);
+    cancellation.onCancel = copy.cancel;
+    try {
+      await copy.done;
+    } finally {
+      cancellation.onCancel = null;
+    }
   }
 
   /// Writes [source] to [session] one chunk at a time, pausing [source] while

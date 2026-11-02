@@ -250,6 +250,148 @@ void main() {
     });
   });
 
+  group('saveFile with copySource', () {
+    Stream<SaveProgress> saveFile(
+      _FakeCopier copier, {
+      ConflictResolution conflictResolution = ConflictResolution.autoRename,
+    }) => PathLocationWriter.saveFile(
+      filePath: 'content://media/external/file/7',
+      dirPath: tmp.path,
+      subDir: 'out',
+      baseName: 'copy',
+      ext: 'bin',
+      conflictResolution: conflictResolution,
+      copySource: copier.copy,
+    );
+
+    test(
+      'copies into the file it claimed, with the copier\'s progress',
+      () async {
+        final copier = _FakeCopier();
+        final events = <SaveProgress>[];
+        final done = saveFile(copier).forEach(events.add);
+
+        await copier.started.future;
+        expect(copier.source, 'content://media/external/file/7');
+        expect(
+          p.equals(copier.path!, p.join(tmp.path, 'out', 'copy.bin')),
+          isTrue,
+        );
+        await File(copier.path!).writeAsBytes(bytes);
+        copier.onProgress!(0.5);
+        copier.onProgress!(1);
+        copier.done.complete();
+        await done;
+
+        expect(events[0], isA<SaveProgressStarted>());
+        expect(events.whereType<SaveProgressUpdate>().map((e) => e.progress), [
+          0.5,
+          1,
+        ]);
+        final uri = (events.last as SaveProgressComplete).uri;
+        expect(p.equals(uri.toFilePath(), copier.path!), isTrue);
+        expect(await File.fromUri(uri).readAsBytes(), bytes);
+      },
+    );
+
+    test('an overwrite copies into a temporary file that replaces the '
+        'original', () async {
+      final original = File(p.join(tmp.path, 'out', 'copy.bin'));
+      await original.create(recursive: true);
+      await original.writeAsString('old');
+      final copier = _FakeCopier();
+      final done = saveFile(
+        copier,
+        conflictResolution: ConflictResolution.overwrite,
+      ).last;
+
+      await copier.started.future;
+      expect(p.equals(copier.path!, original.path), isFalse);
+      expect(p.dirname(copier.path!), p.dirname(original.path));
+      await File(copier.path!).writeAsBytes(bytes);
+      copier.done.complete();
+
+      expect(await done, isA<SaveProgressComplete>());
+      expect(await original.readAsBytes(), bytes);
+      expect(File(copier.path!).existsSync(), isFalse);
+    });
+
+    test('a failed copy emits its exception and deletes the file', () async {
+      final copier = _FakeCopier();
+      final done = saveFile(copier).last;
+
+      await copier.started.future;
+      await File(copier.path!).writeAsBytes(bytes);
+      copier.done.completeError(
+        const SourceFileNotFoundException('content://media/external/file/7'),
+      );
+
+      final event = await done;
+      expect(
+        (event as SaveProgressError).exception,
+        isA<SourceFileNotFoundException>(),
+      );
+      expect(File(copier.path!).existsSync(), isFalse);
+    });
+
+    test('a failed overwrite keeps the original', () async {
+      final original = File(p.join(tmp.path, 'out', 'copy.bin'));
+      await original.create(recursive: true);
+      await original.writeAsString('old');
+      final copier = _FakeCopier();
+      final done = saveFile(
+        copier,
+        conflictResolution: ConflictResolution.overwrite,
+      ).last;
+
+      await copier.started.future;
+      await File(copier.path!).writeAsBytes(bytes);
+      copier.done.completeError(const FileIOException('read failed'));
+
+      expect(await done, isA<SaveProgressError>());
+      expect(await original.readAsString(), 'old');
+      expect(File(copier.path!).existsSync(), isFalse);
+    });
+
+    test('cancelling cancels the copy and completes once it stopped and the '
+        'file is deleted', () async {
+      final copier = _FakeCopier();
+      final events = <SaveProgress>[];
+      final subscription = saveFile(copier).listen(events.add);
+      await copier.started.future;
+      await File(copier.path!).writeAsBytes(bytes);
+
+      var cancelled = false;
+      final cancel = subscription.cancel().then((_) => cancelled = true);
+      await pumpEventQueue();
+      expect(copier.cancelled, isTrue);
+      // Still waiting for the copy to stop.
+      expect(cancelled, isFalse);
+      expect(File(copier.path!).existsSync(), isTrue);
+
+      copier.done.complete();
+      await cancel;
+      expect(File(copier.path!).existsSync(), isFalse);
+      expect(events.whereType<SaveProgressComplete>(), isEmpty);
+    });
+
+    test('skip doesn\'t start a copy', () async {
+      final existing = File(p.join(tmp.path, 'out', 'copy.bin'));
+      await existing.create(recursive: true);
+      await existing.writeAsString('old');
+      final copier = _FakeCopier();
+
+      final event = await saveFile(
+        copier,
+        conflictResolution: ConflictResolution.skip,
+      ).last;
+
+      expect(event, isA<SaveProgressComplete>());
+      expect(copier.started.isCompleted, isFalse);
+      expect(await existing.readAsString(), 'old');
+    });
+  });
+
   group('saveNetwork', () {
     // More than the 64 KiB that `/slow` sends before it stalls.
     final payload = Uint8List.fromList(
@@ -434,4 +576,27 @@ void main() {
       expect(sink, isNull);
     });
   });
+}
+
+/// A [SourceCopier] the test drives: it records the call and ends when the
+/// test completes [done].
+class _FakeCopier {
+  final started = Completer<void>();
+  final done = Completer<void>();
+  String? source;
+  String? path;
+  void Function(double progress)? onProgress;
+  var cancelled = false;
+
+  ({Future<void> done, void Function() cancel}) copy(
+    String source,
+    String path,
+    void Function(double progress) onProgress,
+  ) {
+    this.source = source;
+    this.path = path;
+    this.onProgress = onProgress;
+    started.complete();
+    return (done: done.future, cancel: () => cancelled = true);
+  }
 }
