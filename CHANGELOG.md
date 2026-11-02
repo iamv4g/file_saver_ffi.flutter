@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Added
+
+- `FileSaver.persistDirectory`, `restoreDirectory` and `releaseDirectory` keep access to a picked directory across app restarts, through `dir_picker`. `persistDirectory` returns a token to store; `restoreDirectory` gives the directory back on a later launch, or `null` when access is gone; `releaseDirectory` gives the access up. On iOS and macOS the token is bookmark data, so a stored `PickedDirectoryLocation` now survives a relaunch there too (before, only Android kept access, with `shouldPersist`). Persist the restored location again and store the new token, since a bookmark goes stale when the directory is moved. Not supported on web.
+
 ### Changed
 
 - **iOS:** saving audio or another non-media file to `IosSaveLocation.photos` now throws `InvalidInputException` with every API, as `openWrite` already refused it. Before, `save` and `saveAsync` saved it to Documents without saying so, and `openWrite` threw `UnsupportedFormatException`. Save these files to `IosSaveLocation.documents`.

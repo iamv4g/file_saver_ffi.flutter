@@ -209,6 +209,53 @@ void main() {
     }
   });
 
+  testWidgets('a persisted directory is restored, follows a rename, and '
+      'restores to null once deleted', (_) async {
+    final anchor = await _saveBytes('persist_anchor', _pattern(1));
+    final directory = Directory('${File.fromUri(anchor).parent.path}/persisted')
+      ..createSync();
+
+    final token = await FileSaver.persistDirectory(
+      PickedDirectoryLocation(uri: directory.uri),
+    );
+    expect(token, isNot(directory.uri.toString()), reason: 'a bookmark');
+
+    final restored = await FileSaver.restoreDirectory(token);
+    expect(
+      Directory.fromUri(restored!.uri).resolveSymbolicLinksSync(),
+      directory.resolveSymbolicLinksSync(),
+    );
+    final bytes = _pattern(1000);
+    final savedAs = await FileSaver.saveAsAsync(
+      input: SaveInput.bytes(bytes),
+      fileName: 'restored',
+      fileType: _text,
+      saveLocation: restored,
+    );
+    expect(
+      File.fromUri(savedAs!).parent.resolveSymbolicLinksSync(),
+      directory.resolveSymbolicLinksSync(),
+    );
+    expect(await File.fromUri(savedAs).readAsBytes(), bytes);
+
+    // The bookmark follows the directory, and the restored location can be
+    // persisted again.
+    final moved = directory.renameSync('${directory.path}_moved');
+    final afterMove = await FileSaver.restoreDirectory(token);
+    expect(
+      Directory.fromUri(afterMove!.uri).resolveSymbolicLinksSync(),
+      moved.resolveSymbolicLinksSync(),
+    );
+    final newToken = await FileSaver.persistDirectory(afterMove);
+    await FileSaver.releaseDirectory(token);
+
+    moved.deleteSync(recursive: true);
+    expect(await FileSaver.restoreDirectory(newToken), isNull);
+    await FileSaver.releaseDirectory(newToken);
+
+    expect(await FileSaver.restoreDirectory('not a bookmark'), isNull);
+  });
+
   group('Photos', () {
     // Runs first: its permission dialog grants the access the others use.
     testWidgets('a save cancelled while the permission dialog is open adds '

@@ -22,6 +22,7 @@ device storage, or a user-chosen directory — with real-time progress tracking.
 - 💾 **Original Quality** – Files saved bit-for-bit without compression or metadata loss
 - 📊 **Progress & Cancellation** – Real-time progress tracking with cancellable operations
 - ⚙️ **Conflict Resolution** – Auto-rename, overwrite, skip, or fail on existing files
+- 📂 **Remembered Directories** – Keep access to a user-picked directory across app restarts (Android, iOS, macOS, Windows, Linux)
 
 If you want to say thank you, star us on GitHub or like us on pub.dev.
 
@@ -408,6 +409,27 @@ if (location != null) {
 }
 ```
 
+To use the same directory after the app restarts, store a token from `persistDirectory` and restore it on the next launch. On Android the token keeps a persistable URI permission, on iOS and macOS it holds bookmark data.
+
+```dart
+// After picking:
+prefs.setString('exportDir', await FileSaver.persistDirectory(location));
+
+// On a later launch:
+final token = prefs.getString('exportDir');
+final restored = token == null ? null : await FileSaver.restoreDirectory(token);
+if (restored == null) {
+  // Access is gone (directory deleted, permission revoked): pick again.
+} else {
+  // A bookmark goes stale when the directory moves, so store a fresh token.
+  prefs.setString('exportDir', await FileSaver.persistDirectory(restored));
+}
+
+// When the directory is no longer needed:
+await FileSaver.releaseDirectory(prefs.getString('exportDir')!);
+await prefs.remove('exportDir');
+```
+
 ## API Reference
 
 ### Unified API
@@ -512,6 +534,15 @@ Open system picker to let user choose a folder.
 
 ```dart
 Future<PickedDirectoryLocation?> pickDirectory({bool shouldPersist = true})
+```
+
+#### `persistDirectory` / `restoreDirectory` / `releaseDirectory`
+Keep access to a picked directory across app restarts. Not supported on web.
+
+```dart
+static Future<String> persistDirectory(PickedDirectoryLocation location)
+static Future<PickedDirectoryLocation?> restoreDirectory(String token)
+static Future<void> releaseDirectory(String token)
 ```
 
 #### `canOpenFile`
