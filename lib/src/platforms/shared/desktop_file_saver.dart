@@ -283,7 +283,7 @@ abstract class DesktopFileSaver<L extends SaveLocation>
   /// Resolves the target directory for the save operation.
   ///
   /// - Windows: Uses Known Folder GUIDs via [PathProviderWindows]
-  /// - Linux: Uses XDG Base Directory Specification via `xdg_directories`
+  /// - Linux: Uses the XDG user directories reported by `xdg-user-dir`
   @protected
   Future<String> resolveDirectory(L? saveLocation, String? subDir);
 }
