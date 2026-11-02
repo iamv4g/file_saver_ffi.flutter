@@ -30,55 +30,29 @@ enum FileHelper {
     ) throws {
         let fileHandle = try openForWriting(url)
 
-        if #available(iOS 13.4, *) {
-            // iOS 13.4+ - Use modern write API with error handling
-            defer { try? fileHandle.close() }
+        defer { try? fileHandle.close() }
 
-            var offset = 0
-            let chunkSize = Constants.chunkSize
-            let totalBytes = data.count
+        var offset = 0
+        let chunkSize = Constants.chunkSize
+        let totalBytes = data.count
 
-            while offset < totalBytes {
-                // Check for cancellation before each chunk
-                try cancellationToken?.throwIfCancelled()
+        while offset < totalBytes {
+            // Check for cancellation before each chunk
+            try cancellationToken?.throwIfCancelled()
 
-                let length = min(chunkSize, totalBytes - offset)
-                let chunk = data.subdata(in: offset..<(offset + length))
-                do {
-                    try fileHandle.write(contentsOf: chunk)
-                } catch {
-                    throw ioError(error, url: url)
-                }
-                offset += length
-
-                // Report progress
-                if let onProgress = onProgress, totalBytes > 0 {
-                    let progress = Double(offset) / Double(totalBytes)
-                    onProgress(progress)
-                }
+            let length = min(chunkSize, totalBytes - offset)
+            let chunk = data.subdata(in: offset..<(offset + length))
+            do {
+                try fileHandle.write(contentsOf: chunk)
+            } catch {
+                throw ioError(error, url: url)
             }
-        } else {
-            // iOS 13.0-13.3 fallback - Use legacy write API
-            defer { fileHandle.closeFile() }
+            offset += length
 
-            var offset = 0
-            let chunkSize = Constants.chunkSize
-            let totalBytes = data.count
-
-            while offset < totalBytes {
-                // Check for cancellation before each chunk
-                try cancellationToken?.throwIfCancelled()
-
-                let length = min(chunkSize, totalBytes - offset)
-                let chunk = data.subdata(in: offset..<(offset + length))
-                fileHandle.write(chunk)
-                offset += length
-
-                // Report progress
-                if let onProgress = onProgress, totalBytes > 0 {
-                    let progress = Double(offset) / Double(totalBytes)
-                    onProgress(progress)
-                }
+            // Report progress
+            if let onProgress = onProgress, totalBytes > 0 {
+                let progress = Double(offset) / Double(totalBytes)
+                onProgress(progress)
             }
         }
     }
@@ -163,11 +137,7 @@ enum FileHelper {
         
         /// Closes the file handle and releases security scope if needed
         func close() {
-            if #available(iOS 13.4, *) {
-                try? handle.close()
-            } else {
-                handle.closeFile()
-            }
+            try? handle.close()
             if isSecurityScoped {
                 url.stopAccessingSecurityScopedResource()
             }
@@ -371,54 +341,29 @@ enum FileHelper {
         cancellationToken: CancellationToken? = nil
     ) throws {
         let destHandle = try openForWriting(destination)
-        defer {
-            if #available(iOS 13.4, *) {
-                try? destHandle.close()
-            } else {
-                destHandle.closeFile()
-            }
-        }
+        defer { try? destHandle.close() }
 
         var bytesWritten: Int64 = 0
         let chunkSize = Constants.chunkSize
 
-        if #available(iOS 13.4, *) {
-            while true {
-                // Check for cancellation before each chunk
-                try cancellationToken?.throwIfCancelled()
+        while true {
+            // Check for cancellation before each chunk
+            try cancellationToken?.throwIfCancelled()
 
-                guard let data = try source.read(upToCount: chunkSize), !data.isEmpty else {
-                    break
-                }
-
-                do {
-                    try destHandle.write(contentsOf: data)
-                } catch {
-                    throw ioError(error, url: destination)
-                }
-                bytesWritten += Int64(data.count)
-
-                if let onProgress = onProgress, totalSize > 0 {
-                    let progress = Double(bytesWritten) / Double(totalSize)
-                    onProgress(min(progress, 1.0))
-                }
+            guard let data = try source.read(upToCount: chunkSize), !data.isEmpty else {
+                break
             }
-        } else {
-            // Legacy API fallback
-            while true {
-                // Check for cancellation before each chunk
-                try cancellationToken?.throwIfCancelled()
 
-                let data = source.readData(ofLength: chunkSize)
-                if data.isEmpty { break }
+            do {
+                try destHandle.write(contentsOf: data)
+            } catch {
+                throw ioError(error, url: destination)
+            }
+            bytesWritten += Int64(data.count)
 
-                destHandle.write(data)
-                bytesWritten += Int64(data.count)
-
-                if let onProgress = onProgress, totalSize > 0 {
-                    let progress = Double(bytesWritten) / Double(totalSize)
-                    onProgress(min(progress, 1.0))
-                }
+            if let onProgress = onProgress, totalSize > 0 {
+                let progress = Double(bytesWritten) / Double(totalSize)
+                onProgress(min(progress, 1.0))
             }
         }
     }

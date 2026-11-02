@@ -50,6 +50,10 @@ class FileSaver {
   /// - iOS: [IosSaveLocation.documents]
   /// - macOS / Windows / Linux: user's Downloads folder
   /// - Web: ignored (browser controls the destination)
+  ///
+  /// A location of another platform, such as [IosSaveLocation.photos] on
+  /// macOS, throws [InvalidInputException], and so does a
+  /// [PickedDirectoryLocation]: pass it to [saveAs].
   static Stream<SaveProgress> save({
     required SaveInput input,
     required FileType fileType,
@@ -236,6 +240,10 @@ class FileSaver {
   ///
   /// [totalSize] is optional. When provided, [FileSaverSink.progress] emits
   /// per-chunk progress (0.0–1.0). [FileSaverSink.bytesWritten] always emits.
+  ///
+  /// [saveLocation] works as in [save]: a location of another platform, or a
+  /// [PickedDirectoryLocation] (pass it to [openWriteAs]), throws
+  /// [InvalidInputException].
   ///
   /// Example:
   /// ```dart

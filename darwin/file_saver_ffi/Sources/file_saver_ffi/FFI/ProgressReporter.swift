@@ -24,55 +24,101 @@ import Foundation
 ///
 /// **Note**: `sendProgress` clamps to 0.0–1.0 and sends `Double`.
 /// `sendBytes` sends raw `Int64` — Dart reads it as `(msg[1] as num).toInt()`.
+///
+/// Progress is throttled: a value is sent when it is 1.0, has grown by at least
+/// 1% since the last one sent, or has grown and 100 ms have passed. A network
+/// download reports thousands of values per file.
+///
+/// Every method can be called from any thread. Nothing is sent after a
+/// terminal event (error, success, cancelled).
 final class ProgressReporter {
-    private let port: Int64
-    private var isClosed = false
+    /// Posts a message to a Dart port. Tests replace `FileSaver_PostCObject_DL`.
+    typealias Post = (Int64, UnsafeMutablePointer<Dart_CObject>) -> Bool
 
-    init(port: Int64) {
+    static let minProgressStep = 0.01
+    static let minProgressInterval: TimeInterval = 0.1
+
+    private let port: Int64
+    private let post: Post
+    private let now: () -> TimeInterval
+    private let lock = NSLock()
+    private var isClosed = false
+    private var lastProgress = -1.0
+    private var lastProgressTime: TimeInterval = 0
+
+    init(
+        port: Int64,
+        post: @escaping Post = { FileSaver_PostCObject_DL($0, $1) },
+        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+    ) {
         self.port = port
+        self.post = post
+        self.now = now
     }
 
     /// Send "started" event
     func sendStarted() {
-        guard !isClosed else { return }
-        sendArray([createInt(0)])
+        send { [createInt(0)] }
     }
 
-    /// Send progress update. Value is clamped to 0.0–1.0 and sent as `Double`.
+    /// Send progress update. Value is clamped to 0.0–1.0, throttled, and sent as `Double`.
     /// Use `sendBytes` instead for write-session chunk/flush ACKs.
     func sendProgress(_ value: Double) {
-        guard !isClosed else { return }
         let clampedValue = max(0.0, min(1.0, value))
-        sendArray([createInt(1), createDouble(clampedValue)])
+        send(when: { self.shouldSendProgress(clampedValue) }) {
+            [createInt(1), createDouble(clampedValue)]
+        }
     }
 
     /// Send error event
     func sendError(code: String, message: String) {
-        guard !isClosed else { return }
-        sendArray([createInt(2), createString(code), createString(message)])
-        isClosed = true
+        send(closing: true) { [createInt(2), createString(code), createString(message)] }
     }
 
     /// Send success event. For `save()`/`saveAs()`: `uri` is the file URI.
     /// For write sessions: `uri` is the sessionId string (open) or file URI (close).
     func sendSuccess(uri: String) {
-        guard !isClosed else { return }
-        sendArray([createInt(3), createString(uri)])
-        isClosed = true
+        send(closing: true) { [createInt(3), createString(uri)] }
     }
 
     /// Send chunk/flush ACK for streaming write sessions. Sends cumulative `bytesWritten` as `Int64`.
     /// Dart reads this as `(msg[1] as num).toInt()`.
     func sendBytes(_ bytes: Int64) {
-        guard !isClosed else { return }
-        sendArray([createInt(1), createInt(bytes)])
+        send { [createInt(1), createInt(bytes)] }
     }
 
     /// Send cancelled event
     func sendCancelled() {
-        guard !isClosed else { return }
-        sendArray([createInt(4)])
-        isClosed = true
+        send(closing: true) { [createInt(4)] }
+    }
+
+    /// Sends the message `elements` builds unless a terminal event was sent or
+    /// `condition` is false. Holding the lock while posting keeps messages in
+    /// the order the calls took it, and nothing after the terminal one.
+    private func send(
+        closing: Bool = false,
+        when condition: () -> Bool = { true },
+        _ elements: () -> [UnsafeMutablePointer<Dart_CObject>]
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !isClosed, condition() else { return }
+        if closing { isClosed = true }
+        sendArray(elements())
+    }
+
+    /// Called with the lock held.
+    private func shouldSendProgress(_ value: Double) -> Bool {
+        let time = now()
+        let send =
+            value >= 1.0 && lastProgress < 1.0
+            || value - lastProgress >= Self.minProgressStep
+            || value > lastProgress && time - lastProgressTime >= Self.minProgressInterval
+        if send {
+            lastProgress = value
+            lastProgressTime = time
+        }
+        return send
     }
 
     // MARK: - Private helpers
@@ -93,7 +139,7 @@ final class ProgressReporter {
         arrayObject.value.as_array.values = arrayPtr
 
         // Send to Dart
-        _ = FileSaver_PostCObject_DL(port, &arrayObject)
+        _ = withUnsafeMutablePointer(to: &arrayObject) { post(port, $0) }
 
         // Clean up elements
         for element in elements {
@@ -117,9 +163,12 @@ final class ProgressReporter {
 
     private func createString(_ value: String) -> UnsafeMutablePointer<Dart_CObject> {
         let obj = UnsafeMutablePointer<Dart_CObject>.allocate(capacity: 1)
-        obj.pointee.type = Dart_CObject_kString
         if let cString = strdup(value) {
+            obj.pointee.type = Dart_CObject_kString
             obj.pointee.value.as_string = UnsafePointer(cString)
+        } else {
+            // Out of memory: Dart receives null.
+            obj.pointee.type = Dart_CObject_kNull
         }
         return obj
     }

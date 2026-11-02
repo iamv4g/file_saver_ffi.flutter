@@ -14,7 +14,7 @@ import '../../helpers/test_http_server.dart';
 
 /// Resolves every [SaveLocation] to a temporary directory so the shared
 /// Windows/Linux logic can run on any host.
-class _TestDesktopFileSaver extends DesktopFileSaver {
+class _TestDesktopFileSaver extends DesktopFileSaver<LinuxSaveLocation> {
   _TestDesktopFileSaver(this.baseDir);
 
   final String baseDir;
@@ -25,6 +25,9 @@ class _TestDesktopFileSaver extends DesktopFileSaver {
   /// Thrown by [launchFile] when set.
   Object? launchError;
 
+  /// Locations passed to [resolveDirectory], in call order.
+  final resolvedLocations = <LinuxSaveLocation?>[];
+
   @override
   Future<void> launchFile(String path) async {
     launchedPaths.add(path);
@@ -33,9 +36,10 @@ class _TestDesktopFileSaver extends DesktopFileSaver {
 
   @override
   Future<String> resolveDirectory(
-    SaveLocation? saveLocation,
+    LinuxSaveLocation? saveLocation,
     String? subDir,
   ) async {
+    resolvedLocations.add(saveLocation);
     final dir = subDir != null ? p.join(baseDir, subDir) : baseDir;
     await Directory(dir).create(recursive: true);
     return dir;
@@ -340,6 +344,104 @@ void main() {
       expect(File(inTmp('stream.bin')).existsSync(), isFalse);
       await expectLater(sink.result, throwsA(isA<CancelledException>()));
       expect(() => sink.add(bytes), throwsStateError);
+    });
+  });
+
+  group('saveLocation', () {
+    const others = <SaveLocation>[
+      AndroidSaveLocation.downloads,
+      IosSaveLocation.photos,
+      MacosSaveLocation.downloads,
+      WindowsSaveLocation.documents,
+    ];
+
+    test('passes its own platform\'s location, or null', () async {
+      await saver
+          .saveBytes(
+            fileBytes: bytes,
+            fileName: 'a',
+            fileType: fileType,
+            saveLocation: LinuxSaveLocation.music,
+          )
+          .drain<void>();
+      await saver
+          .saveBytes(fileBytes: bytes, fileName: 'b', fileType: fileType)
+          .drain<void>();
+
+      expect(saver.resolvedLocations, [LinuxSaveLocation.music, null]);
+    });
+
+    test('throws InvalidInputException synchronously for another '
+        'platform\'s location', () {
+      for (final location in others) {
+        expect(
+          () => saver.saveBytes(
+            fileBytes: bytes,
+            fileName: 'a',
+            fileType: fileType,
+            saveLocation: location,
+          ),
+          throwsA(
+            isA<InvalidInputException>().having(
+              (e) => e.message,
+              'message',
+              allOf(contains('$location'), contains('LinuxSaveLocation')),
+            ),
+          ),
+        );
+        expect(
+          () => saver.saveFile(
+            filePath: inTmp('missing.bin'),
+            fileName: 'a',
+            fileType: fileType,
+            saveLocation: location,
+          ),
+          throwsA(isA<InvalidInputException>()),
+        );
+        expect(
+          () => saver.saveNetwork(
+            url: 'https://example.com/a.bin',
+            fileName: 'a',
+            fileType: fileType,
+            saveLocation: location,
+          ),
+          throwsA(isA<InvalidInputException>()),
+        );
+      }
+      expect(saver.resolvedLocations, isEmpty);
+    });
+
+    test('openWrite fails with InvalidInputException for another '
+        'platform\'s location', () async {
+      for (final location in others) {
+        await expectLater(
+          saver.openWrite(
+            fileName: 'a',
+            fileType: fileType,
+            saveLocation: location,
+          ),
+          throwsA(isA<InvalidInputException>()),
+        );
+      }
+      expect(Directory(tmp.path).listSync(), isEmpty);
+    });
+
+    test('a PickedDirectoryLocation points to saveAs', () {
+      expect(
+        () => saver.saveBytes(
+          fileBytes: bytes,
+          fileName: 'a',
+          fileType: fileType,
+          saveLocation: PickedDirectoryLocation(uri: Uri.directory(tmp.path)),
+        ),
+        throwsA(
+          isA<InvalidInputException>().having(
+            (e) => e.message,
+            'message',
+            contains('saveAs'),
+          ),
+        ),
+      );
     });
   });
 

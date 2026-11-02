@@ -107,7 +107,8 @@ typedef bool (*Dart_PostCObject_Type)(Dart_Port port_id, Dart_CObject* message);
  * Must be called before using FileSaver_PostCObject_DL.
  *
  * @param data Pointer from NativeApi.initializeApiDLData
- * @return 0 on success, -1 on failure
+ * @return 0 on success, -1 if the VM's Dart API DL major version isn't 2 or
+ *         it has no Dart_PostCObject
  */
 intptr_t FileSaver_InitializeApiDL(void* data);
 

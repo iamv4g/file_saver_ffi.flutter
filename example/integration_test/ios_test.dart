@@ -9,6 +9,7 @@
 // delete them in the Photos app.
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_saver_ffi/file_saver_ffi.dart';
@@ -37,6 +38,22 @@ Future<Uri> _saveToPhotos(
   saveLocation: IosSaveLocation.photos,
   subDir: album,
   conflictResolution: conflictResolution,
+);
+
+/// [length] bytes that differ from one position to the next.
+Uint8List _pattern(int length) =>
+    Uint8List.fromList(List.generate(length, (i) => i * 7 % 251));
+
+Future<Uri> _saveBytes(
+  String name,
+  Uint8List bytes, {
+  SaveLocation? saveLocation = IosSaveLocation.documents,
+}) => FileSaver.saveAsync(
+  input: SaveInput.bytes(bytes),
+  fileName: name,
+  fileType: _text,
+  saveLocation: saveLocation,
+  subDir: _subDir,
 );
 
 Future<FileSaverSink?> _openSession(
@@ -109,6 +126,88 @@ void main() {
 
     expect(written, 64 * chunk.length);
   }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('saveBytes, saveAs and openWrite write exactly the bytes '
+      'passed', (_) async {
+    final bytes = _pattern(3 * 1024 * 1024 + 17);
+
+    final saved = await _saveBytes('bytes', bytes);
+    expect(await File.fromUri(saved).readAsBytes(), bytes);
+
+    final savedAs = await FileSaver.saveAsAsync(
+      input: SaveInput.bytes(bytes),
+      fileName: 'bytes_as',
+      fileType: _text,
+      saveLocation: PickedDirectoryLocation(
+        uri: File.fromUri(saved).parent.uri,
+      ),
+    );
+    expect(await File.fromUri(savedAs!).readAsBytes(), bytes);
+
+    final sink = (await _openSession('chunks'))!;
+    for (var offset = 0; offset < bytes.length; offset += 100000) {
+      sink.add(bytes.sublist(offset, (offset + 100000).clamp(0, bytes.length)));
+    }
+    await sink.close();
+    expect(await File.fromUri(await sink.result).readAsBytes(), bytes);
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('network progress is sent in steps of about 1%', (_) async {
+    final body = _pattern(32 * 1024 * 1024);
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((request) async {
+      request.response.contentLength = body.length;
+      for (var offset = 0; offset < body.length; offset += 16 * 1024) {
+        request.response.add(body.sublist(offset, offset + 16 * 1024));
+      }
+      await request.response.close();
+    });
+
+    final progress = <double>[];
+    final uri = await FileSaver.saveAsync(
+      input: SaveInput.network(url: 'http://127.0.0.1:${server.port}/body.bin'),
+      fileName: 'network',
+      fileType: const CustomFileType(
+        ext: 'bin',
+        mimeType: 'application/octet-stream',
+      ),
+      saveLocation: IosSaveLocation.documents,
+      subDir: _subDir,
+      onProgress: progress.add,
+    );
+
+    expect(await File.fromUri(uri).length(), body.length);
+    expect(progress.last, 1.0);
+    // At most 100 steps of 1%, plus one per 100 ms of the download.
+    expect(progress.length, lessThan(150), reason: '$progress');
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('a location of another platform throws InvalidInputException', (
+    _,
+  ) async {
+    final bytes = _pattern(16);
+    for (final location in <SaveLocation>[
+      MacosSaveLocation.pictures,
+      AndroidSaveLocation.downloads,
+      PickedDirectoryLocation(uri: Uri.directory(Directory.systemTemp.path)),
+    ]) {
+      await expectLater(
+        () => _saveBytes('other_location', bytes, saveLocation: location),
+        throwsA(isA<InvalidInputException>()),
+        reason: '$location',
+      );
+      await expectLater(
+        FileSaver.openWrite(
+          fileName: 'other_location',
+          fileType: _text,
+          saveLocation: location,
+        ),
+        throwsA(isA<InvalidInputException>()),
+        reason: '$location',
+      );
+    }
+  });
 
   group('Photos', () {
     // Runs first: its permission dialog grants the access the others use.

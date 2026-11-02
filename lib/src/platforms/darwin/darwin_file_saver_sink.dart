@@ -33,12 +33,10 @@ class _DarwinWriteSession implements WriteSession {
   @override
   Future<int> write(List<int> data) async {
     final message = await _call((port) {
-      // Swift copies the buffer before returning, so the arena can be freed.
-      using((arena) {
-        final dataPtr = arena<Uint8>(data.length);
-        dataPtr.asTypedList(data.length).setAll(0, data);
-        _fileSaver.writeChunk(_sessionId, dataPtr, data.length, port);
-      });
+      // Swift takes ownership of the buffer and frees it once written.
+      final dataPtr = malloc<Uint8>(data.length);
+      dataPtr.asTypedList(data.length).setAll(0, data);
+      _fileSaver.writeChunk(_sessionId, dataPtr, data.length, port);
     });
     return (message[1] as num).toInt();
   }

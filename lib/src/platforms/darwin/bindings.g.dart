@@ -19,10 +19,11 @@ class FileSaverFFI {
   ) : _lookup = lookup;
 
   /// Initialize Dart API for NativePort communication.
-  /// Must be called before using file_saver_save_bytes.
+  /// Must be called before any other function.
   ///
   /// @param data Pointer from NativeApi.initializeApiDLData
-  /// @return 0 on success, -1 on failure
+  /// @return 0 on success, -1 if the Dart API DL major version isn't 2 or
+  /// Dart_PostCObject is missing
   int initDartApiDl(ffi.Pointer<ffi.Void> data) {
     return _initDartApiDl(data);
   }
@@ -31,29 +32,8 @@ class FileSaverFFI {
       _lookup<ffi.NativeFunction<ffi.IntPtr Function(ffi.Pointer<ffi.Void>)>>(
         'file_saver_init_dart_api_dl',
       );
-  late final _initDartApiDl =
-      _initDartApiDlPtr.asFunction<int Function(ffi.Pointer<ffi.Void>)>();
-
-  ffi.Pointer<ffi.Void> init() {
-    return _init();
-  }
-
-  late final _initPtr =
-      _lookup<ffi.NativeFunction<ffi.Pointer<ffi.Void> Function()>>(
-        'file_saver_init',
-      );
-  late final _init = _initPtr.asFunction<ffi.Pointer<ffi.Void> Function()>();
-
-  void dispose(ffi.Pointer<ffi.Void> instance) {
-    return _dispose(instance);
-  }
-
-  late final _disposePtr =
-      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
-        'file_saver_dispose',
-      );
-  late final _dispose =
-      _disposePtr.asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+  late final _initDartApiDl = _initDartApiDlPtr
+      .asFunction<int Function(ffi.Pointer<ffi.Void>)>();
 
   /// Cancel an ongoing save operation.
   ///
@@ -77,8 +57,8 @@ class FileSaverFFI {
   /// - Success:    [3, fileUri]
   /// - Cancelled:  [4]
   ///
-  /// @param instance FileSaver instance from file_saver_init
-  /// @param fileData Byte array of file content
+  /// @param fileData Byte array of file content, allocated with malloc. The
+  /// function takes ownership and frees it with free().
   /// @param fileDataLength Length of fileData
   /// @param baseFileName File name without extension
   /// @param extension File extension without dot
@@ -89,7 +69,6 @@ class FileSaverFFI {
   /// @param native_port Dart NativePort for progress reporting
   /// @return Token ID for cancellation
   int saveBytes(
-    ffi.Pointer<ffi.Void> instance,
     ffi.Pointer<ffi.Uint8> fileData,
     int fileDataLength,
     ffi.Pointer<ffi.Char> baseFileName,
@@ -101,7 +80,6 @@ class FileSaverFFI {
     int native_port,
   ) {
     return _saveBytes(
-      instance,
       fileData,
       fileDataLength,
       baseFileName,
@@ -114,38 +92,36 @@ class FileSaverFFI {
     );
   }
 
-  late final _saveBytesPtr = _lookup<
-    ffi.NativeFunction<
-      ffi.Uint64 Function(
-        ffi.Pointer<ffi.Void>,
-        ffi.Pointer<ffi.Uint8>,
-        ffi.Int64,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Int32,
-        ffi.Pointer<ffi.Char>,
-        ffi.Int32,
-        ffi.Int64,
-      )
-    >
-  >('file_saver_save_bytes');
-  late final _saveBytes =
-      _saveBytesPtr
-          .asFunction<
-            int Function(
-              ffi.Pointer<ffi.Void>,
-              ffi.Pointer<ffi.Uint8>,
-              int,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              int,
-              ffi.Pointer<ffi.Char>,
-              int,
-              int,
-            )
-          >();
+  late final _saveBytesPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Uint64 Function(
+            ffi.Pointer<ffi.Uint8>,
+            ffi.Int64,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Int64,
+          )
+        >
+      >('file_saver_save_bytes');
+  late final _saveBytes = _saveBytesPtr
+      .asFunction<
+        int Function(
+          ffi.Pointer<ffi.Uint8>,
+          int,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          int,
+          ffi.Pointer<ffi.Char>,
+          int,
+          int,
+        )
+      >();
 
   /// Save file from source path asynchronously with progress reporting via
   /// NativePort.
@@ -161,7 +137,6 @@ class FileSaverFFI {
   /// - Success:    [3, fileUri]
   /// - Cancelled:  [4]
   ///
-  /// @param instance FileSaver instance from file_saver_init
   /// @param filePath Source file path (file:// URI)
   /// @param baseFileName Target file name without extension
   /// @param extension File extension without dot
@@ -172,7 +147,6 @@ class FileSaverFFI {
   /// @param native_port Dart NativePort for progress reporting
   /// @return Token ID for cancellation
   int saveFile(
-    ffi.Pointer<ffi.Void> instance,
     ffi.Pointer<ffi.Char> filePath,
     ffi.Pointer<ffi.Char> baseFileName,
     ffi.Pointer<ffi.Char> extension,
@@ -183,7 +157,6 @@ class FileSaverFFI {
     int native_port,
   ) {
     return _saveFile(
-      instance,
       filePath,
       baseFileName,
       extension,
@@ -195,36 +168,34 @@ class FileSaverFFI {
     );
   }
 
-  late final _saveFilePtr = _lookup<
-    ffi.NativeFunction<
-      ffi.Uint64 Function(
-        ffi.Pointer<ffi.Void>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Int32,
-        ffi.Pointer<ffi.Char>,
-        ffi.Int32,
-        ffi.Int64,
-      )
-    >
-  >('file_saver_save_file');
-  late final _saveFile =
-      _saveFilePtr
-          .asFunction<
-            int Function(
-              ffi.Pointer<ffi.Void>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              int,
-              ffi.Pointer<ffi.Char>,
-              int,
-              int,
-            )
-          >();
+  late final _saveFilePtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Uint64 Function(
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Int64,
+          )
+        >
+      >('file_saver_save_file');
+  late final _saveFile = _saveFilePtr
+      .asFunction<
+        int Function(
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          int,
+          ffi.Pointer<ffi.Char>,
+          int,
+          int,
+        )
+      >();
 
   /// Save file from network URL asynchronously with progress reporting via
   /// NativePort.
@@ -240,7 +211,6 @@ class FileSaverFFI {
   /// - Success:    [3, fileUri]
   /// - Cancelled:  [4]
   ///
-  /// @param instance FileSaver instance from file_saver_init
   /// @param urlString URL to download from
   /// @param headersJson Optional JSON string of HTTP headers (can be NULL)
   /// @param timeoutSeconds Timeout in seconds for network request
@@ -253,7 +223,6 @@ class FileSaverFFI {
   /// @param native_port Dart NativePort for progress reporting
   /// @return Token ID for cancellation
   int saveNetwork(
-    ffi.Pointer<ffi.Void> instance,
     ffi.Pointer<ffi.Char> urlString,
     ffi.Pointer<ffi.Char> headersJson,
     int timeoutSeconds,
@@ -266,7 +235,6 @@ class FileSaverFFI {
     int native_port,
   ) {
     return _saveNetwork(
-      instance,
       urlString,
       headersJson,
       timeoutSeconds,
@@ -280,40 +248,38 @@ class FileSaverFFI {
     );
   }
 
-  late final _saveNetworkPtr = _lookup<
-    ffi.NativeFunction<
-      ffi.Uint64 Function(
-        ffi.Pointer<ffi.Void>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Int32,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Int32,
-        ffi.Pointer<ffi.Char>,
-        ffi.Int32,
-        ffi.Int64,
-      )
-    >
-  >('file_saver_save_network');
-  late final _saveNetwork =
-      _saveNetworkPtr
-          .asFunction<
-            int Function(
-              ffi.Pointer<ffi.Void>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              int,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              int,
-              ffi.Pointer<ffi.Char>,
-              int,
-              int,
-            )
-          >();
+  late final _saveNetworkPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Uint64 Function(
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Int64,
+          )
+        >
+      >('file_saver_save_network');
+  late final _saveNetwork = _saveNetworkPtr
+      .asFunction<
+        int Function(
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          int,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          int,
+          ffi.Pointer<ffi.Char>,
+          int,
+          int,
+        )
+      >();
 
   /// Save bytes to user-selected directory (saveAs).
   ///
@@ -327,8 +293,8 @@ class FileSaverFFI {
   /// - Success:    [3, fileUri]
   /// - Cancelled:  [4]
   ///
-  /// @param instance FileSaver instance from file_saver_init
-  /// @param fileData Byte array of file content
+  /// @param fileData Byte array of file content, allocated with malloc. The
+  /// function takes ownership and frees it with free().
   /// @param fileDataLength Length of fileData
   /// @param directoryUri Directory URI from DirPicker.pick() (package:dir_picker)
   /// @param baseFileName File name without extension
@@ -337,7 +303,6 @@ class FileSaverFFI {
   /// @param native_port Dart NativePort for progress reporting
   /// @return Token ID for cancellation
   int saveBytesAs(
-    ffi.Pointer<ffi.Void> instance,
     ffi.Pointer<ffi.Uint8> fileData,
     int fileDataLength,
     ffi.Pointer<ffi.Char> directoryUri,
@@ -347,7 +312,6 @@ class FileSaverFFI {
     int native_port,
   ) {
     return _saveBytesAs(
-      instance,
       fileData,
       fileDataLength,
       directoryUri,
@@ -358,34 +322,32 @@ class FileSaverFFI {
     );
   }
 
-  late final _saveBytesAsPtr = _lookup<
-    ffi.NativeFunction<
-      ffi.Uint64 Function(
-        ffi.Pointer<ffi.Void>,
-        ffi.Pointer<ffi.Uint8>,
-        ffi.Int64,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Int32,
-        ffi.Int64,
-      )
-    >
-  >('file_saver_save_bytes_as');
-  late final _saveBytesAs =
-      _saveBytesAsPtr
-          .asFunction<
-            int Function(
-              ffi.Pointer<ffi.Void>,
-              ffi.Pointer<ffi.Uint8>,
-              int,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              int,
-              int,
-            )
-          >();
+  late final _saveBytesAsPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Uint64 Function(
+            ffi.Pointer<ffi.Uint8>,
+            ffi.Int64,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Int64,
+          )
+        >
+      >('file_saver_save_bytes_as');
+  late final _saveBytesAs = _saveBytesAsPtr
+      .asFunction<
+        int Function(
+          ffi.Pointer<ffi.Uint8>,
+          int,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          int,
+          int,
+        )
+      >();
 
   /// Save file to user-selected directory (saveAs).
   ///
@@ -399,7 +361,6 @@ class FileSaverFFI {
   /// - Success:    [3, fileUri]
   /// - Cancelled:  [4]
   ///
-  /// @param instance FileSaver instance from file_saver_init
   /// @param filePath Source file path (file:// URI)
   /// @param directoryUri Directory URI from DirPicker.pick() (package:dir_picker)
   /// @param baseFileName File name without extension
@@ -408,7 +369,6 @@ class FileSaverFFI {
   /// @param native_port Dart NativePort for progress reporting
   /// @return Token ID for cancellation
   int saveFileAs(
-    ffi.Pointer<ffi.Void> instance,
     ffi.Pointer<ffi.Char> filePath,
     ffi.Pointer<ffi.Char> directoryUri,
     ffi.Pointer<ffi.Char> baseFileName,
@@ -417,7 +377,6 @@ class FileSaverFFI {
     int native_port,
   ) {
     return _saveFileAs(
-      instance,
       filePath,
       directoryUri,
       baseFileName,
@@ -427,32 +386,30 @@ class FileSaverFFI {
     );
   }
 
-  late final _saveFileAsPtr = _lookup<
-    ffi.NativeFunction<
-      ffi.Uint64 Function(
-        ffi.Pointer<ffi.Void>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Int32,
-        ffi.Int64,
-      )
-    >
-  >('file_saver_save_file_as');
-  late final _saveFileAs =
-      _saveFileAsPtr
-          .asFunction<
-            int Function(
-              ffi.Pointer<ffi.Void>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              int,
-              int,
-            )
-          >();
+  late final _saveFileAsPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Uint64 Function(
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Int64,
+          )
+        >
+      >('file_saver_save_file_as');
+  late final _saveFileAs = _saveFileAsPtr
+      .asFunction<
+        int Function(
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          int,
+          int,
+        )
+      >();
 
   /// Save network file to user-selected directory (saveAs).
   ///
@@ -466,7 +423,6 @@ class FileSaverFFI {
   /// - Success:    [3, fileUri]
   /// - Cancelled:  [4]
   ///
-  /// @param instance FileSaver instance from file_saver_init
   /// @param urlString URL to download from
   /// @param headersJson Optional JSON string of HTTP headers (can be NULL)
   /// @param timeoutSeconds Timeout in seconds for network request
@@ -477,7 +433,6 @@ class FileSaverFFI {
   /// @param native_port Dart NativePort for progress reporting
   /// @return Token ID for cancellation
   int saveNetworkAs(
-    ffi.Pointer<ffi.Void> instance,
     ffi.Pointer<ffi.Char> urlString,
     ffi.Pointer<ffi.Char> headersJson,
     int timeoutSeconds,
@@ -488,7 +443,6 @@ class FileSaverFFI {
     int native_port,
   ) {
     return _saveNetworkAs(
-      instance,
       urlString,
       headersJson,
       timeoutSeconds,
@@ -500,36 +454,34 @@ class FileSaverFFI {
     );
   }
 
-  late final _saveNetworkAsPtr = _lookup<
-    ffi.NativeFunction<
-      ffi.Uint64 Function(
-        ffi.Pointer<ffi.Void>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Int32,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Int32,
-        ffi.Int64,
-      )
-    >
-  >('file_saver_save_network_as');
-  late final _saveNetworkAs =
-      _saveNetworkAsPtr
-          .asFunction<
-            int Function(
-              ffi.Pointer<ffi.Void>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              int,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              int,
-              int,
-            )
-          >();
+  late final _saveNetworkAsPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Uint64 Function(
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Int64,
+          )
+        >
+      >('file_saver_save_network_as');
+  late final _saveNetworkAs = _saveNetworkAsPtr
+      .asFunction<
+        int Function(
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          int,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          int,
+          int,
+        )
+      >();
 
   /// Opens the saved file with the appropriate system viewer.
   ///
@@ -552,8 +504,8 @@ class FileSaverFFI {
       _lookup<ffi.NativeFunction<ffi.Bool Function(ffi.Pointer<ffi.Char>)>>(
         'file_saver_open_file',
       );
-  late final _openFile =
-      _openFilePtr.asFunction<bool Function(ffi.Pointer<ffi.Char>)>();
+  late final _openFile = _openFilePtr
+      .asFunction<bool Function(ffi.Pointer<ffi.Char>)>();
 
   /// Checks whether the file at the given URI is accessible for reading.
   ///
@@ -571,8 +523,8 @@ class FileSaverFFI {
       _lookup<ffi.NativeFunction<ffi.Bool Function(ffi.Pointer<ffi.Char>)>>(
         'file_saver_can_open_file',
       );
-  late final _canOpenFile =
-      _canOpenFilePtr.asFunction<bool Function(ffi.Pointer<ffi.Char>)>();
+  late final _canOpenFile = _canOpenFilePtr
+      .asFunction<bool Function(ffi.Pointer<ffi.Char>)>();
 
   /// Opens a streaming write session to a platform save location.
   ///
@@ -583,7 +535,6 @@ class FileSaverFFI {
   /// - Session opened:  [3, sessionId]   (sessionId as string)
   /// - Error:           [2, errorCode, errorMessage]
   ///
-  /// @param instance    FileSaver instance from file_saver_init
   /// @param baseFileName File name without extension
   /// @param ext         File extension without dot
   /// @param mimeType    MIME type string
@@ -593,7 +544,6 @@ class FileSaverFFI {
   /// @param totalSize   Total expected bytes (-1 if unknown)
   /// @param native_port Dart NativePort for result delivery
   void openWrite(
-    ffi.Pointer<ffi.Void> instance,
     ffi.Pointer<ffi.Char> baseFileName,
     ffi.Pointer<ffi.Char> ext,
     ffi.Pointer<ffi.Char> mimeType,
@@ -604,7 +554,6 @@ class FileSaverFFI {
     int native_port,
   ) {
     return _openWrite(
-      instance,
       baseFileName,
       ext,
       mimeType,
@@ -616,36 +565,34 @@ class FileSaverFFI {
     );
   }
 
-  late final _openWritePtr = _lookup<
-    ffi.NativeFunction<
-      ffi.Void Function(
-        ffi.Pointer<ffi.Void>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Int32,
-        ffi.Pointer<ffi.Char>,
-        ffi.Int32,
-        ffi.Int64,
-        ffi.Int64,
-      )
-    >
-  >('file_saver_open_write');
-  late final _openWrite =
-      _openWritePtr
-          .asFunction<
-            void Function(
-              ffi.Pointer<ffi.Void>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              int,
-              ffi.Pointer<ffi.Char>,
-              int,
-              int,
-              int,
-            )
-          >();
+  late final _openWritePtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Void Function(
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Int64,
+            ffi.Int64,
+          )
+        >
+      >('file_saver_open_write');
+  late final _openWrite = _openWritePtr
+      .asFunction<
+        void Function(
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          int,
+          ffi.Pointer<ffi.Char>,
+          int,
+          int,
+          int,
+        )
+      >();
 
   /// Opens a streaming write session to a user-selected directory.
   ///
@@ -653,7 +600,6 @@ class FileSaverFFI {
   /// - Session opened:  [3, sessionId]   (sessionId as string)
   /// - Error:           [2, errorCode, errorMessage]
   ///
-  /// @param instance    FileSaver instance from file_saver_init
   /// @param directoryUri Directory URI from DirPicker.pick()
   /// @param baseFileName File name without extension
   /// @param ext         File extension without dot
@@ -661,7 +607,6 @@ class FileSaverFFI {
   /// @param totalSize   Total expected bytes (-1 if unknown)
   /// @param native_port Dart NativePort for result delivery
   void openWriteAs(
-    ffi.Pointer<ffi.Void> instance,
     ffi.Pointer<ffi.Char> directoryUri,
     ffi.Pointer<ffi.Char> baseFileName,
     ffi.Pointer<ffi.Char> ext,
@@ -670,7 +615,6 @@ class FileSaverFFI {
     int native_port,
   ) {
     return _openWriteAs(
-      instance,
       directoryUri,
       baseFileName,
       ext,
@@ -680,32 +624,30 @@ class FileSaverFFI {
     );
   }
 
-  late final _openWriteAsPtr = _lookup<
-    ffi.NativeFunction<
-      ffi.Void Function(
-        ffi.Pointer<ffi.Void>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Pointer<ffi.Char>,
-        ffi.Int32,
-        ffi.Int64,
-        ffi.Int64,
-      )
-    >
-  >('file_saver_open_write_as');
-  late final _openWriteAs =
-      _openWriteAsPtr
-          .asFunction<
-            void Function(
-              ffi.Pointer<ffi.Void>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              ffi.Pointer<ffi.Char>,
-              int,
-              int,
-              int,
-            )
-          >();
+  late final _openWriteAsPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Void Function(
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Pointer<ffi.Char>,
+            ffi.Int32,
+            ffi.Int64,
+            ffi.Int64,
+          )
+        >
+      >('file_saver_open_write_as');
+  late final _openWriteAs = _openWriteAsPtr
+      .asFunction<
+        void Function(
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          ffi.Pointer<ffi.Char>,
+          int,
+          int,
+          int,
+        )
+      >();
 
   /// Writes a chunk of data to an open write session.
   ///
@@ -714,7 +656,8 @@ class FileSaverFFI {
   /// - Error:      [2, errorCode, errorMessage]
   ///
   /// @param sessionId  Session ID from file_saver_open_write[_as]
-  /// @param data       Byte array to write
+  /// @param data       Byte array to write, allocated with malloc. The function
+  /// takes ownership and frees it with free().
   /// @param dataLength Length of data in bytes
   /// @param native_port Dart NativePort for result delivery
   void writeChunk(
@@ -726,19 +669,19 @@ class FileSaverFFI {
     return _writeChunk(sessionId, data, dataLength, native_port);
   }
 
-  late final _writeChunkPtr = _lookup<
-    ffi.NativeFunction<
-      ffi.Void Function(
-        ffi.Uint64,
-        ffi.Pointer<ffi.Uint8>,
-        ffi.Int64,
-        ffi.Int64,
-      )
-    >
-  >('file_saver_write_chunk');
-  late final _writeChunk =
-      _writeChunkPtr
-          .asFunction<void Function(int, ffi.Pointer<ffi.Uint8>, int, int)>();
+  late final _writeChunkPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Void Function(
+            ffi.Uint64,
+            ffi.Pointer<ffi.Uint8>,
+            ffi.Int64,
+            ffi.Int64,
+          )
+        >
+      >('file_saver_write_chunk');
+  late final _writeChunk = _writeChunkPtr
+      .asFunction<void Function(int, ffi.Pointer<ffi.Uint8>, int, int)>();
 
   /// Flushes write buffers for an open write session.
   ///

@@ -8,6 +8,10 @@
 #include "file_saver_dart_api.h"
 #include <string.h>
 
+// DART_API_DL_MAJOR_VERSION of the Dart SDK (include/dart_version.h). A VM
+// with another major version lays out Dart_CObject differently.
+#define FILE_SAVER_DART_API_DL_MAJOR_VERSION 2
+
 // Function pointer storage
 static Dart_PostCObject_Type FileSaver_PostCObject_DL_ = NULL;
 
@@ -30,19 +34,25 @@ intptr_t FileSaver_InitializeApiDL(void* data) {
     }
 
     DartApi* api = (DartApi*)data;
+    if (api->major != FILE_SAVER_DART_API_DL_MAJOR_VERSION) {
+        return -1;
+    }
 
     // Find Dart_PostCObject in the function table
     // Note: Dart SDK exposes "Dart_PostCObject"; we wrap it as FileSaver_PostCObject_DL
-    DartApiEntry* entry = api->functions;
-    while (entry->name != NULL) {
+    Dart_PostCObject_Type post = NULL;
+    for (DartApiEntry* entry = api->functions; entry->name != NULL; entry++) {
         if (strcmp(entry->name, "Dart_PostCObject") == 0) {
-            FileSaver_PostCObject_DL_ = (Dart_PostCObject_Type)entry->function;
+            post = (Dart_PostCObject_Type)entry->function;
             break;
         }
-        entry++;
+    }
+    if (post == NULL) {
+        return -1;
     }
 
-    return FileSaver_PostCObject_DL_ != NULL ? 0 : -1;
+    FileSaver_PostCObject_DL_ = post;
+    return 0;
 }
 
 bool FileSaver_PostCObject_DL(Dart_Port port_id, Dart_CObject* message) {

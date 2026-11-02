@@ -8,36 +8,35 @@ import Photos
 import AppKit
 #endif
 
-private var instanceCounter: UInt = 0
-private var instances: [UInt: FileSaver] = [:]
-private let instanceLock = NSLock()
+/// `FileSaver` keeps no state between calls, so every call shares one.
+private let fileSaver = FileSaver()
 
 // MARK: - Cancellation Token Registry (for saveBytes, saveFile)
 
-private var tokenCounter: UInt = 0
-private var activeTokens: [UInt: CancellationToken] = [:]
+private var tokenCounter: UInt64 = 0
+private var activeTokens: [UInt64: CancellationToken] = [:]
 private let tokenLock = NSLock()
 
-private func generateTokenId() -> UInt {
+private func generateTokenId() -> UInt64 {
     tokenLock.lock()
     defer { tokenLock.unlock() }
     tokenCounter += 1
     return tokenCounter
 }
 
-private func registerToken(_ tokenId: UInt, _ token: CancellationToken) {
+private func registerToken(_ tokenId: UInt64, _ token: CancellationToken) {
     tokenLock.lock()
     defer { tokenLock.unlock() }
     activeTokens[tokenId] = token
 }
 
-private func unregisterToken(_ tokenId: UInt) {
+private func unregisterToken(_ tokenId: UInt64) {
     tokenLock.lock()
     defer { tokenLock.unlock() }
     activeTokens.removeValue(forKey: tokenId)
 }
 
-private func getToken(_ tokenId: UInt) -> CancellationToken? {
+private func getToken(_ tokenId: UInt64) -> CancellationToken? {
     tokenLock.lock()
     defer { tokenLock.unlock() }
     return activeTokens[tokenId]
@@ -82,22 +81,22 @@ private class ActiveDownload {
     }
 }
 
-private var activeDownloads: [UInt: ActiveDownload] = [:]
+private var activeDownloads: [UInt64: ActiveDownload] = [:]
 private let downloadLock = NSLock()
 
-private func registerDownload(_ id: UInt, _ download: ActiveDownload) {
+private func registerDownload(_ id: UInt64, _ download: ActiveDownload) {
     downloadLock.lock()
     defer { downloadLock.unlock() }
     activeDownloads[id] = download
 }
 
-private func getDownload(_ id: UInt) -> ActiveDownload? {
+private func getDownload(_ id: UInt64) -> ActiveDownload? {
     downloadLock.lock()
     defer { downloadLock.unlock() }
     return activeDownloads[id]
 }
 
-private func unregisterDownload(_ id: UInt) {
+private func unregisterDownload(_ id: UInt64) {
     downloadLock.lock()
     defer { downloadLock.unlock() }
     activeDownloads.removeValue(forKey: id)
@@ -159,11 +158,7 @@ final class WriteSession {
                 return reporter.sendError(code: failure.code, message: failure.message)
             }
             do {
-                if #available(macOS 10.15.4, iOS 13.4, *) {
-                    try self.fileHandle.write(contentsOf: chunk)
-                } else {
-                    self.fileHandle.write(chunk)
-                }
+                try self.fileHandle.write(contentsOf: chunk)
                 self.bytesWritten += Int64(chunk.count)
                 reporter.sendBytes(self.bytesWritten)
             } catch {
@@ -179,11 +174,7 @@ final class WriteSession {
                 return reporter.sendError(code: failure.code, message: failure.message)
             }
             do {
-                if #available(macOS 10.15.4, iOS 13.4, *) {
-                    try self.fileHandle.synchronize()
-                } else {
-                    self.fileHandle.synchronizeFile()
-                }
+                try self.fileHandle.synchronize()
                 reporter.sendBytes(self.bytesWritten)
             } catch {
                 self.fail(code: Constants.errorFileIO, message: error.localizedDescription, reporter: reporter)
@@ -206,13 +197,8 @@ final class WriteSession {
                 return reporter.sendError(code: failure.code, message: failure.message)
             }
             do {
-                if #available(macOS 10.15.4, iOS 13.4, *) {
-                    try self.fileHandle.synchronize()
-                    try self.fileHandle.close()
-                } else {
-                    self.fileHandle.synchronizeFile()
-                    self.fileHandle.closeFile()
-                }
+                try self.fileHandle.synchronize()
+                try self.fileHandle.close()
             } catch {
                 self.closeHandle()
                 self.deleteFile()
@@ -245,11 +231,7 @@ final class WriteSession {
     }
 
     private func closeHandle() {
-        if #available(macOS 10.15.4, iOS 13.4, *) {
-            try? fileHandle.close()
-        } else {
-            fileHandle.closeFile()
-        }
+        try? fileHandle.close()
     }
 
     private func deleteFile() {
@@ -257,30 +239,30 @@ final class WriteSession {
     }
 }
 
-private var writeSessionRegistry: [UInt: WriteSession] = [:]
+private var writeSessionRegistry: [UInt64: WriteSession] = [:]
 private let writeSessionLock = NSLock()
-private var writeSessionIdCounter: UInt = 0
+private var writeSessionIdCounter: UInt64 = 0
 
-private func generateWriteSessionId() -> UInt {
+private func generateWriteSessionId() -> UInt64 {
     writeSessionLock.lock()
     defer { writeSessionLock.unlock() }
     writeSessionIdCounter += 1
     return writeSessionIdCounter
 }
 
-private func registerWriteSession(_ id: UInt, _ session: WriteSession) {
+private func registerWriteSession(_ id: UInt64, _ session: WriteSession) {
     writeSessionLock.lock()
     defer { writeSessionLock.unlock() }
     writeSessionRegistry[id] = session
 }
 
-private func removeWriteSession(_ id: UInt) -> WriteSession? {
+private func removeWriteSession(_ id: UInt64) -> WriteSession? {
     writeSessionLock.lock()
     defer { writeSessionLock.unlock() }
     return writeSessionRegistry.removeValue(forKey: id)
 }
 
-private func getWriteSession(_ id: UInt) -> WriteSession? {
+private func getWriteSession(_ id: UInt64) -> WriteSession? {
     writeSessionLock.lock()
     defer { writeSessionLock.unlock() }
     return writeSessionRegistry[id]
@@ -292,28 +274,8 @@ public func fileSaverInitDartApiDL(_ data: UnsafeMutableRawPointer?) -> Int {
     return FileSaver_InitializeApiDL(data)
 }
 
-@_cdecl("file_saver_init")
-public func fileSaverInit() -> UInt {
-    instanceLock.lock()
-    defer { instanceLock.unlock() }
-
-    instanceCounter += 1
-    let id = instanceCounter
-    instances[id] = FileSaver()
-
-    return id
-}
-
-@_cdecl("file_saver_dispose")
-public func fileSaverDispose(_ instanceId: UInt) {
-    instanceLock.lock()
-    defer { instanceLock.unlock() }
-
-    instances.removeValue(forKey: instanceId)
-}
-
 @_cdecl("file_saver_cancel")
-public func fileSaverCancel(_ tokenId: UInt) {
+public func fileSaverCancel(_ tokenId: UInt64) {
     // Try to cancel as download first (saveNetwork)
     if let download = getDownload(tokenId) {
         download.cancel()
@@ -325,8 +287,7 @@ public func fileSaverCancel(_ tokenId: UInt) {
 
 @_cdecl("file_saver_save_bytes")
 public func fileSaverSaveBytes(
-    _ instanceId: UInt,
-    _ fileData: UnsafePointer<UInt8>,
+    _ fileData: UnsafeMutablePointer<UInt8>,
     _ fileDataLength: Int64,
     _ baseFileName: UnsafePointer<CChar>,
     _ ext: UnsafePointer<CChar>,
@@ -335,7 +296,7 @@ public func fileSaverSaveBytes(
     _ subDir: UnsafePointer<CChar>?,
     _ conflictMode: Int32,
     _ nativePort: Int64
-) -> UInt {
+) -> UInt64 {
     let reporter = ProgressReporter(port: nativePort)
 
     // Create cancellation token
@@ -343,8 +304,8 @@ public func fileSaverSaveBytes(
     let token = CancellationToken()
     registerToken(tokenId, token)
 
-    // Copy data before async operation (must be done synchronously)
-    let data = Data(bytes: fileData, count: Int(fileDataLength))
+    // Takes ownership of the buffer: it is freed with the Data.
+    let data = Data(bytesNoCopy: fileData, count: Int(fileDataLength), deallocator: .free)
     let fileName = String(cString: baseFileName)
     let extStr = String(cString: ext)
     let mime = String(cString: mimeType)
@@ -356,20 +317,8 @@ public func fileSaverSaveBytes(
         // Send started event
         reporter.sendStarted()
 
-        // Get FileSaver instance
-        instanceLock.lock()
-        guard let saver = instances[instanceId] else {
-            instanceLock.unlock()
-            reporter.sendError(
-                code: Constants.errorPlatform,
-                message: "FileSaver instance not found"
-            )
-            return
-        }
-        instanceLock.unlock()
-
         // Perform save with progress and cancellation support
-        saver.saveBytes(
+        fileSaver.saveBytes(
             fileData: data,
             baseFileName: fileName,
             extension: extStr,
@@ -387,7 +336,6 @@ public func fileSaverSaveBytes(
 
 @_cdecl("file_saver_save_file")
 public func fileSaverSaveFile(
-    _ instanceId: UInt,
     _ filePath: UnsafePointer<CChar>,
     _ baseFileName: UnsafePointer<CChar>,
     _ ext: UnsafePointer<CChar>,
@@ -396,7 +344,7 @@ public func fileSaverSaveFile(
     _ subDir: UnsafePointer<CChar>?,
     _ conflictMode: Int32,
     _ nativePort: Int64
-) -> UInt {
+) -> UInt64 {
     let reporter = ProgressReporter(port: nativePort)
 
     // Create cancellation token
@@ -417,20 +365,8 @@ public func fileSaverSaveFile(
         // Send started event
         reporter.sendStarted()
 
-        // Get FileSaver instance
-        instanceLock.lock()
-        guard let saver = instances[instanceId] else {
-            instanceLock.unlock()
-            reporter.sendError(
-                code: Constants.errorPlatform,
-                message: "FileSaver instance not found"
-            )
-            return
-        }
-        instanceLock.unlock()
-
         // Perform save with progress and cancellation support
-        saver.saveFile(
+        fileSaver.saveFile(
             filePath: path,
             baseFileName: fileName,
             extension: extStr,
@@ -448,7 +384,6 @@ public func fileSaverSaveFile(
 
 @_cdecl("file_saver_save_network")
 public func fileSaverSaveNetwork(
-    _ instanceId: UInt,
     _ urlString: UnsafePointer<CChar>,
     _ headersJson: UnsafePointer<CChar>?,
     _ timeoutSeconds: Int32,
@@ -459,7 +394,7 @@ public func fileSaverSaveNetwork(
     _ subDir: UnsafePointer<CChar>?,
     _ conflictMode: Int32,
     _ nativePort: Int64
-) -> UInt {
+) -> UInt64 {
     let reporter = ProgressReporter(port: nativePort)
 
     // Create active download entry (holds token + cancel handler)
@@ -478,19 +413,6 @@ public func fileSaverSaveNetwork(
     let directory = subDir.map { String(cString: $0) }
 
     DispatchQueue.global(qos: .userInitiated).async {
-        // Get FileSaver instance
-        instanceLock.lock()
-        guard let saver = instances[instanceId] else {
-            instanceLock.unlock()
-            reporter.sendError(
-                code: Constants.errorPlatform,
-                message: "FileSaver instance not found"
-            )
-            unregisterDownload(tokenId)
-            return
-        }
-        instanceLock.unlock()
-
         // Check if already cancelled before starting
         if token.isCancelled {
             reporter.sendCancelled()
@@ -505,7 +427,7 @@ public func fileSaverSaveNetwork(
         let parsedHeaders = NetworkHelper.parseHeaders(headers)
 
         // Perform save
-        saver.saveNetwork(
+        fileSaver.saveNetwork(
             urlString: url,
             headers: parsedHeaders,
             timeoutSeconds: timeout,
@@ -701,15 +623,14 @@ public func fileSaverCanOpenFile(_ uriString: UnsafePointer<CChar>) -> Bool {
 
 @_cdecl("file_saver_save_bytes_as")
 public func fileSaverSaveBytesAs(
-    _ instanceId: UInt,
-    _ fileData: UnsafePointer<UInt8>,
+    _ fileData: UnsafeMutablePointer<UInt8>,
     _ fileDataLength: Int64,
     _ directoryUri: UnsafePointer<CChar>,
     _ baseFileName: UnsafePointer<CChar>,
     _ ext: UnsafePointer<CChar>,
     _ conflictMode: Int32,
     _ nativePort: Int64
-) -> UInt {
+) -> UInt64 {
     let reporter = ProgressReporter(port: nativePort)
 
     // Create cancellation token
@@ -717,8 +638,8 @@ public func fileSaverSaveBytesAs(
     let token = CancellationToken()
     registerToken(tokenId, token)
 
-    // Copy data before async operation
-    let data = Data(bytes: fileData, count: Int(fileDataLength))
+    // Takes ownership of the buffer: it is freed with the Data.
+    let data = Data(bytesNoCopy: fileData, count: Int(fileDataLength), deallocator: .free)
     let dirUri = String(cString: directoryUri)
     let fileName = String(cString: baseFileName)
     let extStr = String(cString: ext)
@@ -728,18 +649,7 @@ public func fileSaverSaveBytesAs(
 
         reporter.sendStarted()
 
-        instanceLock.lock()
-        guard let saver = instances[instanceId] else {
-            instanceLock.unlock()
-            reporter.sendError(
-                code: Constants.errorPlatform,
-                message: "FileSaver instance not found"
-            )
-            return
-        }
-        instanceLock.unlock()
-
-        saver.saveBytesAs(
+        fileSaver.saveBytesAs(
             fileData: data,
             directoryUri: dirUri,
             baseFileName: fileName,
@@ -755,14 +665,13 @@ public func fileSaverSaveBytesAs(
 
 @_cdecl("file_saver_save_file_as")
 public func fileSaverSaveFileAs(
-    _ instanceId: UInt,
     _ filePath: UnsafePointer<CChar>,
     _ directoryUri: UnsafePointer<CChar>,
     _ baseFileName: UnsafePointer<CChar>,
     _ ext: UnsafePointer<CChar>,
     _ conflictMode: Int32,
     _ nativePort: Int64
-) -> UInt {
+) -> UInt64 {
     let reporter = ProgressReporter(port: nativePort)
 
     // Create cancellation token
@@ -781,18 +690,7 @@ public func fileSaverSaveFileAs(
 
         reporter.sendStarted()
 
-        instanceLock.lock()
-        guard let saver = instances[instanceId] else {
-            instanceLock.unlock()
-            reporter.sendError(
-                code: Constants.errorPlatform,
-                message: "FileSaver instance not found"
-            )
-            return
-        }
-        instanceLock.unlock()
-
-        saver.saveFileAs(
+        fileSaver.saveFileAs(
             filePath: path,
             directoryUri: dirUri,
             baseFileName: fileName,
@@ -808,7 +706,6 @@ public func fileSaverSaveFileAs(
 
 @_cdecl("file_saver_save_network_as")
 public func fileSaverSaveNetworkAs(
-    _ instanceId: UInt,
     _ urlString: UnsafePointer<CChar>,
     _ headersJson: UnsafePointer<CChar>?,
     _ timeoutSeconds: Int32,
@@ -817,7 +714,7 @@ public func fileSaverSaveNetworkAs(
     _ ext: UnsafePointer<CChar>,
     _ conflictMode: Int32,
     _ nativePort: Int64
-) -> UInt {
+) -> UInt64 {
     let reporter = ProgressReporter(port: nativePort)
 
     // Create active download entry
@@ -835,18 +732,6 @@ public func fileSaverSaveNetworkAs(
     let extStr = String(cString: ext)
 
     DispatchQueue.global(qos: .userInitiated).async {
-        instanceLock.lock()
-        guard let saver = instances[instanceId] else {
-            instanceLock.unlock()
-            reporter.sendError(
-                code: Constants.errorPlatform,
-                message: "FileSaver instance not found"
-            )
-            unregisterDownload(tokenId)
-            return
-        }
-        instanceLock.unlock()
-
         if token.isCancelled {
             reporter.sendCancelled()
             unregisterDownload(tokenId)
@@ -857,7 +742,7 @@ public func fileSaverSaveNetworkAs(
 
         let parsedHeaders = NetworkHelper.parseHeaders(headers)
 
-        saver.saveNetworkAs(
+        fileSaver.saveNetworkAs(
             urlString: url,
             headers: parsedHeaders,
             timeoutSeconds: timeout,
@@ -883,7 +768,6 @@ public func fileSaverSaveNetworkAs(
 
 @_cdecl("file_saver_open_write")
 public func fileSaverOpenWrite(
-    _ instanceId: UInt,
     _ baseFileName: UnsafePointer<CChar>,
     _ ext: UnsafePointer<CChar>,
     _ mimeType: UnsafePointer<CChar>,
@@ -901,16 +785,8 @@ public func fileSaverOpenWrite(
     let directory = subDir.map { String(cString: $0) }
 
     DispatchQueue.global(qos: .userInitiated).async {
-        instanceLock.lock()
-        guard let saver = instances[instanceId] else {
-            instanceLock.unlock()
-            reporter.sendError(code: Constants.errorPlatform, message: "FileSaver instance not found")
-            return
-        }
-        instanceLock.unlock()
-
         do {
-            let result = try saver.openWriteSession(
+            let result = try fileSaver.openWriteSession(
                 baseFileName: fileName,
                 extension: extStr,
                 mimeType: mimeStr,
@@ -943,7 +819,6 @@ public func fileSaverOpenWrite(
 
 @_cdecl("file_saver_open_write_as")
 public func fileSaverOpenWriteAs(
-    _ instanceId: UInt,
     _ directoryUri: UnsafePointer<CChar>,
     _ baseFileName: UnsafePointer<CChar>,
     _ ext: UnsafePointer<CChar>,
@@ -963,17 +838,8 @@ public func fileSaverOpenWriteAs(
         }
         let isScoped = dirURL.startAccessingSecurityScopedResource()
 
-        instanceLock.lock()
-        guard let saver = instances[instanceId] else {
-            instanceLock.unlock()
-            if isScoped { dirURL.stopAccessingSecurityScopedResource() }
-            reporter.sendError(code: Constants.errorPlatform, message: "FileSaver instance not found")
-            return
-        }
-        instanceLock.unlock()
-
         do {
-            let (fileURL, fileHandle, commit) = try saver.openWriteSessionAs(
+            let (fileURL, fileHandle, commit) = try fileSaver.openWriteSessionAs(
                 directoryUri: dirUri,
                 baseFileName: fileName,
                 extension: extStr,
@@ -1007,14 +873,14 @@ public func fileSaverOpenWriteAs(
 
 @_cdecl("file_saver_write_chunk")
 public func fileSaverWriteChunk(
-    _ sessionId: UInt,
-    _ data: UnsafePointer<UInt8>,
+    _ sessionId: UInt64,
+    _ data: UnsafeMutablePointer<UInt8>,
     _ dataLength: Int64,
     _ nativePort: Int64
 ) {
     let reporter = ProgressReporter(port: nativePort)
-    // Copy data synchronously before returning — Dart arena freed after call
-    let chunk = Data(bytes: data, count: Int(dataLength))
+    // Takes ownership of the buffer: it is freed with the Data.
+    let chunk = Data(bytesNoCopy: data, count: Int(dataLength), deallocator: .free)
 
     guard let session = getWriteSession(sessionId) else {
         reporter.sendError(code: Constants.errorInvalidInput, message: "Session not found: \(sessionId)")
@@ -1024,7 +890,7 @@ public func fileSaverWriteChunk(
 }
 
 @_cdecl("file_saver_flush_write")
-public func fileSaverFlushWrite(_ sessionId: UInt, _ nativePort: Int64) {
+public func fileSaverFlushWrite(_ sessionId: UInt64, _ nativePort: Int64) {
     let reporter = ProgressReporter(port: nativePort)
     guard let session = getWriteSession(sessionId) else {
         reporter.sendError(code: Constants.errorInvalidInput, message: "Session not found: \(sessionId)")
@@ -1034,7 +900,7 @@ public func fileSaverFlushWrite(_ sessionId: UInt, _ nativePort: Int64) {
 }
 
 @_cdecl("file_saver_close_write")
-public func fileSaverCloseWrite(_ sessionId: UInt, _ nativePort: Int64) {
+public func fileSaverCloseWrite(_ sessionId: UInt64, _ nativePort: Int64) {
     let reporter = ProgressReporter(port: nativePort)
     guard let session = removeWriteSession(sessionId) else {
         reporter.sendError(code: Constants.errorInvalidInput, message: "Session not found: \(sessionId)")
@@ -1044,6 +910,6 @@ public func fileSaverCloseWrite(_ sessionId: UInt, _ nativePort: Int64) {
 }
 
 @_cdecl("file_saver_cancel_write")
-public func fileSaverCancelWrite(_ sessionId: UInt) {
+public func fileSaverCancelWrite(_ sessionId: UInt64) {
     removeWriteSession(sessionId)?.cancel()
 }

@@ -14,7 +14,7 @@ import '../shared/desktop_file_saver.dart';
 /// platform-specific.
 /// Directory resolution uses the XDG Base Directory Specification (`xdg-user-dirs`).
 /// Falls back to `~/.cache/Downloads` if the XDG variable is not configured.
-class FileSaverLinux extends DesktopFileSaver {
+class FileSaverLinux extends DesktopFileSaver<LinuxSaveLocation> {
   /// Registers this class as the default instance of [FileSaverPlatform].
   static void registerWith() {
     FileSaverPlatform.instance = FileSaverLinux();
@@ -22,7 +22,7 @@ class FileSaverLinux extends DesktopFileSaver {
 
   @override
   Future<String> resolveDirectory(
-    SaveLocation? saveLocation,
+    LinuxSaveLocation? saveLocation,
     String? subDir,
   ) async {
     final xdgKey = switch (saveLocation) {
@@ -31,7 +31,7 @@ class FileSaverLinux extends DesktopFileSaver {
       LinuxSaveLocation.videos => 'VIDEOS',
       LinuxSaveLocation.music => 'MUSIC',
       LinuxSaveLocation.documents => 'DOCUMENTS',
-      _ => 'DOWNLOAD',
+      null => 'DOWNLOAD',
     };
 
     final basePath =
