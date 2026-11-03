@@ -572,7 +572,7 @@ static Future<void> openFile(Uri uri, {String? mimeType})
 
 ### SaveProgress Events
 
-Stream API emits these sealed class events:
+Stream API emits these sealed class events. A save stream is single-subscription: the save starts when it is listened to, and a second listen throws a `StateError` instead of saving the file again. Call `save` again for another save, or use `asBroadcast()` to share one save between listeners.
 
 | Event                   | Properties                      | Description                 |
 |-------------------------|---------------------------------|-----------------------------|

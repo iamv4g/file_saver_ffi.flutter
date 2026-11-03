@@ -15,6 +15,7 @@ import '../../models/save_progress.dart';
 import '../../platform_interface/file_saver_platform.dart';
 import '../shared/native_event_parser.dart';
 import '../shared/path_location_writer.dart';
+import '../shared/single_subscription.dart';
 import 'android_file_saver_sink.dart';
 import 'bindings.g.dart' as bindings;
 
@@ -440,7 +441,7 @@ class FileSaverAndroid extends FileSaverPlatform {
   Stream<SaveProgress> _runSave(
     int Function(Arena arena, bindings.ProgressCallback callback) start,
   ) {
-    return Stream.multi((controller) {
+    return singleSubscription((controller) {
       final ended = Completer<void>();
       late final bindings.ProgressCallback callback;
 

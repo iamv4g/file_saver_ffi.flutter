@@ -78,6 +78,16 @@ void main() {
       expect(await existing.readAsString(), 'old');
     });
 
+    test('a second listen throws instead of saving again', () async {
+      final stream = saveBytes();
+      await stream.drain<void>();
+
+      expect(() => stream.listen(null), throwsStateError);
+      expect(await tmp.list().map((e) => p.basename(e.path)).toList(), [
+        'data.bin',
+      ]);
+    });
+
     test('fail emits FileExistsException', () async {
       await saveBytes().drain<void>();
       final events = await saveBytes(

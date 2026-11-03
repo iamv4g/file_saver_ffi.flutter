@@ -213,6 +213,22 @@ void main() {
     expect(events.whereType<SaveProgressComplete>(), isEmpty);
   });
 
+  testWidgets('a second listen throws instead of saving again', (_) async {
+    final subDir = '$_subDir/relisten';
+    final dir = Directory('/storage/emulated/0/Download/$subDir');
+    final stream = FileSaver.save(
+      input: SaveInput.bytes(Uint8List.fromList('x'.codeUnits)),
+      fileName: 'once',
+      fileType: _text,
+      saveLocation: AndroidSaveLocation.downloads,
+      subDir: subDir,
+    );
+
+    expect((await stream.last), isA<SaveProgressComplete>());
+    expect(() => stream.listen(null), throwsStateError);
+    expect(dir.listSync(), hasLength(1));
+  });
+
   testWidgets('an HTTP error throws NetworkException with the status code', (
     _,
   ) async {

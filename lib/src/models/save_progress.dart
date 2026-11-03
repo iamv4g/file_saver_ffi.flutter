@@ -24,6 +24,9 @@ import '../exceptions/file_saver_exceptions.dart';
 /// stream emits nothing more after that, and the Future that
 /// `subscription.cancel()` returns completes once the save has stopped and
 /// deleted the partial file.
+///
+/// A save stream is single-subscription: listening to it again throws a
+/// [StateError] instead of running the save a second time.
 sealed class SaveProgress {
   const SaveProgress();
 }
