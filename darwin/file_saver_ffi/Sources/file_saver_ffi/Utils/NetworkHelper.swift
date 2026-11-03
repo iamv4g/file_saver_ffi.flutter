@@ -47,7 +47,7 @@ private class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
         }
 
         if let statusCode = httpStatusCode, !(200...299).contains(statusCode) {
-            complete(with: .failure(.networkError("Server returned error", statusCode: statusCode)))
+            complete(with: .failure(.networkError("HTTP \(statusCode)", statusCode: statusCode)))
             return
         }
 
@@ -58,7 +58,7 @@ private class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
             let totalSize = downloadTask.countOfBytesReceived
             complete(with: .success((destinationURL, totalSize)))
         } catch {
-            complete(with: .failure(.fileIO(error.localizedDescription)))
+            complete(with: .failure(FileHelper.ioError(error, url: destinationURL)))
         }
     }
     

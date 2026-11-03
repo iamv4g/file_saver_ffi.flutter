@@ -70,7 +70,7 @@ class AudioSaver: BaseFileSaver {
         conflictResolution: ConflictResolution,
         onProgress: ((Double) -> Void)?,
         onSuccess: @escaping (String) -> Void,
-        onError: @escaping (String, String) -> Void,
+        onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,
         onCancelHandlerReady: @escaping (@escaping () -> Void) -> Void,
         onComplete: @escaping () -> Void,
@@ -80,11 +80,11 @@ class AudioSaver: BaseFileSaver {
         do {
             try validateFormat(fileType)
         } catch let error as FileSaverError {
-            onError(error.code, error.message)
+            onError(error)
             onComplete()
             return
         } catch {
-            onError(Constants.errorPlatform, error.localizedDescription)
+            onError(.platformError(error.localizedDescription))
             onComplete()
             return
         }

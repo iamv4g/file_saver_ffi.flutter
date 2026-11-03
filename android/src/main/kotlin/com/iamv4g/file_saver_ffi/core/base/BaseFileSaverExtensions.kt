@@ -34,8 +34,9 @@ internal fun ProducerScope<SaveProgressEvent>.sendProgress(progress: Double) {
 internal suspend fun ProducerScope<SaveProgressEvent>.sendError(
     code: String,
     message: String,
+    statusCode: Int? = null,
 ) {
-    send(SaveProgressEvent.Error(code, message))
+    send(SaveProgressEvent.Error(code, message, statusCode))
 }
 
 /**

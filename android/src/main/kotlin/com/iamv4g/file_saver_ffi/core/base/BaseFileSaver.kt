@@ -7,6 +7,7 @@ import com.iamv4g.file_saver_ffi.models.SaveProgressEvent
 import com.iamv4g.file_saver_ffi.utils.Constants
 import com.iamv4g.file_saver_ffi.utils.FileHelper
 import com.iamv4g.file_saver_ffi.utils.NetworkHelper
+import com.iamv4g.file_saver_ffi.utils.ioErrorCode
 import com.iamv4g.file_saver_ffi.utils.saveFlow
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
@@ -65,7 +66,7 @@ abstract class BaseFileSaver(
                 throw e
             } catch (e: IOException) {
                 entryFactory.deleteEntry(context, entry.uri)
-                sendError(Constants.ERROR_FILE_IO, "Failed to write file data: ${e.message}")
+                sendError(ioErrorCode(e), "Failed to write file data: ${e.message}")
                 return@saveFlow
             } catch (e: Exception) {
                 // Anything else (e.g. a SecurityException from a revoked grant):
@@ -96,7 +97,7 @@ abstract class BaseFileSaver(
                 try {
                     FileHelper.openSourceFile(context, filePath)
                 } catch (_: FileNotFoundException) {
-                    sendError(Constants.ERROR_FILE_NOT_FOUND, "Source file not found: $filePath")
+                    sendError(Constants.ERROR_FILE_NOT_FOUND, filePath)
                     return@saveFlow
                 } catch (e: SecurityException) {
                     sendError(Constants.ERROR_PERMISSION_DENIED, "Permission denied: ${e.message}")
@@ -134,7 +135,7 @@ abstract class BaseFileSaver(
                 throw e
             } catch (e: IOException) {
                 entryFactory.deleteEntry(context, entry.uri)
-                sendError(Constants.ERROR_FILE_IO, "Failed to copy file: ${e.message}")
+                sendError(ioErrorCode(e), "Failed to copy file: ${e.message}")
                 return@saveFlow
             } catch (e: Exception) {
                 entryFactory.deleteEntry(context, entry.uri)
@@ -193,7 +194,7 @@ abstract class BaseFileSaver(
                         throw e
                     } catch (e: IOException) {
                         entryFactory.deleteEntry(context, entry.uri)
-                        sendError(Constants.ERROR_FILE_IO, "Failed to write the downloaded data: ${e.message}")
+                        sendError(ioErrorCode(e), "Failed to write the downloaded data: ${e.message}")
                         return@download
                     } catch (e: Exception) {
                         entryFactory.deleteEntry(context, entry.uri)
@@ -203,13 +204,7 @@ abstract class BaseFileSaver(
                     entryFactory.finishSave(this, context, entry)
                 }
             } catch (e: NetworkDownloadException) {
-                val message =
-                    if (e.statusCode != null) {
-                        "Network download failed (HTTP ${e.statusCode}): ${e.message}"
-                    } else {
-                        "Network download failed: ${e.message}"
-                    }
-                sendError(Constants.ERROR_NETWORK, message)
+                sendError(Constants.ERROR_NETWORK, e.message ?: "Download failed", e.statusCode)
             } catch (e: IllegalArgumentException) {
                 sendError(Constants.ERROR_INVALID_INPUT, e.message ?: "Invalid request headers")
             }

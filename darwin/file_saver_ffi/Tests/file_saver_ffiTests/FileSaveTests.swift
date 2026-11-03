@@ -180,6 +180,42 @@ final class FileSaveTests: XCTestCase {
         XCTAssertEqual(try entries(), [])
     }
 
+    // MARK: - Error messages
+
+    /// Dart builds the exception text from the detail, so the message must not
+    /// carry a prefix of its own.
+    func testErrorsSendOnlyTheDetailDartNeeds() throws {
+        touch("a.txt")
+        XCTAssertThrowsError(try resolve("a.txt", .fail)) { error in
+            XCTAssertEqual((error as? FileSaverError)?.code, Constants.errorFileExists, "\(error)")
+            XCTAssertEqual((error as? FileSaverError)?.message, "a.txt")
+        }
+
+        let missing = directory.appendingPathComponent("missing.txt").path
+        XCTAssertThrowsError(
+            try CustomFileSaver().saveFileAs(
+                filePath: missing,
+                directoryURL: directory,
+                fileName: "copy.txt",
+                conflictResolution: .autoRename,
+                onProgress: nil,
+                onSuccess: { _ in },
+                cancellationToken: nil
+            )
+        ) { error in
+            XCTAssertEqual((error as? FileSaverError)?.message, missing)
+        }
+
+        XCTAssertEqual(FileSaverError.invalidInput("File data is empty").message, "File data is empty")
+        XCTAssertEqual(FileSaverError.iCloudDownloadFailed("Timed out").message, "Timed out")
+        XCTAssertEqual(FileSaverError.unsupportedFormat("heic").message, "heic")
+
+        let network = FileSaverError.networkError("HTTP 404", statusCode: 404)
+        XCTAssertEqual(network.message, "HTTP 404")
+        XCTAssertEqual(network.statusCode, 404)
+        XCTAssertNil(FileSaverError.networkError("No internet connection").statusCode)
+    }
+
     // MARK: - Source paths
 
     func testSourcePathsKeepHashQuestionMarkAndPercent() throws {

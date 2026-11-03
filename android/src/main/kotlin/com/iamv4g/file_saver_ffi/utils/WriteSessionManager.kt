@@ -308,7 +308,7 @@ internal class WriteSessionManager(
             when (e) {
                 is CancellationException -> throw e
                 is FileExistsException -> Constants.ERROR_FILE_EXISTS
-                is IOException -> Constants.ERROR_FILE_IO
+                is IOException -> ioErrorCode(e)
                 is SecurityException -> Constants.ERROR_PERMISSION_DENIED
                 // A non-tree SAF URI, or a MIME type the MediaStore collection rejects.
                 is IllegalArgumentException -> Constants.ERROR_INVALID_INPUT

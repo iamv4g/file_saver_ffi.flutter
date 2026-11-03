@@ -12,6 +12,7 @@ import com.iamv4g.file_saver_ffi.utils.Constants
 import com.iamv4g.file_saver_ffi.utils.FileHelper
 import com.iamv4g.file_saver_ffi.utils.SAFHelper
 import com.iamv4g.file_saver_ffi.utils.StoreHelper
+import com.iamv4g.file_saver_ffi.utils.ioErrorCode
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.withContext
@@ -94,7 +95,7 @@ sealed class SaveEntryFactory {
                 withContext(NonCancellable) { commitEntry(context, entry) }
             } catch (e: Exception) {
                 deleteEntry(context, entry.uri)
-                scope.sendError(Constants.ERROR_FILE_IO, "Failed to finalize file: ${e.message}")
+                scope.sendError(ioErrorCode(e), "Failed to finalize file: ${e.message}")
                 return
             }
         scope.sendProgress(1.0)
@@ -127,10 +128,10 @@ sealed class SaveEntryFactory {
             try {
                 createEntryDirect(context, conflictResolution)
             } catch (e: IOException) {
-                scope.sendError(Constants.ERROR_FILE_IO, "Failed to create MediaStore entry: ${e.message}")
+                scope.sendError(ioErrorCode(e), "Failed to create MediaStore entry: ${e.message}")
                 null
             } catch (e: FileExistsException) {
-                scope.sendError(Constants.ERROR_FILE_EXISTS, e.message ?: "File already exists")
+                scope.sendError(Constants.ERROR_FILE_EXISTS, e.fileName)
                 null
             } catch (e: IllegalArgumentException) {
                 // A target the input can't be saved to: a file type the location
@@ -195,10 +196,10 @@ sealed class SaveEntryFactory {
             try {
                 createEntryDirect(context, conflictResolution)
             } catch (e: IOException) {
-                scope.sendError(Constants.ERROR_FILE_IO, "Failed to create file: ${e.message}")
+                scope.sendError(ioErrorCode(e), "Failed to create file: ${e.message}")
                 null
             } catch (e: FileExistsException) {
-                scope.sendError(Constants.ERROR_FILE_EXISTS, e.message ?: "File already exists")
+                scope.sendError(Constants.ERROR_FILE_EXISTS, e.fileName)
                 null
             } catch (e: IllegalArgumentException) {
                 // A target the input can't be saved to: a file type the location

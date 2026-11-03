@@ -172,6 +172,64 @@ void main() {
     });
   });
 
+  testWidgets('an HTTP error throws NetworkException with the status code', (
+    _,
+  ) async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((request) {
+      request.response.statusCode = HttpStatus.notFound;
+      request.response.close();
+    });
+
+    await expectLater(
+      FileSaver.saveAsync(
+        input: SaveInput.network(
+          url: 'http://127.0.0.1:${server.port}/missing.txt',
+        ),
+        fileName: 'missing',
+        fileType: _text,
+        saveLocation: AndroidSaveLocation.downloads,
+        subDir: _subDir,
+      ),
+      throwsA(
+        isA<NetworkException>()
+            .having((e) => e.statusCode, 'statusCode', 404)
+            .having(
+              (e) => e.message,
+              'message',
+              'Network error: HTTP 404: Not Found',
+            ),
+      ),
+    );
+  });
+
+  testWidgets('a conflict with fail throws FileExistsException with the '
+      'file name', (_) async {
+    Future<Uri> save() => FileSaver.saveAsync(
+      input: SaveInput.bytes(Uint8List.fromList('x'.codeUnits)),
+      fileName: 'taken',
+      fileType: _text,
+      saveLocation: AndroidSaveLocation.downloads,
+      subDir: _subDir,
+      conflictResolution: ConflictResolution.fail,
+    );
+    await save();
+
+    await expectLater(
+      save(),
+      throwsA(
+        isA<FileExistsException>()
+            .having((e) => e.fileName, 'fileName', 'taken.txt')
+            .having(
+              (e) => e.message,
+              'message',
+              'File already exists: taken.txt',
+            ),
+      ),
+    );
+  });
+
   testWidgets('openWrite with skip returns null for an existing file', (
     _,
   ) async {

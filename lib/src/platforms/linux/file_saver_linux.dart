@@ -93,8 +93,7 @@ class FileSaverLinux extends DesktopFileSaver<LinuxSaveLocation> {
     if (!hasHome) {
       throw NativePlatformException(
         'Could not resolve the $folder directory: xdg-user-dir has no '
-            'XDG_${key}_DIR and HOME is not set.',
-        'PLATFORM_ERROR',
+        'XDG_${key}_DIR and HOME is not set.',
       );
     }
     return p.join(home, folder);

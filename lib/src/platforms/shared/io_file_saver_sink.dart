@@ -50,7 +50,7 @@ FileSaverException mapIOException(Object e) {
     return NetworkException(e.toString());
   }
 
-  return NativePlatformException(e.toString(), 'UNKNOWN');
+  return NativePlatformException(e.toString());
 }
 
 /// A write session on a [RandomAccessFile]. Operations run one at a time, in

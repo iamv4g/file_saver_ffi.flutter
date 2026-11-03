@@ -691,7 +691,7 @@ class FileSaverAndroid extends FileSaverPlatform {
             case 2:
               completer.completeError(
                 FileSaverException.fromErrorResult(
-                  dataStr ?? 'UNKNOWN',
+                  dataStr ?? FileSaverErrorCode.platform,
                   messageStr ?? '',
                 ),
               );
@@ -737,7 +737,7 @@ class FileSaverAndroid extends FileSaverPlatform {
             case 2:
               done.completeError(
                 FileSaverException.fromErrorResult(
-                  dataStr ?? 'UNKNOWN',
+                  dataStr ?? FileSaverErrorCode.platform,
                   messageStr ?? '',
                 ),
               );
@@ -802,6 +802,8 @@ class FileSaverAndroid extends FileSaverPlatform {
       progress: progress,
       data: data?.toDartString(releaseOriginal: true),
       message: message?.toDartString(releaseOriginal: true),
+      // Kotlin sends the HTTP status of a network error as the progress.
+      statusCode: eventType == 2 && progress > 0 ? progress.toInt() : null,
     );
   }
 }

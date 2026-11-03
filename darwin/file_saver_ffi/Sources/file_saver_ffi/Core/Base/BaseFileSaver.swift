@@ -72,7 +72,7 @@ protocol BaseFileSaver: AnyObject {
         conflictResolution: ConflictResolution,
         onProgress: ((Double) -> Void)?,
         onSuccess: @escaping (String) -> Void,
-        onError: @escaping (String, String) -> Void,
+        onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,
         onCancelHandlerReady: @escaping (@escaping () -> Void) -> Void,
         onComplete: @escaping () -> Void,
@@ -94,7 +94,7 @@ extension BaseFileSaver {
         albumName: String?,
         onProgress: ((Double) -> Void)?
     ) throws -> String {
-        throw FileSaverError.unsupportedFormat("This file type cannot be saved to Photos Library")
+        throw FileSaverError.unsupportedFormat((fileName as NSString).pathExtension)
     }
 
     func saveFileToPhotos(
@@ -103,7 +103,7 @@ extension BaseFileSaver {
         albumName: String?,
         onProgress: ((Double) -> Void)?
     ) throws -> String {
-        throw FileSaverError.unsupportedFormat("This file type cannot be saved to Photos Library")
+        throw FileSaverError.unsupportedFormat(sourceURL.pathExtension)
     }
     #endif
 }

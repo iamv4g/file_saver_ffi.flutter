@@ -27,10 +27,25 @@ void main() {
       );
     });
 
-    test('2 without code or message -> NativePlatformException UNKNOWN', () {
+    test('2 with a status code -> NetworkException with it', () {
+      final event =
+          parseNativeEvent(
+                2,
+                data: 'NETWORK_ERROR',
+                message: 'HTTP 503',
+                statusCode: 503,
+              )
+              as SaveProgressError;
+      expect(
+        event.exception,
+        isA<NetworkException>().having((e) => e.statusCode, 'statusCode', 503),
+      );
+    });
+
+    test('2 without code or message -> PLATFORM_ERROR', () {
       final event = parseNativeEvent(2) as SaveProgressError;
       expect(event.exception, isA<NativePlatformException>());
-      expect(event.exception.code, 'UNKNOWN');
+      expect(event.exception.code, 'PLATFORM_ERROR');
       expect(event.exception.message, 'Unknown error');
     });
 
@@ -50,9 +65,9 @@ void main() {
       expect(parseNativeEvent(4), isA<SaveProgressCancelled>());
     });
 
-    test('unknown type -> UNKNOWN_TYPE error', () {
+    test('unknown type -> PLATFORM_ERROR', () {
       final event = parseNativeEvent(99) as SaveProgressError;
-      expect(event.exception.code, 'UNKNOWN_TYPE');
+      expect(event.exception.code, 'PLATFORM_ERROR');
     });
   });
 
@@ -81,6 +96,16 @@ void main() {
       expect(parseDarwinMessage([4]), isA<SaveProgressCancelled>());
     });
 
+    test('an error with a fourth element carries the status code', () {
+      final event =
+          parseDarwinMessage([2, 'NETWORK_ERROR', 'HTTP 404', 404])
+              as SaveProgressError;
+      expect(
+        event.exception,
+        isA<NetworkException>().having((e) => e.statusCode, 'statusCode', 404),
+      );
+    });
+
     test('rejects malformed messages', () {
       for (final message in <Object?>[
         null,
@@ -90,13 +115,13 @@ void main() {
       ]) {
         final event = parseDarwinMessage(message);
         expect(event, isA<SaveProgressError>(), reason: '$message');
-        expect((event as SaveProgressError).exception.code, 'INVALID_MESSAGE');
+        expect((event as SaveProgressError).exception.code, 'PLATFORM_ERROR');
       }
     });
 
-    test('unknown type -> UNKNOWN_TYPE error', () {
+    test('unknown type -> PLATFORM_ERROR', () {
       final event = parseDarwinMessage([7]) as SaveProgressError;
-      expect(event.exception.code, 'UNKNOWN_TYPE');
+      expect(event.exception.code, 'PLATFORM_ERROR');
     });
   });
 }

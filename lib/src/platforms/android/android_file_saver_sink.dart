@@ -72,7 +72,7 @@ class _AndroidWriteSession implements WriteSession {
             if (eventType == 2) {
               completer.completeError(
                 FileSaverException.fromErrorResult(
-                  data ?? 'UNKNOWN',
+                  data ?? FileSaverErrorCode.platform,
                   message ?? '',
                 ),
               );

@@ -80,7 +80,7 @@ object SAFHelper {
                     }
 
                     ConflictResolution.FAIL -> {
-                        throw FileExistsException("File already exists: $fileName")
+                        throw FileExistsException(fileName)
                     }
                 }
             }

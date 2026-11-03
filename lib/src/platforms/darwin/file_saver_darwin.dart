@@ -32,10 +32,7 @@ class FileSaverDarwin extends FileSaverPlatform {
     // Initialize Dart API DL for NativePort communication
     final initResult = _fileSaver.initDartApiDl(NativeApi.initializeApiDLData);
     if (initResult != 0) {
-      throw const NativePlatformException(
-        'Failed to initialize Dart API DL',
-        'INIT_FAILED',
-      );
+      throw const NativePlatformException('Failed to initialize Dart API DL');
     }
   }
 

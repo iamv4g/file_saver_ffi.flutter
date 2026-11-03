@@ -12,10 +12,10 @@ void main() {
       'ICLOUD_DOWNLOAD_FAILED': ICloudDownloadException,
       'NETWORK_ERROR': NetworkException,
       'INVALID_INPUT': InvalidInputException,
-      'INVALID_ARGUMENT': InvalidInputException,
       'UNSUPPORTED_FORMAT': UnsupportedFormatException,
       'STORAGE_FULL': StorageFullException,
       'FILE_IO_ERROR': FileIOException,
+      'WRITE_SESSION_ERROR': WriteSessionException,
       'PLATFORM_ERROR': NativePlatformException,
     };
 
@@ -24,6 +24,50 @@ void main() {
         final e = FileSaverException.fromErrorResult(code, 'details');
         expect(e.runtimeType, type);
       });
+    });
+
+    test('the message fills the field of the exception, prefixed '
+        'once', () {
+      final exists =
+          FileSaverException.fromErrorResult('FILE_EXISTS', 'a.txt')
+              as FileExistsException;
+      expect(exists.fileName, 'a.txt');
+      expect(exists.message, 'File already exists: a.txt');
+
+      final missing =
+          FileSaverException.fromErrorResult('FILE_NOT_FOUND', '/x.bin')
+              as SourceFileNotFoundException;
+      expect(missing.path, '/x.bin');
+      expect(missing.message, 'Source file not found: /x.bin');
+
+      final format =
+          FileSaverException.fromErrorResult('UNSUPPORTED_FORMAT', 'heic')
+              as UnsupportedFormatException;
+      expect(format.format, 'heic');
+
+      expect(
+        FileSaverException.fromErrorResult('INVALID_INPUT', 'empty').message,
+        'Invalid input: empty',
+      );
+      expect(
+        FileSaverException.fromErrorResult(
+          'ICLOUD_DOWNLOAD_FAILED',
+          'timed out',
+        ).message,
+        'iCloud file download failed: timed out',
+      );
+    });
+
+    test('NETWORK_ERROR keeps the status code', () {
+      final e =
+          FileSaverException.fromErrorResult(
+                'NETWORK_ERROR',
+                'HTTP 404',
+                statusCode: 404,
+              )
+              as NetworkException;
+      expect(e.statusCode, 404);
+      expect(e.message, 'Network error: HTTP 404');
     });
 
     test('unknown code keeps the code on NativePlatformException', () {
@@ -54,8 +98,12 @@ void main() {
         isA<PermissionDeniedException>(),
       );
       expect(
-        FileSaverException.fromObj(Exception('NO_APP_FOUND: none')),
+        FileSaverException.fromObj(Exception('OPEN_FAILED: none')),
         isA<OpenFailedException>(),
+      );
+      expect(
+        FileSaverException.fromObj(Exception('WRITE_SESSION_ERROR: closed')),
+        isA<WriteSessionException>(),
       );
       expect(
         FileSaverException.fromObj(Exception('CANCELLED')),
@@ -68,5 +116,9 @@ void main() {
       expect(e, isA<NativePlatformException>());
       expect(e.code, 'PLATFORM_ERROR');
     });
+  });
+
+  test('NativePlatformException defaults to PLATFORM_ERROR', () {
+    expect(const NativePlatformException('boom').code, 'PLATFORM_ERROR');
   });
 }

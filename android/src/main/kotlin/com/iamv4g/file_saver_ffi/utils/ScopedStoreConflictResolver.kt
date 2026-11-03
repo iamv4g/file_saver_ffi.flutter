@@ -74,7 +74,7 @@ object ScopedStoreConflictResolver {
                 }
 
                 ConflictResolution.FAIL -> {
-                    throw FileExistsException("File already exists: $originalName")
+                    throw FileExistsException(originalName)
                 }
             }
         }

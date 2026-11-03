@@ -5,6 +5,10 @@ object Constants {
     // Error Codes
     // ===========================================
 
+    // The same strings as FileSaverErrorCode in Dart
+    // (lib/src/exceptions/file_saver_exceptions.dart), which also lists the
+    // message each code carries.
+
     /**
      * Invalid input (empty data, malformed URI, invalid file path)
      */

@@ -162,7 +162,7 @@ final class WriteSession {
                 self.bytesWritten += Int64(chunk.count)
                 reporter.sendBytes(self.bytesWritten)
             } catch {
-                self.fail(code: Constants.errorFileIO, message: error.localizedDescription, reporter: reporter)
+                self.fail(FileHelper.ioError(error, url: self.fileURL), reporter: reporter)
             }
         }
     }
@@ -177,7 +177,7 @@ final class WriteSession {
                 try self.fileHandle.synchronize()
                 reporter.sendBytes(self.bytesWritten)
             } catch {
-                self.fail(code: Constants.errorFileIO, message: error.localizedDescription, reporter: reporter)
+                self.fail(FileHelper.ioError(error, url: self.fileURL), reporter: reporter)
             }
         }
     }
@@ -202,7 +202,8 @@ final class WriteSession {
             } catch {
                 self.closeHandle()
                 self.deleteFile()
-                return reporter.sendError(code: Constants.errorFileIO, message: error.localizedDescription)
+                let failure = FileHelper.ioError(error, url: self.fileURL)
+                return reporter.sendError(code: failure.code, message: failure.message)
             }
             do {
                 reporter.sendSuccess(uri: try self.commit())
@@ -225,9 +226,9 @@ final class WriteSession {
         }
     }
 
-    private func fail(code: String, message: String, reporter: WriteSessionReporter) {
-        failure = (code, message)
-        reporter.sendError(code: code, message: message)
+    private func fail(_ error: FileSaverError, reporter: WriteSessionReporter) {
+        failure = (error.code, error.message)
+        reporter.sendError(code: error.code, message: error.message)
     }
 
     private func closeHandle() {

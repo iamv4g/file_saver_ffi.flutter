@@ -90,7 +90,7 @@ void main() {
       for (final code in codes) {
         final e = FileSaverException.fromErrorResult(code, 'details');
         expect(e.code, code, reason: '$code maps to ${e.runtimeType}');
-        if (code != 'PLATFORM_ERROR') {
+        if (code != FileSaverErrorCode.platform) {
           expect(e, isNot(isA<NativePlatformException>()), reason: code);
         }
       }
@@ -108,6 +108,43 @@ void main() {
       expectAllMapped(
         RegExp(r'error\w+ = "(\w+)"').allMatches(source).map((m) => m[1]!),
       );
+    });
+
+    test('every FileSaverErrorCode maps to a dedicated exception', () {
+      expectAllMapped(FileSaverErrorCode.mapped);
+    });
+
+    // The Dart exceptions add these to the detail native code sends (see
+    // FileSaverErrorCode), so a native message that has them shows them twice.
+    test('native messages leave out the prefixes Dart adds', () {
+      const prefixes = [
+        'File already exists',
+        'Source file not found',
+        'Invalid input:',
+        'Network error:',
+        'Network download failed',
+        'iCloud download failed',
+        'iCloud file download failed',
+      ];
+      final sources = [
+        ...Directory(
+          'android/src/main/kotlin',
+        ).listSync(recursive: true).where((f) => f.path.endsWith('.kt')),
+        ...Directory(
+          _swiftSources,
+        ).listSync(recursive: true).where((f) => f.path.endsWith('.swift')),
+      ].cast<File>();
+      expect(sources, isNotEmpty);
+      for (final file in sources) {
+        final source = file.readAsStringSync();
+        for (final prefix in prefixes) {
+          expect(
+            source.contains('"$prefix'),
+            isFalse,
+            reason: '${file.path} sends "$prefix…"',
+          );
+        }
+      }
     });
   });
 }
