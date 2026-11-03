@@ -93,7 +93,7 @@ class NetworkSaveTest : FileSaverTestBase() {
 
         assertEquals("Events: ${callback.events}", 3, callback.awaitTerminal().type)
         assertArrayEquals(payload, mediaStore.rowNamed("download.bin")!!.file.readBytes())
-        assertTrue(callback.events.count { it.type == 1 } >= 4)
+        assertProgress(callback, payload.size.toString())
     }
 
     @Test
@@ -104,6 +104,20 @@ class NetworkSaveTest : FileSaverTestBase() {
 
         assertEquals("Events: ${callback.events}", 3, callback.awaitTerminal().type)
         assertArrayEquals(payload, mediaStore.rowNamed("download.bin")!!.file.readBytes())
+        assertProgress(callback, size = null)
+    }
+
+    /** Asserts growing byte counts that end with the payload, of [size]. */
+    private fun assertProgress(
+        callback: RecordingCallback,
+        size: String?,
+    ) {
+        val progress = callback.events.filter { it.type == 1 }
+        assertTrue("Events: ${callback.events}", progress.isNotEmpty())
+        val bytes = progress.map { it.progress }
+        assertEquals(bytes.distinct().sorted(), bytes)
+        assertEquals(payload.size.toDouble(), bytes.last(), 0.0)
+        assertEquals(setOf(size), progress.map { it.data }.toSet())
     }
 
     @Test

@@ -3,29 +3,23 @@ package com.iamv4g.file_saver_ffi.core.base
 import com.iamv4g.file_saver_ffi.models.SaveProgressEvent
 import kotlinx.coroutines.channels.ProducerScope
 
-/**
- * Maps progress from source range [0.0-1.0] to target range [start-end].
- */
-internal fun mapProgress(
-    progress: Double,
-    start: Double,
-    end: Double,
-): Double = start + (progress * (end - start))
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Event Sending Extensions
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Progress events use trySend and may be dropped when the buffer is full; a
-// later progress event replaces them. Terminal events (Error, Success) use the
-// suspending send so they are never dropped, otherwise the Dart stream would
-// never end.
+// Every event uses the suspending send, so none is dropped: the Dart stream
+// ends only with a terminal event (Error, Success), and the last progress
+// event carries the size of the file. FileHelper throttles progress events.
 
 /**
- * Sends a progress event.
+ * Sends a progress event: [bytesWritten] of [totalBytes], which is null if
+ * the size isn't known.
  */
-internal fun ProducerScope<SaveProgressEvent>.sendProgress(progress: Double) {
-    trySend(SaveProgressEvent.Progress(progress))
+internal suspend fun ProducerScope<SaveProgressEvent>.sendProgress(
+    bytesWritten: Long,
+    totalBytes: Long?,
+) {
+    send(SaveProgressEvent.Progress(bytesWritten, totalBytes))
 }
 
 /**
@@ -52,6 +46,5 @@ internal suspend fun ProducerScope<SaveProgressEvent>.sendSuccess(uri: String) {
  * existing file without writing anything.
  */
 internal suspend fun ProducerScope<SaveProgressEvent>.sendExisting(entry: SaveEntry.Existing) {
-    sendProgress(1.0)
     sendSuccess(entry.uri.toString())
 }

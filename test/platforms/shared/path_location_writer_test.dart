@@ -291,15 +291,16 @@ void main() {
           isTrue,
         );
         await File(copier.path!).writeAsBytes(bytes);
-        copier.onProgress!(0.5);
-        copier.onProgress!(1);
+        copier.onProgress!(const SaveProgressUpdate.bytes(500, 1000));
+        copier.onProgress!(const SaveProgressUpdate.bytes(1000, 1000));
         copier.done.complete();
         await done;
 
         expect(events[0], isA<SaveProgressStarted>());
-        expect(events.whereType<SaveProgressUpdate>().map((e) => e.progress), [
-          0.5,
-          1,
+        final updates = events.whereType<SaveProgressUpdate>();
+        expect(updates.map((e) => (e.bytesWritten, e.progress)), [
+          (500, 0.5),
+          (1000, 1.0),
         ]);
         final uri = (events.last as SaveProgressComplete).uri;
         expect(p.equals(uri.toFilePath(), copier.path!), isTrue);
@@ -625,13 +626,13 @@ class _FakeCopier {
   final done = Completer<void>();
   String? source;
   String? path;
-  void Function(double progress)? onProgress;
+  void Function(SaveProgressUpdate update)? onProgress;
   var cancelled = false;
 
   ({Future<void> done, void Function() cancel}) copy(
     String source,
     String path,
-    void Function(double progress) onProgress,
+    void Function(SaveProgressUpdate update) onProgress,
   ) {
     this.source = source;
     this.path = path;

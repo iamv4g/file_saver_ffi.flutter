@@ -152,44 +152,26 @@ object FileHelper {
     }
 
     /**
-     * Writes data to output stream with real-time progress
-     *
-     * @param outputStream Output stream from MediaStore
-     * @param data File data to write
-     * @param onProgress Optional suspend callback receiving progress from 0.0 to 1.0
+     * Writes [data] to [outputStream] in chunks, reporting the bytes written
+     * through [onProgress], throttled by [ProgressThrottle].
      */
     suspend fun writeStream(
         outputStream: OutputStream,
         data: ByteArray,
-        onProgress: (suspend (Double) -> Unit)?,
+        onProgress: (suspend (bytesWritten: Long) -> Unit)?,
     ) = withContext(Dispatchers.IO) {
         outputStream.use { stream ->
-            var bytesWritten = 0L
-            val chunkSize = Constants.CHUNK_SIZE
-            val totalBytes = data.size.toLong()
-
-            while (bytesWritten < totalBytes) {
-                // Check for cancellation before each chunk
+            val throttle = ProgressThrottle(data.size.toLong())
+            var bytesWritten = 0
+            while (bytesWritten < data.size) {
                 ensureActive()
-
-                // Calculate chunk size
-                val remainingBytes = (totalBytes - bytesWritten).toInt()
-                val currentChunkSize = minOf(remainingBytes, chunkSize)
-
-                // Write chunk
-                stream.write(data, bytesWritten.toInt(), currentChunkSize)
-
-                // Update progress
-                bytesWritten += currentChunkSize
-
-                // Report progress (0.0 to 1.0)
-                if (onProgress != null) {
-                    val progress = bytesWritten.toDouble() / totalBytes.toDouble()
-                    onProgress(progress)
+                val chunkSize = minOf(data.size - bytesWritten, Constants.CHUNK_SIZE)
+                stream.write(data, bytesWritten, chunkSize)
+                bytesWritten += chunkSize
+                if (onProgress != null && throttle.shouldReport(bytesWritten.toLong())) {
+                    onProgress(bytesWritten.toLong())
                 }
             }
-
-            // Flush stream
             stream.flush()
         }
     }
@@ -197,7 +179,8 @@ object FileHelper {
     /** Result of opening a source file */
     data class SourceFile(
         val inputStream: InputStream,
-        val totalSize: Long,
+        /** Null if the provider doesn't report it. */
+        val totalSize: Long?,
     )
 
     /**
@@ -223,18 +206,18 @@ object FileHelper {
                         context.contentResolver.openInputStream(uri)
                             ?: throw FileNotFoundException("Cannot open content URI: $filePath")
 
-                    // Get file size from ContentResolver
+                    // Many providers don't report a size, or report 0.
                     val size =
                         context.contentResolver
                             .query(uri, arrayOf(MediaStore.MediaColumns.SIZE), null, null, null)
                             ?.use { cursor ->
-                                if (cursor.moveToFirst()) {
-                                    val sizeIndex = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE)
-                                    if (sizeIndex >= 0) cursor.getLong(sizeIndex) else 0L
+                                val sizeIndex = cursor.getColumnIndex(MediaStore.MediaColumns.SIZE)
+                                if (cursor.moveToFirst() && sizeIndex >= 0 && !cursor.isNull(sizeIndex)) {
+                                    cursor.getLong(sizeIndex).takeIf { it > 0 }
                                 } else {
-                                    0L
+                                    null
                                 }
-                            } ?: 0L
+                            }
 
                     SourceFile(inputStream, size)
                 }
@@ -260,22 +243,21 @@ object FileHelper {
         }
 
     /**
-     * Copies data from input stream to output stream with real-time progress
+     * Copies [input] to [output], reporting the bytes written through
+     * [onProgress], throttled by [ProgressThrottle].
      *
-     * @param input Source input stream
-     * @param output Destination output stream
-     * @param totalSize Total size for progress calculation (0 if unknown)
-     * @param onProgress Suspend progress callback (0.0 to 1.0)
+     * @param totalSize The size of the source, or null if it isn't known
      */
     suspend fun copyStream(
         input: InputStream,
         output: OutputStream,
-        totalSize: Long,
-        onProgress: (suspend (Double) -> Unit)?,
+        totalSize: Long?,
+        onProgress: (suspend (bytesWritten: Long) -> Unit)?,
     ) = withContext(Dispatchers.IO) {
         input.use { inputStream ->
             output.use { outputStream ->
                 val buffer = ByteArray(Constants.CHUNK_SIZE)
+                val throttle = ProgressThrottle(totalSize)
                 var bytesWritten = 0L
 
                 while (true) {
@@ -288,13 +270,15 @@ object FileHelper {
                     outputStream.write(buffer, 0, bytesRead)
                     bytesWritten += bytesRead
 
-                    if (onProgress != null && totalSize > 0) {
-                        val progress = bytesWritten.toDouble() / totalSize.toDouble()
-                        onProgress(minOf(progress, 1.0))
+                    if (onProgress != null && throttle.shouldReport(bytesWritten)) {
+                        onProgress(bytesWritten)
                     }
                 }
 
                 outputStream.flush()
+                if (onProgress != null && throttle.shouldReport(bytesWritten, isLast = true)) {
+                    onProgress(bytesWritten)
+                }
             }
         }
     }

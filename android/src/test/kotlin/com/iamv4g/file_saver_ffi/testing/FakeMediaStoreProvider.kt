@@ -59,6 +59,9 @@ class FakeMediaStoreProvider : ContentProvider() {
     @Volatile
     var readOnly = false
 
+    /** False makes a query return a null SIZE, as many providers do. */
+    var reportsSize = true
+
     override fun onCreate() = true
 
     override fun getType(uri: Uri): String? = rowFor(uri)?.values?.getAsString(MediaColumns.MIME_TYPE)
@@ -128,7 +131,7 @@ class FakeMediaStoreProvider : ContentProvider() {
                         when (it) {
                             MediaColumns._ID -> row.id
                             // MediaProvider fills it in from the file.
-                            MediaColumns.SIZE -> row.file.length()
+                            MediaColumns.SIZE -> if (reportsSize) row.file.length() else null
                             else -> row.values.get(it)
                         }
                     },

@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.flowOn
  * ```kotlin
  * fun saveBytes(...): Flow<SaveProgressEvent> = saveFlow {
  *     // Business logic only - no boilerplate needed
- *     trySend(SaveProgressEvent.Progress(0.05))
+ *     sendProgress(bytesWritten, totalBytes)
  *     // ... do work ...
  *     send(SaveProgressEvent.Success(uri.toString()))
  * }

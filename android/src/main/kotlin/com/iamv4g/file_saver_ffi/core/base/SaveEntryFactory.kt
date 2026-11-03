@@ -78,14 +78,13 @@ sealed class SaveEntryFactory {
     ): Uri
 
     /**
-     * Completes save operation (progress 0.9 → 1.0 → Success).
+     * Commits [entry] and reports success, or deletes it and reports the error.
      */
     suspend fun finishSave(
         scope: ProducerScope<SaveProgressEvent>,
         context: Context,
         entry: SaveEntry.Created,
     ) {
-        scope.sendProgress(0.9)
         // NonCancellable: once the replaced file may be gone, a cancellation
         // must not make the caller delete the new one as well. commitEntry only
         // throws before it touches the replaced file, so deleting the new entry
@@ -98,7 +97,6 @@ sealed class SaveEntryFactory {
                 scope.sendError(ioErrorCode(e), "Failed to finalize file: ${e.message}")
                 return
             }
-        scope.sendProgress(1.0)
         scope.sendSuccess(uri.toString())
     }
 

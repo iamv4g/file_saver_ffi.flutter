@@ -347,14 +347,9 @@ class FileSaver(
                     return
                 }
 
-            // In steps of 1%, as the other saves report it.
-            var reported = 0.0
             try {
-                FileHelper.copyStream(source.inputStream, output, source.totalSize) { progress ->
-                    if (progress - reported >= 0.01 || progress >= 1.0) {
-                        reported = progress
-                        callback.onEvent(1, progress, null, null)
-                    }
+                FileHelper.copyStream(source.inputStream, output, source.totalSize) { bytesWritten ->
+                    callback.onEvent(1, bytesWritten.toDouble(), source.totalSize?.toString(), null)
                 }
             } catch (e: IOException) {
                 callback.onEvent(2, 0.0, ioErrorCode(e), "Failed to copy file: ${e.message}")
@@ -545,7 +540,8 @@ class FileSaver(
             flow.collect { event ->
                 when (event) {
                     is SaveProgressEvent.Started -> callback.onEvent(0, 0.0, null, null)
-                    is SaveProgressEvent.Progress -> callback.onEvent(1, event.value, null, null)
+                    is SaveProgressEvent.Progress ->
+                        callback.onEvent(1, event.bytesWritten.toDouble(), event.totalBytes?.toString(), null)
                     is SaveProgressEvent.Error -> callback.onEvent(2, event.statusCode?.toDouble() ?: 0.0, event.code, event.message)
                     is SaveProgressEvent.Success -> callback.onEvent(3, 1.0, event.uri, null)
                 }
