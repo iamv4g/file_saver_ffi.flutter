@@ -59,6 +59,10 @@ class FileSaver {
   /// Cancelling the subscription cancels the save: the stream emits nothing
   /// more, and the cancel completes once the partial file is deleted.
   ///
+  /// The stream is single-subscription. The save starts when it is listened
+  /// to, and listening again throws a [StateError] instead of saving the file
+  /// a second time.
+  ///
   /// [saveLocation] defaults by platform:
   /// - Android: [AndroidSaveLocation.downloads]
   /// - iOS: [IosSaveLocation.documents]
@@ -178,7 +182,8 @@ class FileSaver {
   ///
   /// If [saveLocation] is null, shows the directory picker first.
   /// Yields [SaveProgressCancelled] if the picker is dismissed. Cancelling the
-  /// subscription works as in [save].
+  /// subscription works as in [save], and the stream is single-subscription
+  /// too.
   ///
   /// Web: falls back to anchor-download if the browser has no
   /// `showDirectoryPicker()` (Firefox, Safari). Other picker errors, such as

@@ -17,6 +17,7 @@ import '../../models/save_progress.dart';
 import '../../platform_interface/file_saver_platform.dart';
 import '../shared/native_event_parser.dart';
 import '../shared/path_location_writer.dart';
+import '../shared/single_subscription.dart';
 import 'bindings.g.dart';
 import 'darwin_file_saver_sink.dart';
 
@@ -443,7 +444,7 @@ class FileSaverDarwin extends FileSaverPlatform {
   Stream<SaveProgress> _runSave(
     int Function(Arena arena, int nativePort) start,
   ) {
-    return Stream.multi((controller) {
+    return singleSubscription((controller) {
       final receivePort = ReceivePort();
       final ended = Completer<void>();
 

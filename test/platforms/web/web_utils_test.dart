@@ -61,6 +61,15 @@ void main() {
       },
     );
 
+    test('a second listen throws instead of running the save again', () async {
+      var runs = 0;
+      final stream = WebUtils.executeSave((token, emit) async => runs++);
+      await stream.drain<void>();
+
+      expect(() => stream.listen(null), throwsStateError);
+      expect(runs, 1);
+    });
+
     test(
       'cancelling a running save cancels its token and waits for it to end',
       () async {

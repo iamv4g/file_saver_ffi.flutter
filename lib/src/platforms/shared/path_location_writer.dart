@@ -14,6 +14,7 @@ import 'conflict_resolver.dart';
 import 'file_name.dart';
 import 'io_file_entity.dart';
 import 'io_file_saver_sink.dart';
+import 'single_subscription.dart';
 
 /// The size of the chunks [SaveBytesInput] bytes are written in.
 const int _chunkSize = 1024 * 1024;
@@ -139,7 +140,7 @@ abstract final class PathLocationWriter {
   }) {
     assert(copySource == null || input is SaveFileInput);
     checkFileName('$baseName.$ext');
-    return Stream.multi((controller) {
+    return singleSubscription((controller) {
       final cancellation = _Cancellation();
 
       void emit(SaveProgress event) {

@@ -7,6 +7,7 @@ import 'package:web/web.dart';
 
 import '../../exceptions/file_saver_exceptions.dart';
 import '../../models/save_progress.dart';
+import '../shared/single_subscription.dart';
 import 'web_cancellation_token.dart';
 
 extension on Map<String, String>? {
@@ -180,7 +181,7 @@ class WebUtils {
     )
     operation,
   ) {
-    return Stream.multi((controller) {
+    return singleSubscription((controller) {
       final token = WebCancellationToken();
 
       void emit(SaveProgress event) {
