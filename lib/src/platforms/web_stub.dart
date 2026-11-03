@@ -57,3 +57,14 @@ class FileSaverWeb extends FileSaverPlatform {
   }) =>
       throw UnsupportedError('FileSaverWeb is not supported on this platform.');
 }
+
+/// Stub of the web-only [PickedDirectoryLocation] for IO platforms, where
+/// no instance exists. It lets cross-platform code check
+/// `location is WebPickedDirectoryLocation`.
+final class WebPickedDirectoryLocation extends PickedDirectoryLocation {
+  WebPickedDirectoryLocation._() : super(uri: Uri());
+
+  /// The `FileSystemDirectoryHandle` of the picked directory, on web only.
+  Never get directoryHandle =>
+      throw UnsupportedError('directoryHandle is only available on web.');
+}

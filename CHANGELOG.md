@@ -2,6 +2,7 @@
 
 ### Added
 
+- **Web:** `WebPickedDirectoryLocation` is now exported, so web code can check the result of `pickDirectory` and use its `directoryHandle`. On other platforms the type exists for `is` checks, but `pickDirectory` never returns one.
 - `FileSaver.persistDirectory`, `restoreDirectory` and `releaseDirectory` keep access to a picked directory across app restarts, through `dir_picker`. `persistDirectory` returns a token to store; `restoreDirectory` gives the directory back on a later launch, or `null` when access is gone; `releaseDirectory` gives the access up. On iOS and macOS the token is bookmark data, so a stored `PickedDirectoryLocation` now survives a relaunch there too (before, only Android kept access, with `shouldPersist`). Persist the restored location again and store the new token, since a bookmark goes stale when the directory is moved. Not supported on web.
 
 ### Changed
@@ -12,6 +13,7 @@
 - A `fileName` that already ends with the extension of its `fileType` is no longer saved with it twice, on every platform and API: `photo.png` (or `photo.PNG`) with `ImageType.png` gives `photo.png` instead of `photo.png.png`. Other names are unchanged, so `photo.jpg` with `ImageType.png` still gives `photo.jpg.png`.
 - **Windows/Linux, and `PathLocation` on every platform:** a file name that the system can't take now throws `InvalidInputException` before anything is written: `/`, NUL, `.` and `..` everywhere, and on Windows also `\ < > : " | ? *`, control characters and device names such as `CON` or `nul.txt`. A `subDir` that is absolute (`/x`, `C:\x`) or contains `..` throws too. Before, such names failed with a `FileSystemException` or wrote outside the save location.
 - **Linux:** the plugin no longer depends on `xdg_directories`; it runs `xdg-user-dir` itself.
+- **Web:** `saveBytes` and `saveFile` now throw invalid input (empty bytes or name) and the unsupported `saveFile` as an `InvalidInputException` when they are called, as the other web saves and the other platforms do. Before, it came as a raw error on the stream, after `SaveProgressStarted`.
 
 ### Fixed
 
@@ -38,6 +40,9 @@
 - **Windows/Linux:** custom `headers` now replace the default value of a header, as with `PathLocation`, instead of adding a second value. A custom `User-Agent` is sent alone.
 - **Windows/Linux, and `PathLocation` on every platform:** `autoRename` now claims the new name and creates the file in one step, so saves of the same name at the same time each get their own file. Before, they could all pick the same name and overwrite each other.
 - **Windows/Linux, web, and `PathLocation` on every platform:** `autoRename` of a name without an extension in a directory with a dot (`/data.v2/README`) now gives `README (1)` instead of renaming the directory part, and of a dot file `.env (1)` instead of ` (1).env`.
+- **Web:** a download with `headers` or into a picked directory now fails with a `NetworkException` when the body breaks off or stops arriving for `timeout`. Before, it was a `NativePlatformException` ("Unexpected error"). A non-2xx response now sets `NetworkException.statusCode`, and a 2xx response without a body (such as 204) saves an empty file instead of failing.
+- **Web:** a compressed response (`Content-Encoding`) no longer reports progress above 1.0, because `Content-Length` counts the compressed bytes. Its progress is now unknown, as without `Content-Length`.
+- **Web:** cancelling a save into a picked directory now completes once the partial file is deleted, and a save that fails deletes it before the error is reported. An `overwrite` keeps the original in both cases.
 - **Linux:** a `LinuxSaveLocation` whose XDG directory isn't configured, or is set to `$HOME` (which disables it), now saves to its usual folder: `~/Downloads`, `~/Pictures`, `~/Videos`, `~/Music` or `~/Documents`. Before, `xdg-user-dir` printed `$HOME` for it and files landed in the home directory, and without `xdg-user-dir` every location fell back to `~/Downloads`. Empty or relative output from `xdg-user-dir` is ignored too, instead of saving relative to the working directory, and without `HOME` and an XDG directory the save fails with `NativePlatformException`.
 - **Linux:** each location is looked up once, with `xdg-user-dir` running in the background. Before, every save ran it synchronously and blocked the UI isolate.
 
