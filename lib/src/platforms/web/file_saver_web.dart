@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:js_interop';
-import 'dart:js_interop_unsafe';
 import 'dart:typed_data';
 
 import 'package:dir_picker/dir_picker.dart' as dp;
@@ -19,8 +18,11 @@ import '../../models/save_progress.dart';
 import '../../platform_interface/file_saver_platform.dart';
 import '../shared/conflict_resolver.dart';
 import 'web_file_entity.dart';
+import 'web_cancellation_token.dart';
 import 'web_file_saver_sink.dart';
 import 'web_utils.dart';
+
+export '../../models/locations/web_save_location.dart';
 
 class FileSaverWeb extends FileSaverPlatform {
   /// Registers this class as the default instance of [FileSaverPlatform].
@@ -72,17 +74,15 @@ class FileSaverWeb extends FileSaverPlatform {
     SaveLocation? saveLocation,
     String? subDir,
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
-  }) async* {
-    yield const SaveProgressStarted();
+  }) {
     validateBytesInput(fileBytes, fileName);
-    WebUtils.triggerBytesDownload(
-      fileBytes,
-      '$fileName.${fileType.ext}',
-      fileType.mimeType,
-    );
-    yield SaveProgressComplete(
-      Uri(scheme: 'browser-download', path: '$fileName.${fileType.ext}'),
-    );
+    final fullName = '$fileName.${fileType.ext}';
+    return WebUtils.executeSave((token, emit) async {
+      WebUtils.triggerBytesDownload(fileBytes, fullName, fileType.mimeType);
+      emit(
+        SaveProgressComplete(Uri(scheme: 'browser-download', path: fullName)),
+      );
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -124,7 +124,7 @@ class FileSaverWeb extends FileSaverPlatform {
     SaveLocation? saveLocation,
     String? subDir,
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
-  }) async* {
+  }) {
     throw const InvalidInputException(
       'saveFile is not supported on web. Use saveBytes or saveNetwork instead.',
     );
@@ -148,67 +148,34 @@ class FileSaverWeb extends FileSaverPlatform {
     validateNetworkInput(url, fileName);
     final fullName = '$fileName.${fileType.ext}';
 
-    return WebUtils.executeSave((token, controller) async {
+    return WebUtils.executeSave((token, emit) async {
       // No custom headers → let browser stream natively.
       if (headers == null || headers.isEmpty) {
         WebUtils.triggerUrlDownload(url, fullName, fileType.mimeType);
-        controller.addSync(
+        emit(
           SaveProgressComplete(Uri(scheme: 'browser-download', path: fullName)),
         );
         return;
       }
 
       // Custom headers require fetch() — loads file into memory (browser limitation).
-      final fetchController = AbortController();
-      token.setController(fetchController);
-      final connectionTimer = Timer(
-        timeout,
-        () => fetchController.abort("Connection timed out".toJS),
-      );
-
-      final Response response;
-      try {
-        response = await WebUtils.fetch(url, fetchController, headers: headers);
-      } finally {
-        connectionTimer.cancel();
-      }
-
-      if (token.isCancelled) return;
-
-      if (!response.ok) {
-        controller.addSync(
-          SaveProgressError(
-            NetworkException('HTTP ${response.status}: ${response.statusText}'),
-          ),
-        );
-        return;
-      }
-
-      final total = int.tryParse(response.headers.get('content-length') ?? '');
-      final reader = response.body!.getReader() as ReadableStreamDefaultReader;
+      final body = await WebUtils.fetch(url, headers, timeout, token);
       final jsChunks = <JSUint8Array>[];
-      int received = 0;
-
-      while (true) {
-        if (token.isCancelled) return;
-        final result = await reader.read().toDart;
-        if (result.done) break;
-        final chunk = result.value! as JSUint8Array;
+      var received = 0;
+      await WebUtils.read(body.reader, timeout, token, (chunk) async {
         jsChunks.add(chunk);
-        received += (chunk.getProperty('length'.toJS) as JSNumber).toDartInt;
-        if (total != null && total > 0) {
-          controller.addSync(SaveProgressUpdate(received / total));
+        received += WebUtils.lengthOf(chunk);
+        if (body.length case final length? when length > 0) {
+          emit(SaveProgressUpdate(received / length));
         }
-      }
-
-      if (token.isCancelled) return;
+      });
 
       final blob = Blob(
         jsChunks.toJS as JSArray<BlobPart>,
         BlobPropertyBag(type: fileType.mimeType),
       );
       WebUtils.triggerBlobDownload(blob, fullName);
-      controller.addSync(
+      emit(
         SaveProgressComplete(Uri(scheme: 'browser-download', path: fullName)),
       );
     });
@@ -363,39 +330,21 @@ class FileSaverWeb extends FileSaverPlatform {
     validateBytesInput(fileBytes, fileName);
     final fullName = '$fileName.${fileType.ext}';
 
-    return WebUtils.executeSave((token, controller) async {
-      final fileEntity = WebFileEntity(handle);
-      final resolvedName = await ConflictResolver(
-        fileEntity,
-      ).resolve(fullName, conflictResolution);
+    return WebUtils.executeSave((token, emit) async {
+      final resolvedName = await _resolve(handle, fullName, conflictResolution);
       if (resolvedName == null) {
-        controller.addSync(
+        emit(
           SaveProgressComplete(Uri(scheme: 'web-directory', path: fullName)),
         );
         return;
       }
 
-      final fileHandle = await handle
-          .getFileHandle(resolvedName, FileSystemGetFileOptions(create: true))
-          .toDart;
-
-      if (conflictResolution != ConflictResolution.overwrite) {
-        token.setFileEntry(fileEntity, resolvedName);
-      }
-
-      if (token.isCancelled) return;
-
-      controller.addSync(const SaveProgressUpdate(0.1));
-      final writable = await fileHandle.createWritable().toDart;
-      token.setWritable(writable);
-      if (token.isCancelled) return;
-
-      await writable.write(fileBytes.toJS as FileSystemWriteChunkType).toDart;
-      if (token.isCancelled) return;
-      controller.addSync(const SaveProgressUpdate(1.0));
-      await writable.close().toDart;
-      token.complete();
-      controller.addSync(
+      await _writeFile(handle, resolvedName, token, (writable) async {
+        emit(const SaveProgressUpdate(0.1));
+        await writable.write(fileBytes.toJS as FileSystemWriteChunkType).toDart;
+        emit(const SaveProgressUpdate(1.0));
+      });
+      emit(
         SaveProgressComplete(Uri(scheme: 'web-directory', path: resolvedName)),
       );
     });
@@ -417,98 +366,91 @@ class FileSaverWeb extends FileSaverPlatform {
     validateNetworkInput(url, fileName);
     final fullName = '$fileName.${fileType.ext}';
 
-    return WebUtils.executeSave((token, controller) async {
-      final fileEntity = WebFileEntity(handle);
-      final resolvedName = await ConflictResolver(
-        fileEntity,
-      ).resolve(fullName, conflictResolution);
+    return WebUtils.executeSave((token, emit) async {
+      // Resolved first, so `skip` downloads nothing.
+      final resolvedName = await _resolve(handle, fullName, conflictResolution);
       if (resolvedName == null) {
-        controller.addSync(
+        emit(
           SaveProgressComplete(Uri(scheme: 'web-directory', path: fullName)),
         );
         return;
       }
 
-      final fetchController = AbortController();
-      token.setController(fetchController);
-
-      Timer? idleTimer;
-
-      void resetIdleTimer() {
-        idleTimer?.cancel();
-        idleTimer = Timer(
-          timeout,
-          () => fetchController.abort("Request timed out".toJS),
-        );
+      final body = await WebUtils.fetch(url, headers, timeout, token);
+      try {
+        await _writeFile(handle, resolvedName, token, (writable) async {
+          var written = 0;
+          await WebUtils.read(body.reader, timeout, token, (chunk) async {
+            await writable.write(chunk as FileSystemWriteChunkType).toDart;
+            written += WebUtils.lengthOf(chunk);
+            if (body.length case final length? when length > 0) {
+              emit(SaveProgressUpdate(written / length));
+            }
+          });
+        });
+      } catch (_) {
+        // Closes the connection of a body that won't be read to the end.
+        body.reader?.cancel().toDart.ignore();
+        rethrow;
       }
-
-      resetIdleTimer();
-      final response = await WebUtils.fetch(
-        url,
-        fetchController,
-        headers: headers,
-      );
-      if (token.isCancelled) {
-        idleTimer?.cancel();
-        return;
-      }
-
-      if (!response.ok) {
-        idleTimer?.cancel();
-        controller.addSync(
-          SaveProgressError(
-            NetworkException('HTTP ${response.status}: ${response.statusText}'),
-          ),
-        );
-        return;
-      }
-
-      final fileHandle = await handle
-          .getFileHandle(resolvedName, FileSystemGetFileOptions(create: true))
-          .toDart;
-
-      if (conflictResolution != ConflictResolution.overwrite) {
-        token.setFileEntry(fileEntity, resolvedName);
-      }
-
-      if (token.isCancelled) {
-        idleTimer?.cancel();
-        return;
-      }
-
-      final writable = await fileHandle.createWritable().toDart;
-      token.setWritable(writable);
-      final total = int.tryParse(response.headers.get('content-length') ?? '');
-      final reader = response.body!.getReader() as ReadableStreamDefaultReader;
-
-      int written = 0;
-      resetIdleTimer();
-
-      while (true) {
-        if (token.isCancelled) break;
-
-        final result = await reader.read().toDart;
-        if (result.done) break;
-
-        resetIdleTimer();
-
-        final chunk = (result.value! as JSUint8Array).toDart;
-        await writable.write(chunk.toJS as FileSystemWriteChunkType).toDart;
-        written += chunk.lengthInBytes;
-
-        if (total != null && total > 0) {
-          controller.addSync(SaveProgressUpdate(written / total));
-        }
-      }
-
-      idleTimer?.cancel();
-      if (token.isCancelled) return;
-
-      await writable.close().toDart;
-      token.complete();
-      controller.addSync(
+      emit(
         SaveProgressComplete(Uri(scheme: 'web-directory', path: resolvedName)),
       );
     });
+  }
+
+  /// The name to save [fullName] under in [handle], or null to skip it.
+  Future<String?> _resolve(
+    FileSystemDirectoryHandle handle,
+    String fullName,
+    ConflictResolution conflictResolution,
+  ) async {
+    try {
+      return await ConflictResolver(
+        WebFileEntity(handle),
+      ).resolve(fullName, conflictResolution);
+    } on FileSaverException {
+      rethrow;
+    } catch (e) {
+      throw mapFsaError(e);
+    }
+  }
+
+  /// Writes the file [name] in [directory] with [write], then closes it.
+  ///
+  /// A failed or cancelled write deletes the file if it is new. An existing
+  /// file keeps its content, because the browser writes to a swap file until
+  /// the close.
+  Future<void> _writeFile(
+    FileSystemDirectoryHandle directory,
+    String name,
+    WebCancellationToken token,
+    Future<void> Function(FileSystemWritableFileStream writable) write,
+  ) async {
+    final fileEntity = WebFileEntity(directory);
+    final created = !await fileEntity.exists(name);
+    FileSystemWritableFileStream? writable;
+    try {
+      token.check();
+      final fileHandle = await directory
+          .getFileHandle(name, FileSystemGetFileOptions(create: true))
+          .toDart;
+      writable = await fileHandle.createWritable().toDart;
+      token.check();
+      await write(writable);
+      token.check();
+      await writable.close().toDart;
+    } catch (e) {
+      // The open writable locks the file: abort it before the delete.
+      try {
+        await writable?.abort().toDart;
+      } catch (_) {}
+      if (created) {
+        try {
+          await fileEntity.delete(name);
+        } catch (_) {}
+      }
+      throw e is FileSaverException ? e : mapFsaError(e);
+    }
   }
 }

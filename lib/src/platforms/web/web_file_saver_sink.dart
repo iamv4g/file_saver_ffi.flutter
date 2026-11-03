@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:web/web.dart';
 
-import '../../exceptions/file_saver_exceptions.dart';
 import '../../models/file_saver_sink.dart';
 import '../shared/session_file_saver_sink.dart';
 import 'web_utils.dart';
@@ -41,20 +40,6 @@ class WebFileSaverSink extends SessionFileSaverSink {
   }) : super(_BufferWriteSession(name, mimeType, download), totalSize);
 }
 
-/// Converts a rejected File System Access call into a [FileSaverException].
-///
-/// Matches on the text, which names the `DOMException` under both dart2js
-/// and dart2wasm.
-FileSaverException _mapError(Object e) {
-  if (e is FileSaverException) return e;
-  final text = e.toString();
-  if (text.contains('QuotaExceededError')) return const StorageFullException();
-  if (text.contains('NotAllowedError') || text.contains('SecurityError')) {
-    return PermissionDeniedException(text);
-  }
-  return FileIOException(text);
-}
-
 class _FsaWriteSession implements WriteSession {
   _FsaWriteSession(this._directory, this._name, this._writable, this._created);
 
@@ -72,7 +57,7 @@ class _FsaWriteSession implements WriteSession {
     try {
       await _writable.write(bytes.toJS as FileSystemWriteChunkType).toDart;
     } catch (e) {
-      throw _mapError(e);
+      throw mapFsaError(e);
     }
     return _bytesWritten += bytes.length;
   }
@@ -87,7 +72,7 @@ class _FsaWriteSession implements WriteSession {
       await _writable.close().toDart;
     } catch (e) {
       await cancel();
-      throw _mapError(e);
+      throw mapFsaError(e);
     }
     return Uri(scheme: 'web-directory', path: _name);
   }
