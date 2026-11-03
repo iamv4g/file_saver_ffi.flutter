@@ -2,6 +2,8 @@
 
 ### Added
 
+- `SaveProgressUpdate.bytesWritten` and `totalBytes` give the bytes of the file written so far and its size, or `null` when the size isn't known, as for a download without `Content-Length` or with `Content-Encoding`. Such a download now reports updates with the bytes written while `progress` stays 0.0, so a UI can show the bytes or an indeterminate indicator. Before, it reported no progress at all until it completed. This works on Windows, Linux, web and with `PathLocation` so far. `saveAsync` and `saveAsAsync` call `onProgress` only when the progress changes.
+
 - `FileSaverErrorCode` lists the `FileSaverException.code` values, so error handling can compare against constants instead of string literals. Kotlin and Swift report errors with the same codes.
 - **Web:** `persistDirectory`, `restoreDirectory` and `releaseDirectory` work on web too. The token refers to the directory handle, which `dir_picker` keeps in IndexedDB. The browser may not let the page write to a restored directory yet. `WebPickedDirectoryLocation.hasAccess()` checks it, and `requestAccess()`, called from a button, asks the user again.
 - **Web:** `WebPickedDirectoryLocation` is now exported, so web code can check the result of `pickDirectory` and use its `directoryHandle`. On other platforms the type exists for `is` checks, but `pickDirectory` never returns one.
@@ -33,6 +35,7 @@
 
 ### Fixed
 
+- **Windows/Linux, and `PathLocation` on every platform:** a compressed download (`Content-Encoding: gzip`) no longer jumps to 100% after its first chunk. `Content-Length` counts the compressed bytes, while the body is decompressed, so its size is now unknown, as on web.
 - **Android/iOS/macOS:** cancelling a save's subscription now completes once the save has stopped and deleted its partial file, as on Windows, Linux and web. Before, `subscription.cancel()` returned at once, while the file was still there. If a blocked read keeps the save from stopping, the cancel completes after 2 s.
 - The docs of `SaveProgressCancelled` and `CancelledException` no longer say that cancelling a subscription emits or throws them: a cancelled stream emits nothing more. `SaveProgressCancelled` means that the `saveAs` picker was dismissed, and `CancelledException` comes from `close()` of a cancelled `FileSaverSink`.
 - `SaveProgressUpdate.progress` and `FileSaverSink.progress` never go above 1.0 or below 0.0. Before, a server that sent more than its `Content-Length`, or a `totalSize` smaller than what was written, gave progress above 100%.

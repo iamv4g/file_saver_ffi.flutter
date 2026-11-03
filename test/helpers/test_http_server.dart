@@ -1,11 +1,15 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 
 /// Local HTTP server for network save tests.
 ///
 /// Routes:
 /// - `/file`  → [payload] with Content-Length
+/// - `/chunked` → [payload] in 64 KiB chunks, without Content-Length
+/// - `/gzip`  → [payload] gzip-encoded, with the Content-Length of the
+///   encoded body
 /// - `/auth`  → [payload] only if `X-Token: secret`, otherwise 401
 /// - `/404`   → 404
 /// - `/slow`  → first 64 KiB of [payload], then hangs until [close]
@@ -32,6 +36,18 @@ class TestHttpServer {
       case '/file':
         response.contentLength = payload.length;
         response.add(payload);
+      case '/chunked':
+        for (var offset = 0; offset < payload.length; offset += 64 * 1024) {
+          response.add(
+            payload.sublist(offset, min(offset + 64 * 1024, payload.length)),
+          );
+          await response.flush();
+        }
+      case '/gzip':
+        final encoded = gzip.encode(payload);
+        response.headers.set(HttpHeaders.contentEncodingHeader, 'gzip');
+        response.contentLength = encoded.length;
+        response.add(encoded);
       case '/auth':
         if (request.headers.value('X-Token') != 'secret') {
           response.statusCode = HttpStatus.unauthorized;

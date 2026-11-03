@@ -186,11 +186,13 @@ abstract final class PathLocationWriter {
             } else {
               final source = await _open(input, cancellation);
               if (!cancellation.isCancelled) {
-                await _pipe(source.data, session, cancellation, (written) {
-                  if (source.length case final length? when length > 0) {
-                    emit(SaveProgressUpdate(written / length));
-                  }
-                });
+                await _pipe(
+                  source.data,
+                  session,
+                  cancellation,
+                  (written) =>
+                      emit(SaveProgressUpdate.bytes(written, source.length)),
+                );
               } else {
                 // Closes the connection of a download that won't be read.
                 await source.data.listen(null).cancel();
@@ -314,9 +316,15 @@ abstract final class PathLocationWriter {
               ? NetworkException('No data received for ${timeout.inSeconds}s')
               : NetworkException('Download failed: $e'),
         );
+    // HttpClient decodes a compressed body, but contentLength stays the
+    // length of the encoded one.
+    final encoding = response.headers.value(HttpHeaders.contentEncodingHeader);
+    final compressed = encoding != null && encoding != 'identity';
     return (
       data: _onDone(data, () => client.close(force: true)),
-      length: response.contentLength >= 0 ? response.contentLength : null,
+      length: response.contentLength >= 0 && !compressed
+          ? response.contentLength
+          : null,
     );
   }
 

@@ -132,10 +132,10 @@ void main() {
       final events = await download().toList();
 
       expect(events.first, isA<SaveProgressStarted>());
-      expect(events.whereType<SaveProgressUpdate>().map((e) => e.progress), [
-        0.6,
-        1.0,
-      ]);
+      final updates = events.whereType<SaveProgressUpdate>();
+      expect(updates.map((e) => e.progress), [0.6, 1.0]);
+      expect(updates.map((e) => e.bytesWritten), [3, 5]);
+      expect(updates.map((e) => e.totalBytes), [5, 5]);
       expect(
         (events.last as SaveProgressComplete).uri,
         Uri(scheme: 'web-directory', path: 'data.bin'),
@@ -143,8 +143,26 @@ void main() {
       expect(await contentOf('data.bin'), [1, 2, 3, 4, 5]);
     });
 
-    test('a compressed body reports no progress, as its length is '
-        'unknown', () async {
+    test('a body without content-length reports the bytes written, of an '
+        'unknown size', () async {
+      stubFetch(
+        body([
+          [1, 2, 3],
+          [4, 5],
+        ]),
+      );
+
+      final events = await download().toList();
+
+      final updates = events.whereType<SaveProgressUpdate>();
+      expect(updates.map((e) => e.bytesWritten), [3, 5]);
+      expect(updates.map((e) => e.totalBytes), [null, null]);
+      expect(updates.map((e) => e.progress), [0.0, 0.0]);
+      expect(events.last, isA<SaveProgressComplete>());
+    });
+
+    test('a compressed body reports the bytes written, of an unknown size, '
+        'as its content-length is that of the encoded body', () async {
       stubFetch(
         body(
           [
@@ -156,7 +174,9 @@ void main() {
 
       final events = await download().toList();
 
-      expect(events.whereType<SaveProgressUpdate>(), isEmpty);
+      final updates = events.whereType<SaveProgressUpdate>();
+      expect(updates.map((e) => e.bytesWritten), [6]);
+      expect(updates.map((e) => e.totalBytes), [null]);
       expect(events.last, isA<SaveProgressComplete>());
     });
 
@@ -313,6 +333,23 @@ void main() {
   });
 
   group('saveAs bytes into a picked directory', () {
+    test('reports the bytes written once the file is written', () async {
+      final events = await saver
+          .saveAs(
+            input: SaveInput.bytes(Uint8List.fromList([1, 2])),
+            fileType: bin,
+            fileName: 'data',
+            saveLocation: WebPickedDirectoryLocation(directory),
+          )
+          .toList();
+
+      final updates = events.whereType<SaveProgressUpdate>();
+      expect(updates.map((e) => (e.bytesWritten, e.totalBytes, e.progress)), [
+        (2, 2, 1.0),
+      ]);
+      expect(events.last, isA<SaveProgressComplete>());
+    });
+
     test('writes the file and autoRenames on a conflict', () async {
       Future<SaveProgress> save() => saver
           .saveAs(

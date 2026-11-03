@@ -44,22 +44,45 @@ final class SaveProgressStarted extends SaveProgress {
 
 /// Progress update during save operation.
 ///
-/// [progress] is a value from 0.0 to 1.0 representing completion percentage.
+/// [bytesWritten] counts the bytes of the file written so far, and
+/// [totalBytes] is the size the file will have, or null when it isn't known,
+/// as for a download without a `Content-Length`. [progress] is the fraction
+/// written, from 0.0 to 1.0, and stays 0.0 while [totalBytes] is null: show
+/// [bytesWritten] or an indeterminate indicator then.
 final class SaveProgressUpdate extends SaveProgress {
   /// Clamps [progress] to 0.0–1.0, so a server that sends more bytes than its
   /// `Content-Length` can't report more than 100%. NaN becomes 0.0.
-  const SaveProgressUpdate(double progress)
-    : progress = progress >= 1.0
-          ? 1.0
-          : progress > 0.0
-          ? progress
-          : 0.0;
+  const SaveProgressUpdate(
+    double progress, {
+    this.bytesWritten = 0,
+    this.totalBytes,
+  }) : progress = progress >= 1.0
+           ? 1.0
+           : progress > 0.0
+           ? progress
+           : 0.0;
+
+  /// The update for [bytesWritten] of [totalBytes] bytes, with [progress]
+  /// their fraction, or 0.0 when [totalBytes] is null.
+  const SaveProgressUpdate.bytes(int bytesWritten, int? totalBytes)
+    : this(
+        totalBytes == null ? 0.0 : bytesWritten / totalBytes,
+        bytesWritten: bytesWritten,
+        totalBytes: totalBytes,
+      );
 
   /// Progress value from 0.0 (0%) to 1.0 (100%)
   final double progress;
 
+  /// Bytes of the file written so far.
+  final int bytesWritten;
+
+  /// The size of the file once saved, or null if it isn't known.
+  final int? totalBytes;
+
   @override
-  String toString() => 'SaveProgressUpdate($progress)';
+  String toString() =>
+      'SaveProgressUpdate($progress, $bytesWritten of ${totalBytes ?? '?'} bytes)';
 }
 
 /// Save completed successfully.
