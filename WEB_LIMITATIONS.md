@@ -10,14 +10,14 @@ The download mechanism depends on which API and arguments are used:
 |---------------|-----------------------|-------------------------------------------------------|---------------|-----------------------------|
 | `saveBytes`   | —                     | Blob → `<a download>`                                 | ❌            | ❌                          |
 | `saveNetwork` | No custom `headers`   | `<a href=url download>` — browser native streaming    | ❌            | ❌                          |
-| `saveNetwork` | With custom `headers` | `window.fetch()` → Blob → `<a download>`              | ✅            | ✅ (needs `Content-Length`) |
-| `saveAs`      | Chrome / Edge 86+     | FSA: streams chunks directly to disk (zero RAM)       | Only for `SaveNetworkInput` | ✅ (needs `Content-Length`) |
+| `saveNetwork` | With custom `headers` | `window.fetch()` → Blob → `<a download>`              | ✅            | ✅ (fraction needs `Content-Length`) |
+| `saveAs`      | Chrome / Edge 86+     | FSA: streams chunks directly to disk (zero RAM)       | Only for `SaveNetworkInput` | ✅ (fraction needs `Content-Length`) |
 | `saveAs`      | Firefox / Safari      | Falls back to `saveBytes` / `saveNetwork` above       | As above      | As above                    |
 | `openWrite`   | —                     | Chunks buffered in memory → Blob → `<a download>` on `close()` | ❌     | ✅ (needs `totalSize`)      |
 | `openWriteAs` | Chrome / Edge 86+     | FSA: each chunk written to disk before the next       | ❌            | ✅ (needs `totalSize`)      |
 | `openWriteAs` | Firefox / Safari      | Falls back to `openWrite` above                       | ❌            | ✅ (needs `totalSize`)      |
 
-"Needs `Content-Length`": a response without it, or with `Content-Encoding` (the header counts the compressed bytes, the body is decompressed), reports no progress until it completes.
+"Fraction needs `Content-Length`": every chunk reports `SaveProgressUpdate.bytesWritten`. A response without `Content-Length`, or with `Content-Encoding` (the header counts the compressed bytes, the body is decompressed), has an unknown size: `totalBytes` is null and `progress` stays 0.0.
 
 The sections below explain each limitation that flows from these mechanisms.
 

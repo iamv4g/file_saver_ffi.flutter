@@ -199,9 +199,7 @@ class FileSaverWeb extends FileSaverPlatform {
       await WebUtils.read(body.reader, timeout, token, (chunk) async {
         jsChunks.add(chunk);
         received += WebUtils.lengthOf(chunk);
-        if (body.length case final length? when length > 0) {
-          emit(SaveProgressUpdate(received / length));
-        }
+        emit(SaveProgressUpdate.bytes(received, body.length));
       });
 
       final blob = Blob(
@@ -392,9 +390,8 @@ class FileSaverWeb extends FileSaverPlatform {
       }
 
       await _writeFile(handle, resolvedName, token, (writable) async {
-        emit(const SaveProgressUpdate(0.1));
         await writable.write(fileBytes.toJS as FileSystemWriteChunkType).toDart;
-        emit(const SaveProgressUpdate(1.0));
+        emit(SaveProgressUpdate.bytes(fileBytes.length, fileBytes.length));
       });
       emit(
         SaveProgressComplete(Uri(scheme: 'web-directory', path: resolvedName)),
@@ -435,9 +432,7 @@ class FileSaverWeb extends FileSaverPlatform {
           await WebUtils.read(body.reader, timeout, token, (chunk) async {
             await writable.write(chunk as FileSystemWriteChunkType).toDart;
             written += WebUtils.lengthOf(chunk);
-            if (body.length case final length? when length > 0) {
-              emit(SaveProgressUpdate(written / length));
-            }
+            emit(SaveProgressUpdate.bytes(written, body.length));
           });
         });
       } catch (_) {

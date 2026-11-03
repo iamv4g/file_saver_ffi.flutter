@@ -44,7 +44,10 @@ void main() {
 
       expect(events, hasLength(3));
       expect(events[0], isA<SaveProgressStarted>());
-      expect((events[1] as SaveProgressUpdate).progress, 1.0);
+      final update = events[1] as SaveProgressUpdate;
+      expect(update.progress, 1.0);
+      expect(update.bytesWritten, bytes.length);
+      expect(update.totalBytes, bytes.length);
       final uri = (events[2] as SaveProgressComplete).uri;
       expect(p.equals(uri.toFilePath(), p.join(tmp.path, 'data.bin')), isTrue);
       expect(await File.fromUri(uri).readAsBytes(), bytes);
@@ -533,9 +536,36 @@ void main() {
       for (var i = 1; i < progress.length; i++) {
         expect(progress[i], greaterThanOrEqualTo(progress[i - 1]));
       }
+      final last = events.whereType<SaveProgressUpdate>().last;
+      expect(last.bytesWritten, payload.length);
+      expect(last.totalBytes, payload.length);
       final uri = (events.last as SaveProgressComplete).uri;
       expect(await File.fromUri(uri).readAsBytes(), payload);
     });
+
+    for (final (path, why) in [
+      ('/chunked', 'without Content-Length'),
+      ('/gzip', 'gzip-encoded'),
+    ]) {
+      test('a download $why reports the bytes written, of an unknown '
+          'size', () async {
+        final events = await download(path).toList();
+
+        final updates = events.whereType<SaveProgressUpdate>().toList();
+        expect(updates.length, greaterThan(1));
+        expect(updates.map((e) => e.totalBytes), everyElement(isNull));
+        expect(updates.map((e) => e.progress), everyElement(0.0));
+        for (var i = 1; i < updates.length; i++) {
+          expect(
+            updates[i].bytesWritten,
+            greaterThan(updates[i - 1].bytesWritten),
+          );
+        }
+        expect(updates.last.bytesWritten, payload.length);
+        final uri = (events.last as SaveProgressComplete).uri;
+        expect(await File.fromUri(uri).readAsBytes(), payload);
+      });
+    }
 
     test('forwards headers', () async {
       final events = await download(

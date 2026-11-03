@@ -186,6 +186,21 @@ void main() {
       expect(progress, [0.5, 1.0]);
     });
 
+    test('reports progress only when it changes, so a download of unknown '
+        'size reports 0.0 once', () async {
+      platform.events = [
+        const SaveProgressStarted(),
+        const SaveProgressUpdate.bytes(100, null),
+        const SaveProgressUpdate.bytes(200, null),
+        const SaveProgressUpdate.bytes(300, null),
+        SaveProgressComplete(savedUri),
+      ];
+      final progress = <double>[];
+
+      expect(await saveAsync(onProgress: progress.add), savedUri);
+      expect(progress, [0.0]);
+    });
+
     test('throws the exception from SaveProgressError', () {
       platform.events = [
         const SaveProgressStarted(),
@@ -379,6 +394,25 @@ void main() {
       expect(const SaveProgressUpdate(-0.1).progress, 0.0);
       expect(SaveProgressUpdate(double.nan).progress, 0.0);
       expect(SaveProgressUpdate(double.infinity).progress, 1.0);
+    });
+
+    test('bytes gives the fraction written of a known size', () {
+      const update = SaveProgressUpdate.bytes(250, 1000);
+      expect(update.progress, 0.25);
+      expect(update.bytesWritten, 250);
+      expect(update.totalBytes, 1000);
+      expect(const SaveProgressUpdate.bytes(2000, 1000).progress, 1.0);
+    });
+
+    test('bytes of an unknown size has progress 0.0', () {
+      const update = SaveProgressUpdate.bytes(250, null);
+      expect(update.progress, 0.0);
+      expect(update.bytesWritten, 250);
+      expect(update.totalBytes, isNull);
+    });
+
+    test('bytes of a size of 0 has progress 0.0, not NaN', () {
+      expect(const SaveProgressUpdate.bytes(0, 0).progress, 0.0);
     });
   });
 }

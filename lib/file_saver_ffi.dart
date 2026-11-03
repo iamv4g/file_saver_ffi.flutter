@@ -52,7 +52,8 @@ class FileSaver {
   ///
   /// Yields [SaveProgress] events:
   /// - [SaveProgressStarted]: operation began
-  /// - [SaveProgressUpdate]: progress 0.0–1.0
+  /// - [SaveProgressUpdate]: progress 0.0–1.0, and the bytes written of the
+  ///   file's size, if known
   /// - [SaveProgressComplete]: success with [Uri]
   /// - [SaveProgressError]: failed with exception
   ///
@@ -122,6 +123,10 @@ class FileSaver {
   ///
   /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
   ///
+  /// [onProgress] is called when [SaveProgressUpdate.progress] changes. It
+  /// stays at 0.0 while the size of the file is unknown; [save] gives the
+  /// bytes written then.
+  ///
   /// Returns the saved [Uri]. Throws on error.
   static Future<Uri> saveAsync({
     required SaveInput input,
@@ -156,12 +161,16 @@ class FileSaver {
     Stream<SaveProgress> saves,
     void Function(double progress)? onProgress,
   ) async {
+    double? reported;
     await for (final event in saves) {
       switch (event) {
         case SaveProgressStarted():
           break;
-        case SaveProgressUpdate(:final progress):
+        case SaveProgressUpdate(:final progress) when progress != reported:
+          reported = progress;
           onProgress?.call(progress);
+        case SaveProgressUpdate():
+          break;
         case SaveProgressComplete(:final uri):
           return uri;
         case SaveProgressError(:final exception):
@@ -257,6 +266,8 @@ class FileSaver {
   /// [Future] wrapper for [saveAs] with an optional [onProgress] callback.
   ///
   /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
+  ///
+  /// [onProgress] works as in [saveAsync].
   ///
   /// Returns the saved [Uri], or null if the picker was cancelled.
   /// Throws on error, and like [saveAsync] a [NativePlatformException] with

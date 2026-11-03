@@ -213,15 +213,15 @@ No additional app configuration needed. Directories are resolved via the XDG Bas
 |-----------------------------|---------------------------------------------------------------|----------------------------------|----------------------------------|
 | `save` / `saveNetwork`      | ✅                                                             | ✅                                | ✅                                |
 | `saveAs` (directory picker) | ✅ File System Access API                                      | ❌ falls back to browser download | ❌ falls back to browser download |
-| Download progress           | ✅ `saveAs` + `SaveNetworkInput` only (needs `Content-Length`) | ❌                                | ❌                                |
+| Download progress           | ✅ `saveAs` + `SaveNetworkInput`, and `saveNetwork` with `headers` | ❌                                | ❌                                |
 
 **Download mechanism:**
 
 | API           | Scenario              | Mechanism                                          | CORS required | Progress                   |
 |---------------|-----------------------|----------------------------------------------------|---------------|----------------------------|
 | `saveNetwork` | No custom `headers`   | `<a href=url download>` — browser native streaming | ❌             | ❌                          |
-| `saveNetwork` | With custom `headers` | `window.fetch()` → Blob → `<a download>`           | ✅             | ❌                          |
-| `saveAs`      | Chrome / Edge 86+     | FSA: streams chunks directly to disk (zero RAM)    | ✅             | ✅ (needs `Content-Length`) |
+| `saveNetwork` | With custom `headers` | `window.fetch()` → Blob → `<a download>`           | ✅             | ✅ (fraction needs `Content-Length`) |
+| `saveAs`      | Chrome / Edge 86+     | FSA: streams chunks directly to disk (zero RAM)    | ✅             | ✅ (fraction needs `Content-Length`) |
 | `saveAs`      | Firefox / Safari      | Falls back to standard browser download            | —             | —                          |
 
 > **Note:** `saveAs` with directory selection requires the app to be served over **HTTPS** or `localhost`. `http://` origins cannot use `showDirectoryPicker`.
@@ -372,6 +372,21 @@ await FileSaver.saveAsync(
     print('Download progress: ${(progress * 100).toInt()}%');
   },
 );
+
+// Using the stream, which also gives the bytes written. A download without
+// Content-Length (or a compressed one) has an unknown size: totalBytes is
+// null and progress stays 0.0.
+FileSaver.save(
+  input: SaveNetworkInput(url: '...'),
+  fileName: 'video',
+  fileType: VideoType.mp4,
+).listen((event) {
+  if (event case SaveProgressUpdate(:final bytesWritten, :final totalBytes)) {
+    print(totalBytes == null
+        ? '$bytesWritten bytes'
+        : '$bytesWritten of $totalBytes bytes');
+  }
+});
 ```
 
 ### Cancellation
@@ -577,7 +592,7 @@ Stream API emits these sealed class events. A save stream is single-subscription
 | Event                   | Properties                      | Description                 |
 |-------------------------|---------------------------------|-----------------------------|
 | `SaveProgressStarted`   | -                               | Operation began             |
-| `SaveProgressUpdate`    | `progress: double`              | Progress from 0.0 to 1.0    |
+| `SaveProgressUpdate`    | `progress: double`, `bytesWritten: int`, `totalBytes: int?` | Progress from 0.0 to 1.0, and the bytes written of the file's size (`null` if unknown) |
 | `SaveProgressComplete`  | `uri: Uri`                      | Success with saved file URI |
 | `SaveProgressError`     | `exception: FileSaverException` | Error occurred              |
 | `SaveProgressCancelled` | -                               | `saveAs` picker dismissed   |
