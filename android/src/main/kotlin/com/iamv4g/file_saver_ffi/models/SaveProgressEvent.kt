@@ -41,9 +41,4 @@ sealed class SaveProgressEvent {
         val message: String,
         val statusCode: Int? = null,
     ) : SaveProgressEvent()
-
-    /**
-     * User cancelled the operation.
-     */
-    data object Cancelled : SaveProgressEvent()
 }

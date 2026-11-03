@@ -55,7 +55,9 @@ class FileSaver {
   /// - [SaveProgressUpdate]: progress 0.0–1.0
   /// - [SaveProgressComplete]: success with [Uri]
   /// - [SaveProgressError]: failed with exception
-  /// - [SaveProgressCancelled]: cancelled
+  ///
+  /// Cancelling the subscription cancels the save: the stream emits nothing
+  /// more, and the cancel completes once the partial file is deleted.
   ///
   /// [saveLocation] defaults by platform:
   /// - Android: [AndroidSaveLocation.downloads]
@@ -116,7 +118,7 @@ class FileSaver {
   ///
   /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
   ///
-  /// Returns the saved [Uri]. Throws on error; throws [CancelledException] if cancelled.
+  /// Returns the saved [Uri]. Throws on error.
   static Future<Uri> saveAsync({
     required SaveInput input,
     required FileType fileType,
@@ -175,7 +177,8 @@ class FileSaver {
   /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
   ///
   /// If [saveLocation] is null, shows the directory picker first.
-  /// Yields [SaveProgressCancelled] if the picker is dismissed.
+  /// Yields [SaveProgressCancelled] if the picker is dismissed. Cancelling the
+  /// subscription works as in [save].
   ///
   /// Web: falls back to anchor-download if the browser has no
   /// `showDirectoryPicker()` (Firefox, Safari). Other picker errors, such as

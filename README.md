@@ -382,15 +382,13 @@ final subscription = FileSaver.save(
   input: SaveNetworkInput(url: '...'), // Works for all inputs
   fileName: 'video',
   fileType: VideoType.mp4,
-).listen((event) {
-    if (event is SaveProgressCancelled) {
-      print('Cancelled!');
-    }
-});
+).listen((event) => print(event));
 
-// Cancel anytime
-subscription.cancel();
+// Cancel anytime. Completes once the partial file is deleted.
+await subscription.cancel();
 ```
+
+A cancelled stream emits no further events, so no `SaveProgressCancelled` or `CancelledException` follows. Leaving an `await for` loop early cancels the save the same way.
 
 ### Save to User-Selected Directory
 
@@ -582,7 +580,7 @@ Stream API emits these sealed class events:
 | `SaveProgressUpdate`    | `progress: double`              | Progress from 0.0 to 1.0    |
 | `SaveProgressComplete`  | `uri: Uri`                      | Success with saved file URI |
 | `SaveProgressError`     | `exception: FileSaverException` | Error occurred              |
-| `SaveProgressCancelled` | -                               | User cancelled operation    |
+| `SaveProgressCancelled` | -                               | `saveAs` picker dismissed   |
 
 ## Exception Reference
 
@@ -598,7 +596,7 @@ Stream API emits these sealed class events:
 | `ICloudDownloadException`     | iCloud download failed (iOS)            | `ICLOUD_DOWNLOAD_FAILED` |
 | `NetworkException`            | Download failed; `statusCode` is set for an HTTP error | `NETWORK_ERROR` |
 | `OpenFailedException`         | `openFile` found no app or failed       | `OPEN_FAILED`            |
-| `CancelledException`          | Operation cancelled by user             | `CANCELLED`              |
+| `CancelledException`          | `close()` of a cancelled `FileSaverSink` | `CANCELLED`             |
 | `NativePlatformException`     | Generic platform error, or a `dir_picker` error with its code | `PLATFORM_ERROR` |
 
 `FileSaverErrorCode` has a constant for each code, plus `INCOMPLETE`, which `saveAsync` and `saveAsAsync` throw as a `NativePlatformException` when the stream ends without a result.

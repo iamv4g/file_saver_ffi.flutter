@@ -15,6 +15,7 @@ import 'dart:typed_data';
 import 'package:file_saver_ffi/file_saver_ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
+import 'package:path_provider/path_provider.dart';
 
 final _subDir = 'fsf_it/${DateTime.now().millisecondsSinceEpoch}';
 const _text = CustomFileType(ext: 'txt', mimeType: 'text/plain');
@@ -151,6 +152,49 @@ void main() {
     await sink.close();
     expect(await File.fromUri(await sink.result).readAsBytes(), bytes);
   }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('cancelling a download completes once the partial file is '
+      'deleted', (_) async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((request) {
+      // Sends half of the body, then stalls.
+      request.response
+        ..contentLength = 1024 * 1024
+        ..add(Uint8List(512 * 1024));
+      request.response.flush();
+    });
+    final subDir = '$_subDir/cancel';
+    final dir = Directory(
+      '${(await getApplicationDocumentsDirectory()).path}/$subDir',
+    );
+
+    final writing = Completer<void>();
+    final events = <SaveProgress>[];
+    final subscription =
+        FileSaver.save(
+          input: SaveInput.network(
+            url: 'http://127.0.0.1:${server.port}/stall',
+          ),
+          fileName: 'stalled',
+          fileType: _text,
+          saveLocation: IosSaveLocation.documents,
+          subDir: subDir,
+        ).listen((event) {
+          events.add(event);
+          // The file exists once data arrives.
+          if (event is SaveProgressUpdate && event.progress >= 0.3) {
+            if (!writing.isCompleted) writing.complete();
+          }
+        });
+    await writing.future.timeout(const Duration(seconds: 10));
+    expect(dir.listSync(), hasLength(1), reason: 'the partial file');
+
+    await subscription.cancel();
+
+    expect(dir.existsSync() ? dir.listSync() : const [], isEmpty);
+    expect(events.whereType<SaveProgressComplete>(), isEmpty);
+  });
 
   testWidgets('an HTTP error throws NetworkException with the status code', (
     _,

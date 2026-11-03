@@ -202,7 +202,8 @@ class WebUtils {
       controller.addSync(const SaveProgressStarted());
       final done = run();
       controller.onCancel = () {
-        token.cancel();
+        // Also called once the stream has ended: nothing is left to cancel.
+        if (!controller.isClosed) token.cancel();
         return done;
       };
     });

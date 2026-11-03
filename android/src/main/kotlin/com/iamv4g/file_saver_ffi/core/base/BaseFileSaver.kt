@@ -62,7 +62,6 @@ abstract class BaseFileSaver(
                 }
             } catch (e: CancellationException) {
                 entryFactory.deleteEntry(context, entry.uri)
-                sendCancelled()
                 throw e
             } catch (e: IOException) {
                 entryFactory.deleteEntry(context, entry.uri)
@@ -131,7 +130,6 @@ abstract class BaseFileSaver(
                 }
             } catch (e: CancellationException) {
                 entryFactory.deleteEntry(context, entry.uri)
-                sendCancelled()
                 throw e
             } catch (e: IOException) {
                 entryFactory.deleteEntry(context, entry.uri)
@@ -186,8 +184,7 @@ abstract class BaseFileSaver(
                         }
                     } catch (e: CancellationException) {
                         entryFactory.deleteEntry(context, entry.uri)
-                        sendCancelled()
-                        throw e
+                                throw e
                     } catch (e: NetworkDownloadException) {
                         // Reading the body failed: reported as a network error below.
                         entryFactory.deleteEntry(context, entry.uri)

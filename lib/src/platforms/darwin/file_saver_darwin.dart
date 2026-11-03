@@ -427,31 +427,38 @@ class FileSaverDarwin extends FileSaverPlatform {
   // Private Methods
   // ─────────────────────────────────────────────────────────────────────────
 
+  /// How long cancelling a save waits for Swift to report that it stopped.
+  static const _cancelTimeout = Duration(seconds: 2);
+
   /// Starts a save with [start] and returns its events.
   ///
   /// [start] calls the native function, which returns the token for
   /// cancellation. The native side copies the strings before it returns, so
   /// [start]'s arena is released right after the call.
+  ///
+  /// Cancelling the subscription cancels the save, and completes once Swift
+  /// reports cancelled (`[4]`), which it does after removing what it wrote,
+  /// or after [_cancelTimeout] if it can't stop sooner, for example while the
+  /// Photos permission dialog is open.
   Stream<SaveProgress> _runSave(
     int Function(Arena arena, int nativePort) start,
   ) {
     return Stream.multi((controller) {
       final receivePort = ReceivePort();
-      var cleanedUp = false;
+      final ended = Completer<void>();
 
-      void cleanup() {
-        if (cleanedUp) return;
-        cleanedUp = true;
+      void end() {
+        if (ended.isCompleted) return;
+        ended.complete();
         receivePort.close();
-        controller.closeSync();
+        if (!controller.isClosed) controller.closeSync();
       }
 
-      // Cleanup happens here on terminal events
       receivePort.listen((message) {
-        if (cleanedUp || controller.isClosed) return;
+        if (ended.isCompleted) return;
         final event = parseDarwinMessage(message);
         controller.addSync(event);
-        if (isTerminal(event)) cleanup();
+        if (isTerminal(event)) end();
       });
 
       final tokenId = using(
@@ -459,9 +466,10 @@ class FileSaverDarwin extends FileSaverPlatform {
       );
 
       controller.onCancel = () {
+        // Also called once the stream has ended.
+        if (ended.isCompleted) return null;
         _fileSaver.cancel(tokenId);
-        // Fallback cleanup if native doesn't respond with Cancelled event
-        Future.delayed(const Duration(milliseconds: 500), cleanup);
+        return ended.future.timeout(_cancelTimeout, onTimeout: end);
       };
     });
   }

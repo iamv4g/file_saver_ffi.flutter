@@ -40,16 +40,6 @@ internal suspend fun ProducerScope<SaveProgressEvent>.sendError(
 }
 
 /**
- * Sends a cancelled event.
- *
- * Best effort: the caller is already cancelled, so a suspending send would
- * throw. The Dart side ends the stream on cancel anyway.
- */
-internal fun ProducerScope<SaveProgressEvent>.sendCancelled() {
-    trySend(SaveProgressEvent.Cancelled)
-}
-
-/**
  * Sends a success event.
  */
 internal suspend fun ProducerScope<SaveProgressEvent>.sendSuccess(uri: String) {

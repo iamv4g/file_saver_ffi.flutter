@@ -12,7 +12,9 @@ import '../../models/save_progress.dart';
 /// - 2: Error ([data] = error code, [message] = its detail, see
 ///   [FileSaverErrorCode]; [statusCode] = HTTP status of a network error)
 /// - 3: Success ([data] = file URI)
-/// - 4: Cancelled
+/// - 4: Cancelled. Sent only after a cancel, once the save has stopped and
+///   deleted what it wrote; the listener has cancelled, so only the bridge
+///   sees it.
 SaveProgress parseNativeEvent(
   int eventType, {
   double progress = 0,

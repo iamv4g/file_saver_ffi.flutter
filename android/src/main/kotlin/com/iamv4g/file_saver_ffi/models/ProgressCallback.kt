@@ -19,6 +19,9 @@ package com.iamv4g.file_saver_ffi.models
  * exception for the code needs (see `FileSaverErrorCode` in Dart), such as
  * just the file name for `FILE_EXISTS` or the path for `FILE_NOT_FOUND`.
  *
+ * Cancelled (4) is sent only after `FileSaver.cancelOperation`, once the save
+ * has stopped and deleted what it wrote, and isn't sent after `dispose()`.
+ *
  * ### Used by write-session methods (`openWriteSession`, `writeChunk`, `flushSession`, `closeSession`)
  * | eventType | progress          | data               | message |
  * |-----------|-------------------|--------------------|---------|
