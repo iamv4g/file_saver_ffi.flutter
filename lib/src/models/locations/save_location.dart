@@ -232,6 +232,9 @@ class PickedDirectoryLocation implements SaveLocation {
 ///   system picker are accessible. Opening via picker grants access.
 /// - **Android 11+**: Paths outside app storage (e.g., `/storage/emulated/0/`)
 ///   require `MANAGE_EXTERNAL_STORAGE` permission.
+/// - **Android**: `SaveInput.file` takes a `content://` URI too. The
+///   `ContentResolver` reads it; the app needs read access to it, which a
+///   file picker grants.
 class PathLocation implements SaveLocation {
   const PathLocation(this.path);
 

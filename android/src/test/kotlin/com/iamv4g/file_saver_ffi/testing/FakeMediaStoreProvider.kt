@@ -123,7 +123,16 @@ class FakeMediaStoreProvider : ContentProvider() {
             .filter { collection == "file" || it.collection == collection }
             .filter { row -> filters.all { (column, value) -> row.values.getAsString(column) == value } }
             .forEach { row ->
-                cursor.addRow(columns.map { if (it == MediaColumns._ID) row.id else row.values.get(it) })
+                cursor.addRow(
+                    columns.map {
+                        when (it) {
+                            MediaColumns._ID -> row.id
+                            // MediaProvider fills it in from the file.
+                            MediaColumns.SIZE -> row.file.length()
+                            else -> row.values.get(it)
+                        }
+                    },
+                )
             }
         return cursor
     }
