@@ -8,10 +8,16 @@ The download mechanism depends on which API and arguments are used:
 
 | API           | Scenario              | Mechanism                                             | CORS required | Progress                    |
 |---------------|-----------------------|-------------------------------------------------------|---------------|-----------------------------|
+| `saveBytes`   | —                     | Blob → `<a download>`                                 | ❌            | ❌                          |
 | `saveNetwork` | No custom `headers`   | `<a href=url download>` — browser native streaming    | ❌            | ❌                          |
-| `saveNetwork` | With custom `headers` | `window.fetch()` → Blob → `<a download>`              | ✅            | ❌                          |
-| `saveAs`      | Chrome / Edge 86+     | FSA: streams chunks directly to disk (zero RAM)       | ✅            | ✅ (needs `Content-Length`) |
-| `saveAs`      | Firefox / Safari      | Falls back to standard browser download               | —             | —                           |
+| `saveNetwork` | With custom `headers` | `window.fetch()` → Blob → `<a download>`              | ✅            | ✅ (needs `Content-Length`) |
+| `saveAs`      | Chrome / Edge 86+     | FSA: streams chunks directly to disk (zero RAM)       | Only for `SaveNetworkInput` | ✅ (needs `Content-Length`) |
+| `saveAs`      | Firefox / Safari      | Falls back to `saveBytes` / `saveNetwork` above       | As above      | As above                    |
+| `openWrite`   | —                     | Chunks buffered in memory → Blob → `<a download>` on `close()` | ❌     | ✅ (needs `totalSize`)      |
+| `openWriteAs` | Chrome / Edge 86+     | FSA: each chunk written to disk before the next       | ❌            | ✅ (needs `totalSize`)      |
+| `openWriteAs` | Firefox / Safari      | Falls back to `openWrite` above                       | ❌            | ✅ (needs `totalSize`)      |
+
+"Needs `Content-Length`": a response without it, or with `Content-Encoding` (the header counts the compressed bytes, the body is decompressed), reports no progress until it completes.
 
 The sections below explain each limitation that flows from these mechanisms.
 
@@ -21,7 +27,12 @@ The sections below explain each limitation that flows from these mechanisms.
 
 When using `saveNetwork` or `saveBytes` without the File System Access API, the browser controls where the file is saved. You cannot programmatically choose a directory, and the final behavior depends on server headers and browser settings.
 
-This is a browser security constraint and cannot be overridden.
+This is a browser security constraint and cannot be overridden. It also means that for a browser download:
+
+- `saveLocation`, `subDir` and `conflictResolution` are ignored. The browser picks the folder and renames on a conflict (`file (1).pdf`) itself.
+- `timeout` is ignored by `saveNetwork` without `headers`: the browser runs that download.
+- `SaveProgressComplete` means the download was handed to the browser, not that the file is on disk. For `saveNetwork` without `headers` it comes right away, even when the browser then opens the file in a tab (§2) or the download fails.
+- A Blob download keeps its object URL, and with it the bytes, for 60 s after the click, because revoking it at once can cancel the download in some browsers.
 
 ---
 
@@ -134,6 +145,30 @@ if (location is WebPickedDirectoryLocation && !await location.hasAccess()) {
 ```
 
 A save into a directory the page can't write to fails with `PermissionDeniedException`.
+
+---
+
+## 8. Returned URIs and Unsupported APIs
+
+Browsers don't expose file paths, so the `Uri` of `SaveProgressComplete` (and of `saveAsync`, `saveAsAsync` and `FileSaverSink.result`) only names the file:
+
+| URI                        | Returned by                                                  |
+|----------------------------|--------------------------------------------------------------|
+| `browser-download:<name>`  | A browser download: `saveBytes`, `saveNetwork`, `openWrite`, and the fallbacks of `saveAs` / `openWriteAs` |
+| `web-directory:<name>`     | A file in a picked directory: `saveAs`, `openWriteAs` (FSA)  |
+
+`<name>` is the file name with its extension, after `autoRename` for `web-directory:`. Neither URI can be opened again.
+
+Not supported on web:
+
+- `saveFile` / `SaveInput.file` throws `InvalidInputException`: a page can't read a path on disk. Read the file into bytes first, for example with a file picker.
+- `canOpenFile` and `openFile` throw `UnsupportedError`: the browser owns downloaded files.
+
+## 9. Write Sessions (`openWrite` / `openWriteAs`)
+
+- `openWrite` always buffers every chunk in memory and downloads one Blob on `close()`. `saveLocation`, `subDir` and `conflictResolution` are ignored, as for any browser download. `cancel()` drops the buffer and downloads nothing.
+- `openWriteAs` with a picked directory writes each chunk to the file before the next one, without holding the file in memory. `conflictResolution` applies: `autoRename` picks a free name, `skip` returns `null` for an existing file, `fail` throws `FileExistsException`. `cancel()` deletes a file it created and keeps the original of an `overwrite`, because the browser writes to a swap file until `close()`.
+- `openWriteAs` without `showDirectoryPicker()` falls back to `openWrite` (§6).
 
 ---
 

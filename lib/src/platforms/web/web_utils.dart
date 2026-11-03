@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:web/web.dart';
 
 import '../../exceptions/file_saver_exceptions.dart';
@@ -34,6 +34,17 @@ FileSaverException mapFsaError(Object e) {
 class WebUtils {
   WebUtils._();
 
+  /// How long a Blob download keeps its object URL. Revoking it right after
+  /// the click can cancel the download in some browsers, which start it
+  /// asynchronously.
+  @visibleForTesting
+  static Duration revokeDelay = const Duration(seconds: 60);
+
+  /// Clicks the download link. Tests replace it to see the link without
+  /// starting a download.
+  @visibleForTesting
+  static void Function(HTMLAnchorElement anchor) clickAnchor = _anchorClick;
+
   static void triggerBytesDownload(
     Uint8List bytes,
     String fullName,
@@ -45,16 +56,16 @@ class WebUtils {
 
   static void triggerBlobDownload(Blob blob, String fullName) {
     final objectUrl = URL.createObjectURL(blob);
-    _anchorClick(
+    clickAnchor(
       document.createElement('a') as HTMLAnchorElement
         ..href = objectUrl
         ..download = fullName,
     );
-    URL.revokeObjectURL(objectUrl);
+    Timer(revokeDelay, () => URL.revokeObjectURL(objectUrl));
   }
 
   static void triggerUrlDownload(String url, String fullName, String mimeType) {
-    _anchorClick(
+    clickAnchor(
       document.createElement('a') as HTMLAnchorElement
         ..href = url
         ..type = mimeType
