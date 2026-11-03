@@ -83,7 +83,7 @@ object NetworkHelper {
                             Step.Redirect(location)
                         } else {
                             if (status !in 200..299) {
-                                throw NetworkDownloadException(connection.responseMessage ?: "Unknown error", status)
+                                throw NetworkDownloadException(httpError(status, connection.responseMessage), status)
                             }
                             val contentLength = connection.contentLengthLong
                             Step.Done(block(Response(NetworkInputStream(connection.inputStream, contentLength), contentLength)))
@@ -113,6 +113,12 @@ object NetworkHelper {
             val location: String,
         ) : Step<Nothing>
     }
+
+    /** "HTTP 404: Not Found", as the other platforms word a non-2xx response. */
+    private fun httpError(
+        status: Int,
+        reason: String?,
+    ): String = if (reason.isNullOrEmpty()) "HTTP $status" else "HTTP $status: $reason"
 
     private fun parseUrl(urlString: String): URL {
         val url =

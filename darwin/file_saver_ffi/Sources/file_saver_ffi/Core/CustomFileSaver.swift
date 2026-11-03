@@ -68,7 +68,7 @@ class CustomFileSaver: BaseFileSaver {
         conflictResolution: ConflictResolution,
         onProgress: ((Double) -> Void)?,
         onSuccess: @escaping (String) -> Void,
-        onError: @escaping (String, String) -> Void,
+        onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,
         onCancelHandlerReady: @escaping (@escaping () -> Void) -> Void,
         onComplete: @escaping () -> Void,

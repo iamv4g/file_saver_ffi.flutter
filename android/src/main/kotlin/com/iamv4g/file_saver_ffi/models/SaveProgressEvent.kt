@@ -33,11 +33,13 @@ sealed class SaveProgressEvent {
      * Save failed with error.
      *
      * @property code Error code
-     * @property message Error message
+     * @property message The detail the Dart side expects for [code]
+     * @property statusCode HTTP status of a network error
      */
     data class Error(
         val code: String,
         val message: String,
+        val statusCode: Int? = null,
     ) : SaveProgressEvent()
 
     /**

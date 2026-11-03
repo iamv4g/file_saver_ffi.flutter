@@ -153,7 +153,7 @@ class FileSaver {
     if (result == null) {
       throw const NativePlatformException(
         'Save operation did not complete',
-        'INCOMPLETE',
+        FileSaverErrorCode.incomplete,
       );
     }
     return result;

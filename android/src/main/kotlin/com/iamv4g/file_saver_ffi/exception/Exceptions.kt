@@ -16,11 +16,11 @@ class UnsupportedFormatException(
 /**
  * Exception thrown when file already exists and conflict mode is FAIL
  *
- * @property message Error message with file details
+ * @property fileName Name of the existing file, which is also the message
  */
 class FileExistsException(
-    message: String,
-) : Exception(message)
+    val fileName: String,
+) : Exception(fileName)
 
 /**
  * Exception thrown when a network download fails.

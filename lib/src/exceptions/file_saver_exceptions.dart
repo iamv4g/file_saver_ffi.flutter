@@ -1,56 +1,105 @@
+/// The [FileSaverException.code] values.
+///
+/// Kotlin (`utils/Constants.kt`) and Swift (`Utils/Constants.swift`) report
+/// errors with the same strings, and an error message that holds only the
+/// detail [FileSaverException.fromErrorResult] needs:
+///
+/// | Code | Message from native code |
+/// |------|--------------------------|
+/// | [fileExists] | the file name |
+/// | [fileNotFound] | the source path or URI |
+/// | [unsupportedFormat] | the file extension |
+/// | [network] | the reason, with the HTTP status code sent separately |
+/// | [invalidInput], [fileIO], [iCloudDownloadFailed] | the reason |
+/// | [storageFull], [cancelled] | ignored |
+/// | others | the full message |
+abstract final class FileSaverErrorCode {
+  static const cancelled = 'CANCELLED';
+  static const permissionDenied = 'PERMISSION_DENIED';
+  static const fileExists = 'FILE_EXISTS';
+  static const fileNotFound = 'FILE_NOT_FOUND';
+  static const openFailed = 'OPEN_FAILED';
+  static const iCloudDownloadFailed = 'ICLOUD_DOWNLOAD_FAILED';
+  static const network = 'NETWORK_ERROR';
+  static const invalidInput = 'INVALID_INPUT';
+  static const unsupportedFormat = 'UNSUPPORTED_FORMAT';
+  static const storageFull = 'STORAGE_FULL';
+  static const fileIO = 'FILE_IO_ERROR';
+  static const writeSession = 'WRITE_SESSION_ERROR';
+
+  /// An error that fits no other code, including an unexpected native error
+  /// or reply.
+  static const platform = 'PLATFORM_ERROR';
+
+  /// A save stream that ended without a result (`saveAsync`).
+  static const incomplete = 'INCOMPLETE';
+
+  /// Every code that maps to its own exception type, in the order
+  /// [FileSaverException.fromObj] looks for them.
+  static const mapped = [
+    cancelled,
+    permissionDenied,
+    fileExists,
+    fileNotFound,
+    openFailed,
+    iCloudDownloadFailed,
+    network,
+    invalidInput,
+    unsupportedFormat,
+    storageFull,
+    fileIO,
+    writeSession,
+  ];
+}
+
 /// Base exception for all file saver errors.
 ///
 /// Uses sealed class for exhaustive exception handling.
 sealed class FileSaverException implements Exception {
   const FileSaverException(this.message, [this.code]);
 
+  /// Converts any error into a [FileSaverException]: returns one unchanged,
+  /// and maps an [Exception] whose text contains an error code like
+  /// [FileSaverException.fromErrorResult], with the whole text as message.
   factory FileSaverException.fromObj(Object e) {
     if (e is FileSaverException) return e;
     if (e is! Exception) {
-      return NativePlatformException('Unexpected error: $e', 'PLATFORM_ERROR');
+      return NativePlatformException('Unexpected error: $e');
     }
 
     final msg = e.toString();
-    bool contains(String code) {
-      return msg.contains(code);
-    }
-
-    return switch (msg) {
-      _ when contains('CANCELLED') => const CancelledException(),
-      _ when contains('PERMISSION_DENIED') => PermissionDeniedException(msg),
-      _ when contains('FILE_EXISTS') => FileExistsException(msg),
-      _ when contains('FILE_NOT_FOUND') => SourceFileNotFoundException(msg),
-      _ when contains('OPEN_FAILED') => OpenFailedException(msg),
-      _ when contains('NO_APP_FOUND') => OpenFailedException(msg),
-      _ when contains('FILE_PROVIDER_NOT_CONFIGURED') => OpenFailedException(
-        msg,
-      ),
-      _ when contains('FILE_PROVIDER_PATHS_NOT_COVERED') => OpenFailedException(
-        msg,
-      ),
-      _ when contains('ICLOUD_DOWNLOAD_FAILED') => ICloudDownloadException(msg),
-      _ when contains('NETWORK_ERROR') => NetworkException(msg),
-      _ when contains('INVALID_INPUT') => InvalidInputException(msg),
-      _ when contains('UNSUPPORTED_FORMAT') => UnsupportedFormatException(msg),
-      _ when contains('STORAGE_FULL') => const StorageFullException(),
-      _ when contains('FILE_IO_ERROR') => FileIOException(msg),
-      _ => NativePlatformException(msg, 'PLATFORM_ERROR'),
-    };
+    final code = FileSaverErrorCode.mapped.where(msg.contains).firstOrNull;
+    return code == null
+        ? NativePlatformException(msg)
+        : FileSaverException.fromErrorResult(code, msg);
   }
 
-  factory FileSaverException.fromErrorResult(String errorCode, String message) {
+  /// Converts an error that native code reported as [errorCode] and
+  /// [message] into a [FileSaverException]. See [FileSaverErrorCode] for what
+  /// [message] holds. [statusCode] is the HTTP status of a
+  /// [FileSaverErrorCode.network] error.
+  factory FileSaverException.fromErrorResult(
+    String errorCode,
+    String message, {
+    int? statusCode,
+  }) {
     return switch (errorCode) {
-      'CANCELLED' => const CancelledException(),
-      'PERMISSION_DENIED' => PermissionDeniedException(message),
-      'FILE_EXISTS' => FileExistsException(message),
-      'FILE_NOT_FOUND' => SourceFileNotFoundException(message),
-      'OPEN_FAILED' => OpenFailedException(message),
-      'ICLOUD_DOWNLOAD_FAILED' => ICloudDownloadException(message),
-      'NETWORK_ERROR' => NetworkException(message),
-      'INVALID_INPUT' || 'INVALID_ARGUMENT' => InvalidInputException(message),
-      'UNSUPPORTED_FORMAT' => UnsupportedFormatException(message),
-      'STORAGE_FULL' => const StorageFullException(),
-      'FILE_IO_ERROR' => FileIOException(message),
+      FileSaverErrorCode.cancelled => const CancelledException(),
+      FileSaverErrorCode.permissionDenied => PermissionDeniedException(message),
+      FileSaverErrorCode.fileExists => FileExistsException(message),
+      FileSaverErrorCode.fileNotFound => SourceFileNotFoundException(message),
+      FileSaverErrorCode.openFailed => OpenFailedException(message),
+      FileSaverErrorCode.iCloudDownloadFailed => ICloudDownloadException(
+        message,
+      ),
+      FileSaverErrorCode.network => NetworkException(message, statusCode),
+      FileSaverErrorCode.invalidInput => InvalidInputException(message),
+      FileSaverErrorCode.unsupportedFormat => UnsupportedFormatException(
+        message,
+      ),
+      FileSaverErrorCode.storageFull => const StorageFullException(),
+      FileSaverErrorCode.fileIO => FileIOException(message),
+      FileSaverErrorCode.writeSession => WriteSessionException(message),
       _ => NativePlatformException(message, errorCode),
     };
   }
@@ -74,7 +123,10 @@ sealed class FileSaverException implements Exception {
 /// or when permissions are not granted.
 final class PermissionDeniedException extends FileSaverException {
   const PermissionDeniedException([String? message])
-    : super(message ?? 'Storage permission denied', 'PERMISSION_DENIED');
+    : super(
+        message ?? 'Storage permission denied',
+        FileSaverErrorCode.permissionDenied,
+      );
 }
 
 /// File already exists and conflict resolution strategy is set to fail.
@@ -84,7 +136,7 @@ final class PermissionDeniedException extends FileSaverException {
 /// - The conflict resolution strategy is [ConflictResolution.fail]
 final class FileExistsException extends FileSaverException {
   const FileExistsException(this.fileName)
-    : super('File already exists: $fileName', 'FILE_EXISTS');
+    : super('File already exists: $fileName', FileSaverErrorCode.fileExists);
 
   /// The name of the existing file.
   final String fileName;
@@ -95,7 +147,7 @@ final class FileExistsException extends FileSaverException {
 
 final class InvalidInputException extends FileSaverException {
   const InvalidInputException(String reason)
-    : super('Invalid input: $reason', 'INVALID_INPUT');
+    : super('Invalid input: $reason', FileSaverErrorCode.invalidInput);
 }
 
 /// Insufficient storage space available.
@@ -104,7 +156,7 @@ final class InvalidInputException extends FileSaverException {
 /// on the device to save the file.
 final class StorageFullException extends FileSaverException {
   const StorageFullException()
-    : super('Insufficient storage space', 'STORAGE_FULL');
+    : super('Insufficient storage space', FileSaverErrorCode.storageFull);
 }
 
 /// Platform-specific error occurred.
@@ -112,7 +164,10 @@ final class StorageFullException extends FileSaverException {
 /// This exception wraps platform-specific errors from iOS or Android
 /// that don't fit into other exception categories.
 final class NativePlatformException extends FileSaverException {
-  const NativePlatformException(super.message, [super.code]);
+  const NativePlatformException(
+    super.message, [
+    super.code = FileSaverErrorCode.platform,
+  ]);
 
   /// Creates a platform exception from native error details.
   factory NativePlatformException.fromNative({
@@ -131,7 +186,8 @@ final class NativePlatformException extends FileSaverException {
 /// suitable system app (no handler, OS rejected the request, or the open
 /// command failed).
 final class OpenFailedException extends FileSaverException {
-  const OpenFailedException(String message) : super(message, 'OPEN_FAILED');
+  const OpenFailedException(String message)
+    : super(message, FileSaverErrorCode.openFailed);
 }
 
 /// File I/O operation failed.
@@ -142,7 +198,7 @@ final class OpenFailedException extends FileSaverException {
 /// - File system error occurred
 final class FileIOException extends FileSaverException {
   const FileIOException(String reason)
-    : super('File I/O error: $reason', 'FILE_IO_ERROR');
+    : super('File I/O error: $reason', FileSaverErrorCode.fileIO);
 }
 
 /// File format is not supported on this platform or OS version.
@@ -155,7 +211,7 @@ final class UnsupportedFormatException extends FileSaverException {
   const UnsupportedFormatException(this.format, [String? details])
     : super(
         'File format "$format" is not supported on this platform${details != null ? ": $details" : ""}',
-        'UNSUPPORTED_FORMAT',
+        FileSaverErrorCode.unsupportedFormat,
       );
 
   /// The unsupported file format/extension.
@@ -174,7 +230,7 @@ final class UnsupportedFormatException extends FileSaverException {
 /// - The path is invalid or inaccessible
 final class SourceFileNotFoundException extends FileSaverException {
   const SourceFileNotFoundException(this.path)
-    : super('Source file not found: $path', 'FILE_NOT_FOUND');
+    : super('Source file not found: $path', FileSaverErrorCode.fileNotFound);
 
   /// The path of the file that was not found.
   final String path;
@@ -194,7 +250,7 @@ final class ICloudDownloadException extends FileSaverException {
   const ICloudDownloadException([String? details])
     : super(
         'iCloud file download failed${details != null ? ": $details" : ""}',
-        'ICLOUD_DOWNLOAD_FAILED',
+        FileSaverErrorCode.iCloudDownloadFailed,
       );
 }
 
@@ -207,7 +263,7 @@ final class ICloudDownloadException extends FileSaverException {
 /// - Download was interrupted
 final class NetworkException extends FileSaverException {
   const NetworkException(String reason, [this.statusCode])
-    : super('Network error: $reason', 'NETWORK_ERROR');
+    : super('Network error: $reason', FileSaverErrorCode.network);
 
   /// HTTP status code, if available.
   final int? statusCode;
@@ -224,7 +280,8 @@ final class NetworkException extends FileSaverException {
 /// - User breaks from `await for` loop early
 /// - The operation is cancelled programmatically
 final class CancelledException extends FileSaverException {
-  const CancelledException() : super('Operation cancelled', 'CANCELLED');
+  const CancelledException()
+    : super('Operation cancelled', FileSaverErrorCode.cancelled);
 }
 
 /// Write session error (openWrite / openWriteAs).
@@ -234,5 +291,5 @@ final class CancelledException extends FileSaverException {
 /// It is kept so that existing `on WriteSessionException` clauses compile.
 final class WriteSessionException extends FileSaverException {
   const WriteSessionException(String reason)
-    : super('Write session error: $reason', 'WRITE_SESSION_ERROR');
+    : super('Write session error: $reason', FileSaverErrorCode.writeSession);
 }

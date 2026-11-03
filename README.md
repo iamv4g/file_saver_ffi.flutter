@@ -596,9 +596,12 @@ Stream API emits these sealed class events:
 | `UnsupportedFormatException`  | Format not supported on platform        | `UNSUPPORTED_FORMAT`     |
 | `SourceFileNotFoundException` | Source file not found (saveFile)        | `FILE_NOT_FOUND`         |
 | `ICloudDownloadException`     | iCloud download failed (iOS)            | `ICLOUD_DOWNLOAD_FAILED` |
-| `NetworkException`            | Network error occurred during download. | `NETWORK_ERROR`          |
+| `NetworkException`            | Download failed; `statusCode` is set for an HTTP error | `NETWORK_ERROR` |
+| `OpenFailedException`         | `openFile` found no app or failed       | `OPEN_FAILED`            |
 | `CancelledException`          | Operation cancelled by user             | `CANCELLED`              |
-| `NativePlatformException`           | Generic platform error                  | `PLATFORM_ERROR`         |
+| `NativePlatformException`     | Generic platform error, or a `dir_picker` error with its code | `PLATFORM_ERROR` |
+
+`FileSaverErrorCode` has a constant for each code, plus `INCOMPLETE`, which `saveAsync` throws as a `NativePlatformException` when the stream ends without a result.
 
 ## Contributing
 

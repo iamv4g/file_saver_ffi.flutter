@@ -2,12 +2,15 @@
 
 ### Added
 
+- `FileSaverErrorCode` lists the `FileSaverException.code` values, so error handling can compare against constants instead of string literals. Kotlin and Swift report errors with the same codes.
 - **Web:** `persistDirectory`, `restoreDirectory` and `releaseDirectory` work on web too. The token refers to the directory handle, which `dir_picker` keeps in IndexedDB. The browser may not let the page write to a restored directory yet. `WebPickedDirectoryLocation.hasAccess()` checks it, and `requestAccess()`, called from a button, asks the user again.
 - **Web:** `WebPickedDirectoryLocation` is now exported, so web code can check the result of `pickDirectory` and use its `directoryHandle`. On other platforms the type exists for `is` checks, but `pickDirectory` never returns one.
 - `FileSaver.persistDirectory`, `restoreDirectory` and `releaseDirectory` keep access to a picked directory across app restarts, through `dir_picker`. `persistDirectory` returns a token to store; `restoreDirectory` gives the directory back on a later launch, or `null` when access is gone; `releaseDirectory` gives the access up. On iOS and macOS the token is bookmark data, so a stored `PickedDirectoryLocation` now survives a relaunch there too (before, only Android kept access, with `shouldPersist`). Persist the restored location again and store the new token, since a bookmark goes stale when the directory is moved.
 
 ### Changed
 
+- The error codes are now the ones `FileSaverErrorCode` lists. A native error without a code, an unknown native event, a malformed message from Swift and a failed start of the Darwin bridge now have the code `PLATFORM_ERROR` (was `UNKNOWN`, `UNKNOWN_TYPE`, `INVALID_MESSAGE` and `INIT_FAILED`), and so does a `NativePlatformException` created without a code (was `null`). The unused aliases `INVALID_ARGUMENT`, `NO_APP_FOUND` and `FILE_PROVIDER_*` are no longer recognized. `WRITE_SESSION_ERROR` now maps to `WriteSessionException` everywhere.
+- **Android:** an HTTP error now reads `HTTP 404: Not Found`, as on web. Before, it was the status line text alone.
 - `dir_picker` is now `^0.8.0` (was `^0.6.0`).
 - A failing `pickDirectory`, `persistDirectory`, `restoreDirectory` or `releaseDirectory` throws a `NativePlatformException` whose `code` is the `DirPickerException.code` of `dir_picker`, such as `ALREADY_ACTIVE` when another pick is still open. Before, the code was lost in the message.
 - **Web:** `pickDirectory` throws `UnsupportedError` when the browser has no `showDirectoryPicker()` (Firefox, Safari), as documented. Before, it threw `NativePlatformException`. `saveAs` and `openWriteAs` without a location now fall back to a browser download or an in-memory buffer only in that case. Any other picker failure, such as a missing user gesture, is reported: `saveAs` emits it as `SaveProgressError`, and `openWriteAs` throws it. Before, every picker error led to the fallback without a word.
@@ -27,6 +30,10 @@
 
 ### Fixed
 
+- **Android/iOS/macOS:** `NetworkException.statusCode` is now set for an HTTP error. Before, it was always `null` there, and the status was only in the message.
+- **Android/iOS/macOS:** exception messages and fields no longer repeat their prefix. `FileExistsException.fileName` is the file name (was `File already exists: x.jpg`, giving `File already exists: File already exists: x.jpg`), `SourceFileNotFoundException.path` is the path, `UnsupportedFormatException.format` is the extension, and `InvalidInputException`, `NetworkException` and `ICloudDownloadException` no longer read like `Invalid input: Invalid input: …` on iOS and macOS.
+- **Android:** running out of space while saving, copying or writing a session chunk now fails with `StorageFullException`. Before, it was a `FileIOException`.
+- **iOS/macOS:** running out of space while writing a session chunk, flushing or closing a session, or while moving a finished download into place, now fails with `StorageFullException` too.
 - **iOS:** a save to `IosSaveLocation.photos` without `subDir` now uses the Photos read/write access the app already has (full or limited). Before, it always asked for add-only access, so `overwrite`, `skip` and `fail` were silently ignored and every save added a new asset, and `canOpenFile`/`openFile` rejected the returned `ph://` URI.
 - **iOS:** cancelling a save to Photos now stops it if the asset isn't being added yet, for example while the permission dialog is open. Before, the cancel was ignored and the asset still appeared in Photos.
 - **iOS:** a save to Photos no longer waits an extra 0.5 s after the permission dialog.

@@ -14,7 +14,7 @@ extension BaseFileSaver {
         conflictResolution: ConflictResolution,
         onProgress: ((Double) -> Void)?,
         onSuccess: @escaping (String) -> Void,
-        onError: @escaping (String, String) -> Void,
+        onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,
         onCancelHandlerReady: @escaping (@escaping () -> Void) -> Void,
         onComplete: @escaping () -> Void,
@@ -26,11 +26,11 @@ extension BaseFileSaver {
         do {
             try checkPhotosSupport(saveLocation: saveLocation, fileType: fileType)
         } catch let error as FileSaverError {
-            onError(error.code, error.message)
+            onError(error)
             onComplete()
             return
         } catch {
-            onError(Constants.errorPlatform, error.localizedDescription)
+            onError(.platformError(error.localizedDescription))
             onComplete()
             return
         }
@@ -103,7 +103,7 @@ extension BaseFileSaver {
         conflictResolution: ConflictResolution,
         onProgress: ((Double) -> Void)?,
         onSuccess: @escaping (String) -> Void,
-        onError: @escaping (String, String) -> Void,
+        onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,
         onCancelHandlerReady: @escaping (@escaping () -> Void) -> Void,
         onComplete: @escaping () -> Void,
@@ -118,11 +118,11 @@ extension BaseFileSaver {
                 conflictResolution: conflictResolution
             )
         } catch let error as FileSaverError {
-            onError(error.code, error.message)
+            onError(error)
             onComplete()
             return
         } catch {
-            onError(Constants.errorPlatform, error.localizedDescription)
+            onError(.platformError(error.localizedDescription))
             onComplete()
             return
         }
@@ -166,16 +166,16 @@ extension BaseFileSaver {
                     do {
                         onSuccess(try target.commit().absoluteString)
                     } catch let error as FileSaverError {
-                        onError(error.code, error.message)
+                        onError(error)
                     } catch {
-                        onError(Constants.errorFileIO, error.localizedDescription)
+                        onError(.fileIO(error.localizedDescription))
                     }
                 case .failure(let error):
                     target.discard()
                     if case .cancelled = error {
                         onCancelled()
                     } else {
-                        onError(error.code, error.message)
+                        onError(error)
                     }
                 }
             }
@@ -194,7 +194,7 @@ extension BaseFileSaver {
         conflictResolution: ConflictResolution,
         onProgress: ((Double) -> Void)?,
         onSuccess: @escaping (String) -> Void,
-        onError: @escaping (String, String) -> Void,
+        onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,
         onCancelHandlerReady: @escaping (@escaping () -> Void) -> Void,
         onComplete: @escaping () -> Void,
@@ -225,11 +225,11 @@ extension BaseFileSaver {
                 return
             }
         } catch let error as FileSaverError {
-            onError(error.code, error.message)
+            onError(error)
             onComplete()
             return
         } catch {
-            onError(Constants.errorPlatform, error.localizedDescription)
+            onError(.platformError(error.localizedDescription))
             onComplete()
             return
         }
@@ -283,7 +283,7 @@ extension BaseFileSaver {
                     if case .cancelled = error {
                         onCancelled()
                     } else {
-                        onError(error.code, error.message)
+                        onError(error)
                     }
                     onComplete()
                 }
@@ -300,7 +300,7 @@ extension BaseFileSaver {
         subDir: String?,
         onProgress: ((Double) -> Void)?,
         onSuccess: @escaping (String) -> Void,
-        onError: @escaping (String, String) -> Void,
+        onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,
         onComplete: @escaping () -> Void,
         cancellationToken: CancellationToken?
@@ -339,11 +339,11 @@ extension BaseFileSaver {
             onComplete()
         } catch let error as FileSaverError {
             cleanup()
-            onError(error.code, error.message)
+            onError(error)
             onComplete()
         } catch {
             cleanup()
-            onError(Constants.errorPlatform, error.localizedDescription)
+            onError(.platformError(error.localizedDescription))
             onComplete()
         }
     }

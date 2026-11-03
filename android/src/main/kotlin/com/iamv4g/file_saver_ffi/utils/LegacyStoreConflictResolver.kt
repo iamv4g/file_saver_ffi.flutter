@@ -71,7 +71,7 @@ object LegacyStoreConflictResolver {
                 }
 
                 ConflictResolution.FAIL -> {
-                    throw FileExistsException("File already exists: ${original.name}")
+                    throw FileExistsException(original.name)
                 }
             }
         }

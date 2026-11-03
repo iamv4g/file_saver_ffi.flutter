@@ -108,7 +108,7 @@ class FileSaver {
             conflictResolution: conflictResolution,
             onProgress: { reporter.sendProgress($0) },
             onSuccess: { reporter.sendSuccess(uri: $0) },
-            onError: { reporter.sendError(code: $0, message: $1) },
+            onError: { reporter.sendError($0) },
             onCancelled: { reporter.sendCancelled() },
             onCancelHandlerReady: onCancelHandlerReady,
             onComplete: onComplete,
@@ -203,7 +203,7 @@ class FileSaver {
             conflictResolution: conflictResolution,
             onProgress: { reporter.sendProgress($0) },
             onSuccess: { reporter.sendSuccess(uri: $0) },
-            onError: { reporter.sendError(code: $0, message: $1) },
+            onError: { reporter.sendError($0) },
             onCancelled: { reporter.sendCancelled() },
             onCancelHandlerReady: onCancelHandlerReady,
             onComplete: onComplete,
@@ -414,7 +414,7 @@ class FileSaver {
         case FileSaverError.cancelled:
             reporter.sendCancelled()
         case let fsError as FileSaverError:
-            reporter.sendError(code: fsError.code, message: fsError.message)
+            reporter.sendError(fsError)
         default:
             reporter.sendError(
                 code: Constants.errorPlatform,

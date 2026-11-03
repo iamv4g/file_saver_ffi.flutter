@@ -76,7 +76,7 @@ class ImageSaver(
                 emit(
                     SaveProgressEvent.Error(
                         Constants.ERROR_UNSUPPORTED_FORMAT,
-                        e.message ?: "Unsupported format: ${entryFactory.fileType.ext}",
+                        e.format,
                     ),
                 )
                 return false

@@ -9,7 +9,8 @@ import '../../models/save_progress.dart';
 /// Event codes:
 /// - 0: Started
 /// - 1: Progress ([progress] is 0.0 to 1.0)
-/// - 2: Error ([data] = error code, [message] = error message)
+/// - 2: Error ([data] = error code, [message] = its detail, see
+///   [FileSaverErrorCode]; [statusCode] = HTTP status of a network error)
 /// - 3: Success ([data] = file URI)
 /// - 4: Cancelled
 SaveProgress parseNativeEvent(
@@ -17,6 +18,7 @@ SaveProgress parseNativeEvent(
   double progress = 0,
   String? data,
   String? message,
+  int? statusCode,
 }) {
   switch (eventType) {
     case 0: // Started
@@ -28,8 +30,9 @@ SaveProgress parseNativeEvent(
     case 2: // Error
       return SaveProgressError(
         FileSaverException.fromErrorResult(
-          data ?? 'UNKNOWN',
+          data ?? FileSaverErrorCode.platform,
           message ?? 'Unknown error',
+          statusCode: statusCode,
         ),
       );
 
@@ -41,10 +44,7 @@ SaveProgress parseNativeEvent(
 
     default:
       return SaveProgressError(
-        NativePlatformException(
-          'Unknown event type: $eventType',
-          'UNKNOWN_TYPE',
-        ),
+        NativePlatformException('Unknown event type: $eventType'),
       );
   }
 }
@@ -54,13 +54,14 @@ SaveProgress parseNativeEvent(
 /// Protocol:
 /// - Started:    [0]
 /// - Progress:   [1, progress]    (progress is 0.0 to 1.0)
-/// - Error:      [2, errorCode, errorMessage]
+/// - Error:      [2, errorCode, errorMessage, statusCode]   (statusCode is
+///               an int for a network error with an HTTP status, else null)
 /// - Success:    [3, fileUri]
 /// - Cancelled:  [4]
 SaveProgress parseDarwinMessage(dynamic message) {
   if (message is! List || message.isEmpty || message[0] is! int) {
     return const SaveProgressError(
-      NativePlatformException('Invalid message format', 'INVALID_MESSAGE'),
+      NativePlatformException('Invalid message format'),
     );
   }
 
@@ -71,6 +72,7 @@ SaveProgress parseDarwinMessage(dynamic message) {
       type,
       data: message[1] as String,
       message: message[2] as String,
+      statusCode: message.length > 3 ? message[3] as int? : null,
     ),
     3 => parseNativeEvent(type, data: message[1] as String),
     _ => parseNativeEvent(type),

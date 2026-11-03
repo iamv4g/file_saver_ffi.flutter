@@ -124,7 +124,9 @@ class NetworkSaveTest : FileSaverTestBase() {
     fun `an HTTP error reports NETWORK_ERROR with the status`() {
         val (_, callback) = download(server.url("/missing"))
 
-        assertNetworkError(callback, "(HTTP 404)")
+        assertNetworkError(callback, "HTTP 404")
+        // The status goes to Dart as the progress of the error event.
+        assertEquals(404.0, callback.events.last().progress, 0.0)
     }
 
     @Test
@@ -133,7 +135,8 @@ class NetworkSaveTest : FileSaverTestBase() {
 
         val (_, callback) = download(server.url("/short"))
 
-        assertNetworkError(callback, "Network download failed")
+        assertNetworkError(callback, "after ${Constants.CHUNK_SIZE} bytes")
+        assertEquals(0.0, callback.events.last().progress, 0.0)
     }
 
     @Test

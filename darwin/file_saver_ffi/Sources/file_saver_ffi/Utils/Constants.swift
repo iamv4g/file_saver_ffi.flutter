@@ -1,6 +1,9 @@
 import Foundation
 
 enum Constants {
+    // Error codes: the same strings as FileSaverErrorCode in Dart
+    // (lib/src/exceptions/file_saver_exceptions.dart), which also lists the
+    // message each code carries.
     static let errorInvalidInput = "INVALID_INPUT"
     static let errorPermissionDenied = "PERMISSION_DENIED"
     static let errorUnsupportedFormat = "UNSUPPORTED_FORMAT"

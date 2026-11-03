@@ -24,6 +24,7 @@ import com.iamv4g.file_saver_ffi.utils.FileHelper
 import com.iamv4g.file_saver_ffi.utils.FileOpener
 import com.iamv4g.file_saver_ffi.utils.StoragePermissionHandler
 import com.iamv4g.file_saver_ffi.utils.WriteSessionManager
+import com.iamv4g.file_saver_ffi.utils.ioErrorCode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -337,7 +338,7 @@ class FileSaver(
             try {
                 FileOutputStream(targetPath)
             } catch (e: IOException) {
-                callback.onEvent(2, 0.0, Constants.ERROR_FILE_IO, "Cannot write $targetPath: ${e.message}")
+                callback.onEvent(2, 0.0, ioErrorCode(e), "Cannot write $targetPath: ${e.message}")
                 return
             }
         output.use {
@@ -345,7 +346,6 @@ class FileSaver(
                 try {
                     FileHelper.openSourceFile(context, sourceUri)
                 } catch (_: FileNotFoundException) {
-                    // The Dart exception adds "Source file not found: ".
                     callback.onEvent(2, 0.0, Constants.ERROR_FILE_NOT_FOUND, sourceUri)
                     return
                 } catch (e: SecurityException) {
@@ -366,7 +366,7 @@ class FileSaver(
                     }
                 }
             } catch (e: IOException) {
-                callback.onEvent(2, 0.0, Constants.ERROR_FILE_IO, "Failed to copy file: ${e.message}")
+                callback.onEvent(2, 0.0, ioErrorCode(e), "Failed to copy file: ${e.message}")
                 return
             }
         }
@@ -557,7 +557,7 @@ class FileSaver(
                     when (event) {
                         is SaveProgressEvent.Started -> callback.onEvent(0, 0.0, null, null)
                         is SaveProgressEvent.Progress -> callback.onEvent(1, event.value, null, null)
-                        is SaveProgressEvent.Error -> callback.onEvent(2, 0.0, event.code, event.message)
+                        is SaveProgressEvent.Error -> callback.onEvent(2, event.statusCode?.toDouble() ?: 0.0, event.code, event.message)
                         is SaveProgressEvent.Success -> callback.onEvent(3, 1.0, event.uri, null)
                         is SaveProgressEvent.Cancelled -> callback.onEvent(4, 0.0, null, null)
                     }

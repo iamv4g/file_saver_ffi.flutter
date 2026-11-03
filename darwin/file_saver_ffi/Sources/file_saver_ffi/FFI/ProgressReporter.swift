@@ -75,6 +75,17 @@ final class ProgressReporter {
         send(closing: true) { [createInt(2), createString(code), createString(message)] }
     }
 
+    /// Sends `error`, with the HTTP status of a network error as a fourth
+    /// element: `[2, code, message, statusCode]`.
+    func sendError(_ error: FileSaverError) {
+        guard let statusCode = error.statusCode else {
+            return sendError(code: error.code, message: error.message)
+        }
+        send(closing: true) {
+            [createInt(2), createString(error.code), createString(error.message), createInt(Int64(statusCode))]
+        }
+    }
+
     /// Send success event. For `save()`/`saveAs()`: `uri` is the file URI.
     /// For write sessions: `uri` is the sessionId string (open) or file URI (close).
     func sendSuccess(uri: String) {

@@ -147,6 +147,18 @@ final class ProgressReporterTests: XCTestCase {
 
         XCTAssertEqual(port.messages, [[.int(2), .string("PERMISSION_DENIED"), .string("Không có quyền")]])
     }
+
+    func testANetworkErrorCarriesItsStatusCode() {
+        reporter().sendError(.networkError("HTTP 404", statusCode: 404))
+
+        XCTAssertEqual(port.messages, [[.int(2), .string("NETWORK_ERROR"), .string("HTTP 404"), .int(404)]])
+    }
+
+    func testOtherErrorsHaveNoStatusCode() {
+        reporter().sendError(.fileExists("a.txt"))
+
+        XCTAssertEqual(port.messages, [[.int(2), .string("FILE_EXISTS"), .string("a.txt")]])
+    }
 }
 
 /// `FileSaver_InitializeApiDL`, given the `DartApi` struct that
