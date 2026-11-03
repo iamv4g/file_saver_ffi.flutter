@@ -67,4 +67,12 @@ final class WebPickedDirectoryLocation extends PickedDirectoryLocation {
   /// The `FileSystemDirectoryHandle` of the picked directory, on web only.
   Never get directoryHandle =>
       throw UnsupportedError('directoryHandle is only available on web.');
+
+  /// Whether the page can write to the directory, on web only.
+  Future<bool> hasAccess() =>
+      throw UnsupportedError('hasAccess is only available on web.');
+
+  /// Asks the user for write access to the directory, on web only.
+  Future<bool> requestAccess() =>
+      throw UnsupportedError('requestAccess is only available on web.');
 }

@@ -2,11 +2,17 @@
 
 ### Added
 
+- **Web:** `persistDirectory`, `restoreDirectory` and `releaseDirectory` work on web too. The token refers to the directory handle, which `dir_picker` keeps in IndexedDB. The browser may not let the page write to a restored directory yet. `WebPickedDirectoryLocation.hasAccess()` checks it, and `requestAccess()`, called from a button, asks the user again.
 - **Web:** `WebPickedDirectoryLocation` is now exported, so web code can check the result of `pickDirectory` and use its `directoryHandle`. On other platforms the type exists for `is` checks, but `pickDirectory` never returns one.
-- `FileSaver.persistDirectory`, `restoreDirectory` and `releaseDirectory` keep access to a picked directory across app restarts, through `dir_picker`. `persistDirectory` returns a token to store; `restoreDirectory` gives the directory back on a later launch, or `null` when access is gone; `releaseDirectory` gives the access up. On iOS and macOS the token is bookmark data, so a stored `PickedDirectoryLocation` now survives a relaunch there too (before, only Android kept access, with `shouldPersist`). Persist the restored location again and store the new token, since a bookmark goes stale when the directory is moved. Not supported on web.
+- `FileSaver.persistDirectory`, `restoreDirectory` and `releaseDirectory` keep access to a picked directory across app restarts, through `dir_picker`. `persistDirectory` returns a token to store; `restoreDirectory` gives the directory back on a later launch, or `null` when access is gone; `releaseDirectory` gives the access up. On iOS and macOS the token is bookmark data, so a stored `PickedDirectoryLocation` now survives a relaunch there too (before, only Android kept access, with `shouldPersist`). Persist the restored location again and store the new token, since a bookmark goes stale when the directory is moved.
 
 ### Changed
 
+- `dir_picker` is now `^0.8.0` (was `^0.6.0`).
+- A failing `pickDirectory`, `persistDirectory`, `restoreDirectory` or `releaseDirectory` throws a `NativePlatformException` whose `code` is the `DirPickerException.code` of `dir_picker`, such as `ALREADY_ACTIVE` when another pick is still open. Before, the code was lost in the message.
+- **Web:** `pickDirectory` throws `UnsupportedError` when the browser has no `showDirectoryPicker()` (Firefox, Safari), as documented. Before, it threw `NativePlatformException`. `saveAs` and `openWriteAs` without a location now fall back to a browser download or an in-memory buffer only in that case. Any other picker failure, such as a missing user gesture, is reported: `saveAs` emits it as `SaveProgressError`, and `openWriteAs` throws it. Before, every picker error led to the fallback without a word.
+- **Web:** `pickDirectory` asks for write access along with the directory, so a save into it doesn't need a second permission prompt.
+- `saveAs` without a location reports the picker's exception as it is. Before, it was wrapped in another `NativePlatformException`, which doubled the message and lost its type and code.
 - **iOS:** saving audio or another non-media file to `IosSaveLocation.photos` now throws `InvalidInputException` with every API, as `openWrite` already refused it. Before, `save` and `saveAsync` saved it to Documents without saying so, and `openWrite` threw `UnsupportedFormatException`. Save these files to `IosSaveLocation.documents`.
 - **iOS:** the minimum iOS version is now 13.4 (was 13.0), in the podspec, `Package.swift` and README. iOS 13.0–13.3 used `FileHandle` calls that crash the app on a write error instead of throwing.
 - A `saveLocation` of another platform, such as `IosSaveLocation.photos` on macOS or `AndroidSaveLocation.downloads` on iOS, now throws `InvalidInputException` from `save`, `saveAsync` and `openWrite` on Android, iOS, macOS, Windows and Linux, and so does a `PickedDirectoryLocation`, which belongs to `saveAs` and `openWriteAs`. Before, the location was replaced by the platform's default without a word, and on macOS `IosSaveLocation.photos` saved to `~/Pictures`. Pick the location per platform, or pass `null` for the default.
@@ -14,6 +20,10 @@
 - **Windows/Linux, and `PathLocation` on every platform:** a file name that the system can't take now throws `InvalidInputException` before anything is written: `/`, NUL, `.` and `..` everywhere, and on Windows also `\ < > : " | ? *`, control characters and device names such as `CON` or `nul.txt`. A `subDir` that is absolute (`/x`, `C:\x`) or contains `..` throws too. Before, such names failed with a `FileSystemException` or wrote outside the save location.
 - **Linux:** the plugin no longer depends on `xdg_directories`; it runs `xdg-user-dir` itself.
 - **Web:** `saveBytes` and `saveFile` now throw invalid input (empty bytes or name) and the unsupported `saveFile` as an `InvalidInputException` when they are called, as the other web saves and the other platforms do. Before, it came as a raw error on the stream, after `SaveProgressStarted`.
+
+### Deprecated
+
+- `pickDirectory(shouldPersist:)` (Android only). Call `persistDirectory` on the picked location instead: it works on every platform and returns a token for `restoreDirectory` and `releaseDirectory`, while `shouldPersist` takes a permission it gives no token to release. It still works, and is removed in 1.0.0, where `pickDirectory` stops persisting on Android. `dir_picker` deprecates the `AndroidOptions` behind it the same way.
 
 ### Fixed
 

@@ -252,7 +252,11 @@ void main() {
 
       final events = await saveAs().toList();
 
-      expect(events.single, isA<SaveProgressError>());
+      // The picker's exception as it is, not wrapped once more.
+      expect(
+        (events.single as SaveProgressError).exception,
+        same(platform.pickResult),
+      );
       expect(platform.calls, isEmpty);
     });
 

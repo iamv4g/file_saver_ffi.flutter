@@ -178,9 +178,8 @@ abstract class FileSaverPlatform {
   ///
   /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
   ///
-  /// [shouldPersist] is Android-only: if true, calls takePersistableUriPermission
-  /// so the app can write to the selected directory across restarts without re-picking.
-  /// Ignored on all other platforms.
+  /// [shouldPersist] is Android-only, where the Android implementation then
+  /// calls [persistDirectory] on the result. Ignored on all other platforms.
   ///
   /// Returns [PickedDirectoryLocation], or null if cancelled.
   /// Throws [UnsupportedError] on browsers that do not support the File System Access API.
@@ -188,33 +187,26 @@ abstract class FileSaverPlatform {
     bool shouldPersist = true,
   }) async {
     try {
-      final location = await DirPicker.pick(
-        options: AndroidOptions(shouldPersist: shouldPersist),
-      );
+      final location = await DirPicker.pick();
       if (location == null) return null;
       return PickedDirectoryLocation(uri: location.uri!);
-    } on FileSaverException {
-      rethrow;
     } catch (e) {
-      throw NativePlatformException('Pick directory failed: $e');
+      throw mapDirPickerError(e, 'Pick directory failed');
     }
   }
 
   /// Keeps access to [location] after the app restarts and returns a token
   /// for [restoreDirectory]. See [DirPicker.persist].
   ///
-  /// **Platforms:** Android · iOS · macOS · Windows · Linux
-  /// **Web:** throws [UnsupportedError]
+  /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
   ///
   /// Throws [InvalidInputException] for a location the platform can't
   /// persist, and [NativePlatformException] when the platform refuses.
   Future<String> persistDirectory(PickedDirectoryLocation location) async {
     try {
       return await DirPicker.persist(IOPickedLocation(location.uri));
-    } on ArgumentError catch (e) {
-      throw InvalidInputException('Persist directory failed: ${e.message}');
     } catch (e) {
-      throw NativePlatformException('Persist directory failed: $e');
+      throw mapDirPickerError(e, 'Persist directory failed');
     }
   }
 
@@ -222,30 +214,43 @@ abstract class FileSaverPlatform {
   /// to it restored, or null when the token no longer gives access. See
   /// [DirPicker.restore].
   ///
-  /// **Platforms:** Android · iOS · macOS · Windows · Linux
-  /// **Web:** throws [UnsupportedError]
+  /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
   Future<PickedDirectoryLocation?> restoreDirectory(String token) async {
     try {
       final location = await DirPicker.restore(token);
       if (location == null) return null;
       return PickedDirectoryLocation(uri: location.uri!);
     } catch (e) {
-      throw NativePlatformException('Restore directory failed: $e');
+      throw mapDirPickerError(e, 'Restore directory failed');
     }
   }
 
   /// Gives up the access a [persistDirectory] token keeps. See
   /// [DirPicker.release].
   ///
-  /// **Platforms:** Android · iOS · macOS · Windows · Linux
-  /// **Web:** throws [UnsupportedError]
+  /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
   Future<void> releaseDirectory(String token) async {
     try {
       await DirPicker.release(token);
     } catch (e) {
-      throw NativePlatformException('Release directory failed: $e');
+      throw mapDirPickerError(e, 'Release directory failed');
     }
   }
+
+  /// Converts an error from `dir_picker` into a [FileSaverException]: an
+  /// [ArgumentError] (a location the platform can't use) into an
+  /// [InvalidInputException], and anything else into a
+  /// [NativePlatformException] that keeps the [DirPickerException.code].
+  @protected
+  FileSaverException mapDirPickerError(Object e, String action) => switch (e) {
+    FileSaverException() => e,
+    DirPickerException(:final code, :final message) => NativePlatformException(
+      '$action: ${message ?? code}',
+      code,
+    ),
+    ArgumentError(:final message) => InvalidInputException('$action: $message'),
+    _ => NativePlatformException('$action: $e'),
+  };
 
   /// Checks whether the file at [uri] is accessible for reading.
   ///

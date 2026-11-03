@@ -166,7 +166,9 @@ class FileSaver {
   /// If [saveLocation] is null, shows the directory picker first.
   /// Yields [SaveProgressCancelled] if the picker is dismissed.
   ///
-  /// Web: falls back to anchor-download if the browser does not support FSA.
+  /// Web: falls back to anchor-download if the browser has no
+  /// `showDirectoryPicker()` (Firefox, Safari). Other picker errors, such as
+  /// a missing user gesture, are reported as [SaveProgressError].
   ///
   /// [fileName] works as in [save].
   static Stream<SaveProgress> saveAs({
@@ -185,16 +187,18 @@ class FileSaver {
           return;
         }
         resolvedLocation = picked;
-      } catch (e) {
-        if (kIsWeb) {
-          // Browser doesn't support FSA (Firefox / Safari).
-          // Pass a plain PickedDirectoryLocation so FileSaverWeb.saveAs()
-          // falls through to its anchor-download fallback.
-          resolvedLocation = PickedDirectoryLocation(uri: Uri());
-        } else {
+      } on UnsupportedError catch (e) {
+        if (!kIsWeb) {
           yield SaveProgressError(NativePlatformException(e.toString()));
           return;
         }
+        // The browser has no showDirectoryPicker() (Firefox / Safari). A
+        // plain PickedDirectoryLocation makes FileSaverWeb.saveAs() fall
+        // through to its anchor-download fallback.
+        resolvedLocation = PickedDirectoryLocation(uri: Uri());
+      } catch (e) {
+        yield SaveProgressError(FileSaverException.fromObj(e));
+        return;
       }
     }
 
@@ -311,7 +315,8 @@ class FileSaver {
   /// target file already exists.
   ///
   /// Web: uses [FileSystemWritableFileStream] (FSA) when the browser supports it,
-  /// falls back to in-memory buffering otherwise.
+  /// falls back to in-memory buffering when it has no `showDirectoryPicker()`.
+  /// Other picker errors are thrown.
   ///
   /// [fileName] works as in [save].
   static Future<FileSaverSink?> openWriteAs({
@@ -327,13 +332,11 @@ class FileSaver {
         final picked = await pickDirectory();
         if (picked == null) return null;
         resolvedLocation = picked;
-      } catch (e) {
-        if (kIsWeb) {
-          // Browser doesn't support FSA — fall through to buffer mode.
-          resolvedLocation = PickedDirectoryLocation(uri: Uri());
-        } else {
-          rethrow;
-        }
+      } on UnsupportedError {
+        if (!kIsWeb) rethrow;
+        // The browser has no showDirectoryPicker() — fall through to buffer
+        // mode.
+        resolvedLocation = PickedDirectoryLocation(uri: Uri());
       }
     }
     return _platform.openWriteAs(
@@ -353,14 +356,23 @@ class FileSaver {
   ///
   /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
   ///
-  /// [shouldPersist] is Android-only: if true, calls takePersistableUriPermission
-  /// so the app can write to the selected directory across restarts without re-picking.
-  /// Ignored on all other platforms. To keep access after a restart on every
-  /// platform but web, use [persistDirectory].
+  /// [shouldPersist] is Android-only and deprecated: if true, the picked
+  /// directory is persisted as with [persistDirectory], but the token is
+  /// discarded, so it can't be released. Call [persistDirectory] instead,
+  /// which works on every platform. Ignored on all other platforms.
   ///
   /// Returns [PickedDirectoryLocation], or null if cancelled.
-  /// Throws [UnsupportedError] on browsers that do not support the File System Access API.
+  /// Throws [UnsupportedError] on browsers without `showDirectoryPicker()`
+  /// (Firefox, Safari), and [NativePlatformException] if the picker fails;
+  /// its `code` is the `DirPickerException.code` of `dir_picker`, such as
+  /// `ALREADY_ACTIVE` when another pick is still open.
   static Future<PickedDirectoryLocation?> pickDirectory({
+    @Deprecated(
+      'Call persistDirectory on the result instead; it works on every '
+      'platform and returns a token for restoreDirectory and '
+      'releaseDirectory. shouldPersist will be removed in 1.0.0, and '
+      'pickDirectory will then no longer persist on Android.',
+    )
     bool shouldPersist = true,
   }) {
     return _platform.pickDirectory(shouldPersist: shouldPersist);
@@ -371,8 +383,7 @@ class FileSaver {
   /// to [restoreDirectory] to save to the same directory without asking the
   /// user again.
   ///
-  /// **Platforms:** Android · iOS · macOS · Windows · Linux
-  /// **Web:** throws [UnsupportedError]
+  /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
   ///
   /// [location] has to come from [pickDirectory] or [restoreDirectory].
   ///
@@ -382,6 +393,7 @@ class FileSaver {
   /// | iOS      | Bookmark data (base64) | A bookmark of the directory. |
   /// | macOS    | Security-scoped bookmark data (base64) | A security-scoped bookmark. A sandboxed app needs the `com.apple.security.files.user-selected.read-write` entitlement. |
   /// | Windows, Linux | The `file://` URI | Nothing: the path stays usable. |
+  /// | Web      | A random key | The directory handle, in the IndexedDB database of `dir_picker`. Persisting the same directory again returns the same token. |
   ///
   /// ```dart
   /// final location = await FileSaver.pickDirectory();
@@ -404,8 +416,11 @@ class FileSaver {
   /// or released with [releaseDirectory], or the token isn't from this
   /// platform. Ask the user with [pickDirectory] again then.
   ///
-  /// **Platforms:** Android · iOS · macOS · Windows · Linux
-  /// **Web:** throws [UnsupportedError]
+  /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
+  ///
+  /// On web the directory comes back, but the browser may not let the page
+  /// write to it yet. Check `WebPickedDirectoryLocation.hasAccess`, and if it
+  /// is false, call `requestAccess` from a button before saving.
   ///
   /// On iOS and macOS a bookmark goes stale when the directory is moved or
   /// renamed. It still restores, so persist the restored location and store
@@ -434,8 +449,7 @@ class FileSaver {
   /// Gives up the access a [persistDirectory] token keeps, for a directory
   /// the app no longer needs. Delete the stored token too.
   ///
-  /// **Platforms:** Android · iOS · macOS · Windows · Linux
-  /// **Web:** throws [UnsupportedError]
+  /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
   ///
   /// - **Android**: releases the persisted permission, so [restoreDirectory]
   ///   returns null for the token.
@@ -443,6 +457,8 @@ class FileSaver {
   ///   [restoreDirectory] (and on iOS, [pickDirectory]) started, which
   ///   otherwise lasts until the app exits.
   /// - **Windows, Linux**: does nothing.
+  /// - **Web**: deletes the stored handle, so [restoreDirectory] returns
+  ///   null for the token.
   ///
   /// Throws [NativePlatformException] if the platform call fails.
   static Future<void> releaseDirectory(String token) {
