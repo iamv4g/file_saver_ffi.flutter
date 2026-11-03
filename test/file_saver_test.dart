@@ -11,6 +11,7 @@ class _FakePlatform extends FileSaverPlatform {
 
   /// Result of [pickDirectory]; a [FileSaverException] is thrown instead.
   Object? pickResult;
+  var picks = 0;
 
   Stream<SaveProgress> _record(String name, Map<String, Object?> args) {
     calls[name] = args;
@@ -89,6 +90,7 @@ class _FakePlatform extends FileSaverPlatform {
   Future<PickedDirectoryLocation?> pickDirectory({
     bool shouldPersist = true,
   }) async {
+    picks++;
     final result = pickResult;
     if (result is FileSaverException) throw result;
     return result as PickedDirectoryLocation?;
@@ -260,6 +262,77 @@ void main() {
       expect(platform.calls, isEmpty);
     });
 
+    test('invalid input throws when saveAs is called, before the '
+        'picker', () {
+      for (final input in [
+        SaveInput.bytes(Uint8List(0)),
+        SaveInput.file(''),
+        SaveInput.network(url: 'ftp://example.com/a.png'),
+      ]) {
+        expect(
+          () => FileSaver.saveAs(
+            input: input,
+            fileType: ImageType.png,
+            fileName: 'a',
+          ),
+          throwsA(isA<InvalidInputException>()),
+          reason: '$input',
+        );
+      }
+      expect(
+        () => FileSaver.saveAs(
+          input: SaveInput.bytes(bytes),
+          fileType: ImageType.png,
+          fileName: '',
+        ),
+        throwsA(isA<InvalidInputException>()),
+      );
+      expect(platform.picks, 0);
+      expect(platform.calls, isEmpty);
+    });
+
+    test('saveAsAsync throws INCOMPLETE when the stream ends without a '
+        'result, as saveAsync does', () {
+      platform.events = [const SaveProgressStarted()];
+
+      expect(
+        FileSaver.saveAsAsync(
+          input: SaveInput.bytes(bytes),
+          fileType: ImageType.png,
+          fileName: 'a',
+          saveLocation: picked,
+        ),
+        throwsA(
+          isA<NativePlatformException>().having(
+            (e) => e.code,
+            'code',
+            FileSaverErrorCode.incomplete,
+          ),
+        ),
+      );
+    });
+
+    test('saveAsAsync returns the URI and reports progress', () async {
+      platform.events = [
+        const SaveProgressStarted(),
+        const SaveProgressUpdate(0.5),
+        SaveProgressComplete(savedUri),
+      ];
+      final progress = <double>[];
+
+      expect(
+        await FileSaver.saveAsAsync(
+          input: SaveInput.bytes(bytes),
+          fileType: ImageType.png,
+          fileName: 'a',
+          saveLocation: picked,
+          onProgress: progress.add,
+        ),
+        savedUri,
+      );
+      expect(progress, [0.5]);
+    });
+
     test('saveAsAsync returns null when cancelled', () async {
       expect(
         await FileSaver.saveAsAsync(
@@ -282,12 +355,30 @@ void main() {
       expect(platform.calls, isEmpty);
     });
 
+    test('an empty name throws before the picker', () async {
+      await expectLater(
+        FileSaver.openWriteAs(fileName: '', fileType: ImageType.png),
+        throwsA(isA<InvalidInputException>()),
+      );
+      expect(platform.picks, 0);
+    });
+
     test('rethrows picker errors', () {
       platform.pickResult = const PermissionDeniedException();
       expect(
         FileSaver.openWriteAs(fileName: 'a', fileType: ImageType.png),
         throwsA(isA<PermissionDeniedException>()),
       );
+    });
+  });
+
+  group('SaveProgressUpdate', () {
+    test('clamps progress to 0.0–1.0', () {
+      expect(const SaveProgressUpdate(0.3).progress, 0.3);
+      expect(const SaveProgressUpdate(1.5).progress, 1.0);
+      expect(const SaveProgressUpdate(-0.1).progress, 0.0);
+      expect(SaveProgressUpdate(double.nan).progress, 0.0);
+      expect(SaveProgressUpdate(double.infinity).progress, 1.0);
     });
   });
 }

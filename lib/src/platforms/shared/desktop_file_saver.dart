@@ -154,6 +154,21 @@ abstract class DesktopFileSaver<L extends SaveLocation>
 
   // pickDirectory() is inherited from FileSaverPlatform (uses DirPicker).
 
+  /// Also checks the name the file gets, with [checkFileName].
+  @override
+  void validateSaveAsInput({
+    SaveInput? input,
+    required String fileName,
+    required FileType fileType,
+  }) {
+    super.validateSaveAsInput(
+      input: input,
+      fileName: fileName,
+      fileType: fileType,
+    );
+    checkFileName('$fileName.${fileType.ext}');
+  }
+
   @override
   Stream<SaveProgress> saveAs({
     required SaveInput input,
@@ -162,14 +177,7 @@ abstract class DesktopFileSaver<L extends SaveLocation>
     required PickedDirectoryLocation saveLocation,
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
   }) {
-    switch (input) {
-      case SaveBytesInput(:final fileBytes):
-        validateBytesInput(fileBytes, fileName);
-      case SaveFileInput(:final filePath):
-        validateFilePathInput(filePath, fileName);
-      case SaveNetworkInput(:final url):
-        validateNetworkInput(url, fileName);
-    }
+    validateSaveAsInput(input: input, fileName: fileName, fileType: fileType);
     final dirPath = saveLocation.uri.toFilePath();
     return PathLocationWriter.save(
       input: input,
@@ -227,10 +235,7 @@ abstract class DesktopFileSaver<L extends SaveLocation>
     int? totalSize,
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
   }) async {
-    if (fileName.isEmpty) {
-      throw const InvalidInputException('File name cannot be empty');
-    }
-    checkFileName('$fileName.${fileType.ext}');
+    validateSaveAsInput(fileName: fileName, fileType: fileType);
     final dirPath = saveLocation.uri.toFilePath();
     final filePath = p.join(dirPath, '$fileName.${fileType.ext}');
     final resolved = await _conflictResolver.claim(

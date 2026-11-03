@@ -317,6 +317,7 @@ class FileSaverAndroid extends FileSaverPlatform {
     required PickedDirectoryLocation saveLocation,
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
   }) {
+    validateSaveAsInput(input: input, fileName: fileName, fileType: fileType);
     return switch (input) {
       SaveBytesInput(:final fileBytes) => _saveBytesAs(
         fileBytes: fileBytes,

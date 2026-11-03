@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show clampDouble;
+
 import '../../exceptions/file_saver_exceptions.dart';
 import '../../models/file_saver_sink.dart';
 
@@ -237,7 +239,10 @@ class SessionFileSaverSink implements FileSaverSink {
     if (_bytesController.isClosed) return;
     _bytesController.add(bytes);
     final total = _totalSize;
-    if (total != null && total > 0) _progressController.add(bytes / total);
+    // A totalSize smaller than what is written stays at 1.0.
+    if (total != null && total > 0) {
+      _progressController.add(clampDouble(bytes / total, 0, 1));
+    }
   }
 
   Future<void> _finish() async {
