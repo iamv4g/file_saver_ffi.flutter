@@ -14,10 +14,12 @@ sealed class SaveProgressEvent {
     /**
      * Progress update during save operation.
      *
-     * @property value Progress value from 0.0 to 1.0
+     * @property bytesWritten Bytes of the file written so far
+     * @property totalBytes The size of the file, or null if it isn't known
      */
     data class Progress(
-        val value: Double,
+        val bytesWritten: Long,
+        val totalBytes: Long?,
     ) : SaveProgressEvent()
 
     /**

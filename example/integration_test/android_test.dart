@@ -117,6 +117,9 @@ void main() {
       expect(uri.toFilePath(), '${dir.path}/out/copy.txt');
       expect(await File.fromUri(uri).readAsString(), 'from MediaStore');
       expect(dir.listSync(recursive: true).whereType<File>(), hasLength(1));
+      final last = events.whereType<SaveProgressUpdate>().last;
+      expect(last.bytesWritten, 'from MediaStore'.length);
+      expect(last.totalBytes, 'from MediaStore'.length);
     });
 
     testWidgets('cancelling stops the copy and deletes the partial file', (
@@ -227,6 +230,60 @@ void main() {
     expect((await stream.last), isA<SaveProgressComplete>());
     expect(() => stream.listen(null), throwsStateError);
     expect(dir.listSync(), hasLength(1));
+  });
+
+  group('a download reports the bytes written', () {
+    final body = Uint8List.fromList(List.generate(256 * 1024, (i) => i % 251));
+    late HttpServer server;
+
+    setUp(() async {
+      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        // Without a contentLength, HttpServer sends the body chunked.
+        if (request.uri.path == '/sized') {
+          request.response.contentLength = body.length;
+        }
+        for (var offset = 0; offset < body.length; offset += 64 * 1024) {
+          request.response.add(body.sublist(offset, offset + 64 * 1024));
+          await request.response.flush();
+          await Future<void>.delayed(const Duration(milliseconds: 150));
+        }
+        await request.response.close();
+      });
+    });
+
+    tearDown(() => server.close(force: true));
+
+    Future<List<SaveProgressUpdate>> download(String path) async {
+      final events = await FileSaver.save(
+        input: SaveInput.network(url: 'http://127.0.0.1:${server.port}$path'),
+        fileName: path.substring(1),
+        fileType: _text,
+        saveLocation: AndroidSaveLocation.downloads,
+        subDir: _subDir,
+        conflictResolution: ConflictResolution.overwrite,
+      ).toList();
+      expect(events.last, isA<SaveProgressComplete>());
+      return events.whereType<SaveProgressUpdate>().toList();
+    }
+
+    testWidgets('of the Content-Length', (_) async {
+      final updates = await download('/sized');
+
+      expect(updates.length, greaterThan(1));
+      expect(updates.map((e) => e.totalBytes), everyElement(body.length));
+      expect(updates.last.bytesWritten, body.length);
+      expect(updates.last.progress, 1.0);
+    });
+
+    testWidgets('of an unknown size without Content-Length', (_) async {
+      final updates = await download('/chunked');
+
+      expect(updates.length, greaterThan(1));
+      expect(updates.map((e) => e.totalBytes), everyElement(isNull));
+      expect(updates.map((e) => e.progress), everyElement(0.0));
+      expect(updates.last.bytesWritten, body.length);
+    });
   });
 
   testWidgets('an HTTP error throws NetworkException with the status code', (

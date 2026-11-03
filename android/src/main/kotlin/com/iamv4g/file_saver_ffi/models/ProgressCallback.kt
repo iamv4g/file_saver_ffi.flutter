@@ -6,13 +6,17 @@ package com.iamv4g.file_saver_ffi.models
  * ## Message protocol
  *
  * ### Used by `save()` / `saveAs()`
- * | eventType | progress         | data       | message |
- * |-----------|------------------|------------|---------|
- * | 0         | –                | –          | –       | Started
- * | 1         | 0.0–1.0 fraction | –          | –       | Progress
- * | 2         | HTTP status or 0 | errorCode  | detail  | Error
- * | 3         | –                | fileUri    | –       | Success
- * | 4         | –                | –          | –       | Cancelled
+ * | eventType | progress         | data          | message |
+ * |-----------|------------------|---------------|---------|
+ * | 0         | –                | –             | –       | Started
+ * | 1         | bytesWritten     | totalBytes    | –       | Progress
+ * | 2         | HTTP status or 0 | errorCode     | detail  | Error
+ * | 3         | –                | fileUri       | –       | Success
+ * | 4         | –                | –             | –       | Cancelled
+ *
+ * Progress sends the bytes of the file written so far, and the size of the
+ * file as a decimal string, or null if it isn't known (a download without
+ * `Content-Length`, many `content://` sources). `copyToPath` reports the same.
  *
  * An error sends the HTTP status of a [com.iamv4g.file_saver_ffi.utils.Constants.ERROR_NETWORK]
  * error as `progress`, and 0 otherwise. Its `message` is the detail the Dart
@@ -35,9 +39,10 @@ interface ProgressCallback {
      * Called for each event.
      *
      * @param eventType 0=Started, 1=Progress/ChunkAck, 2=Error, 3=Success/SessionEvent, 4=Cancelled
-     * @param progress  For save: 0.0–1.0 fraction. For write-session chunk/flush ACK: cumulative bytes written.
+     * @param progress  eventType=1 → cumulative bytes written, for a save as for a write-session chunk/flush ACK.
      *                  eventType=2 → HTTP status of a network error, otherwise 0.
-     * @param data      eventType=2 → errorCode; eventType=3 → fileUri or sessionId string
+     * @param data      eventType=1 → the save's size, if known; eventType=2 → errorCode;
+     *                  eventType=3 → fileUri or sessionId string
      * @param message   eventType=2 → the error detail; otherwise null
      */
     fun onEvent(

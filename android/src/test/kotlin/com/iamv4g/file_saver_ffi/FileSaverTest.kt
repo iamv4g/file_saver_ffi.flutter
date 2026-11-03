@@ -118,7 +118,10 @@ class FileSaverTest : FileSaverTestBase() {
         val event = callback.awaitTerminal()
         assertEquals(3, event.type)
         assertEquals(0, callback.events.first().type)
-        assertTrue(callback.events.count { it.type == 1 } >= 3)
+        // Every chunk is more than 1% of the size.
+        val progress = callback.events.filter { it.type == 1 }
+        assertEquals(listOf(1, 2, 3).map { it * Constants.CHUNK_SIZE.toDouble() }, progress.map { it.progress })
+        assertEquals(setOf("${data.size}"), progress.map { it.data }.toSet())
         assertArrayEquals(data, mediaStore.rowNamed("photo.png")!!.file.readBytes())
     }
 

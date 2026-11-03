@@ -34,7 +34,7 @@ class SaveFlowBuilderTest {
         val events =
             slowCollect(
                 saveFlow {
-                    repeat(500) { sendProgress(it / 500.0) }
+                    repeat(500) { sendProgress(it.toLong(), 500) }
                     sendSuccess("content://media/1")
                 },
             )
@@ -47,7 +47,7 @@ class SaveFlowBuilderTest {
         val events =
             slowCollect(
                 saveFlow {
-                    repeat(500) { sendProgress(it / 500.0) }
+                    repeat(500) { sendProgress(it.toLong(), 500) }
                     sendError(Constants.ERROR_FILE_IO, "disk full")
                 },
             )
@@ -60,7 +60,7 @@ class SaveFlowBuilderTest {
         val events =
             slowCollect(
                 saveFlow {
-                    repeat(500) { sendProgress(it / 500.0) }
+                    repeat(500) { sendProgress(it.toLong(), 500) }
                     throw IllegalStateException("boom")
                 },
             )

@@ -42,8 +42,6 @@ abstract class BaseFileSaver(
                 return@saveFlow
             }
 
-            sendProgress(0.05)
-
             val entry =
                 when (val result = entryFactory.createEntry(this, context, conflictResolution)) {
                     null -> return@saveFlow
@@ -54,11 +52,9 @@ abstract class BaseFileSaver(
                     is SaveEntry.Created -> result
                 }
 
-            sendProgress(0.1)
-
             try {
-                FileHelper.writeStream(entry.outputStream, fileData) { writeProgress ->
-                    sendProgress(mapProgress(writeProgress, 0.1, 0.9))
+                FileHelper.writeStream(entry.outputStream, fileData) { bytesWritten ->
+                    sendProgress(bytesWritten, fileData.size.toLong())
                 }
             } catch (e: CancellationException) {
                 entryFactory.deleteEntry(context, entry.uri)
@@ -90,7 +86,6 @@ abstract class BaseFileSaver(
         conflictResolution: ConflictResolution,
     ): Flow<SaveProgressEvent> =
         saveFlow {
-            sendProgress(0.05)
 
             val sourceFile =
                 try {
@@ -106,8 +101,6 @@ abstract class BaseFileSaver(
                     return@saveFlow
                 }
 
-            sendProgress(0.1)
-
             val entry =
                 when (val result = entryFactory.createEntry(this, context, conflictResolution)) {
                     null -> {
@@ -122,11 +115,9 @@ abstract class BaseFileSaver(
                     is SaveEntry.Created -> result
                 }
 
-            sendProgress(0.15)
-
             try {
-                FileHelper.copyStream(sourceFile.inputStream, entry.outputStream, sourceFile.totalSize) { copyProgress ->
-                    sendProgress(mapProgress(copyProgress, 0.15, 0.9))
+                FileHelper.copyStream(sourceFile.inputStream, entry.outputStream, sourceFile.totalSize) { bytesWritten ->
+                    sendProgress(bytesWritten, sourceFile.totalSize)
                 }
             } catch (e: CancellationException) {
                 entryFactory.deleteEntry(context, entry.uri)
@@ -160,11 +151,9 @@ abstract class BaseFileSaver(
         conflictResolution: ConflictResolution,
     ): Flow<SaveProgressEvent> =
         saveFlow {
-            sendProgress(0.02)
 
             try {
                 NetworkHelper.download(url, headersJson, timeoutMs) { response ->
-                    sendProgress(0.05)
 
                     val entry =
                         when (val result = entryFactory.createEntry(this, context, conflictResolution)) {
@@ -176,11 +165,10 @@ abstract class BaseFileSaver(
                             is SaveEntry.Created -> result
                         }
 
-                    sendProgress(0.1)
-
                     try {
-                        FileHelper.copyStream(response.body, entry.outputStream, response.contentLength) { copyProgress ->
-                            sendProgress(mapProgress(copyProgress, 0.1, 0.9))
+                        val totalSize = response.contentLength.takeIf { it >= 0 }
+                        FileHelper.copyStream(response.body, entry.outputStream, totalSize) { bytesWritten ->
+                            sendProgress(bytesWritten, totalSize)
                         }
                     } catch (e: CancellationException) {
                         entryFactory.deleteEntry(context, entry.uri)

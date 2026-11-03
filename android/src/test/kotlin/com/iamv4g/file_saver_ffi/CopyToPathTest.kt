@@ -63,11 +63,27 @@ class CopyToPathTest : FileSaverTestBase() {
         assertEquals("Events: ${callback.events}", 3, event.type)
         assertEquals(target.path, event.data)
         assertArrayEquals(data, target.readBytes())
-        val progress = callback.events.filter { it.type == 1 }.map { it.progress }
-        assertTrue("Progress: $progress", progress.size >= 3)
-        assertEquals(progress.sorted(), progress)
-        assertEquals(1.0, progress.last(), 0.0)
+        val progress = callback.events.filter { it.type == 1 }
+        val bytes = progress.map { it.progress }
+        assertEquals(listOf(1, 2, 3).map { it * Constants.CHUNK_SIZE.toDouble() }, bytes)
+        assertEquals(setOf("${data.size}"), progress.map { it.data }.toSet())
         assertNoCrash()
+    }
+
+    @Test
+    fun `a content URI without a size reports the bytes copied, of an unknown size`() {
+        val data = ByteArray(3 * Constants.CHUNK_SIZE) { it.toByte() }
+        val source = contentUri(data)
+        mediaStore.reportsSize = false
+        val callback = RecordingCallback()
+
+        fileSaver.copyToPath(source, target.path, callback)
+
+        assertEquals("Events: ${callback.events}", 3, callback.awaitTerminal().type)
+        val progress = callback.events.filter { it.type == 1 }
+        assertTrue("Events: ${callback.events}", progress.isNotEmpty())
+        assertEquals(data.size.toDouble(), progress.last().progress, 0.0)
+        assertEquals(setOf<String?>(null), progress.map { it.data }.toSet())
     }
 
     @Test

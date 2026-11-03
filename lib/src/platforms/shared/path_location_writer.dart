@@ -20,8 +20,8 @@ import 'single_subscription.dart';
 const int _chunkSize = 1024 * 1024;
 
 /// Copies a source that `dart:io` can't read, such as an Android `content://`
-/// URI, into the existing file at `path`, calling `onProgress` with the
-/// fraction copied.
+/// URI, into the existing file at `path`, calling `onProgress` with the bytes
+/// copied.
 ///
 /// `done` completes when the copy has ended, or fails with a
 /// [FileSaverException]. After `cancel` it completes once the copy no longer
@@ -30,7 +30,7 @@ typedef SourceCopier =
     ({Future<void> done, void Function() cancel}) Function(
       String source,
       String path,
-      void Function(double progress) onProgress,
+      void Function(SaveProgressUpdate update) onProgress,
     );
 
 /// Saves with `dart:io` into a directory: [PathLocation] on every IO platform,
@@ -176,13 +176,7 @@ abstract final class PathLocationWriter {
             if (input case SaveFileInput(
               :final filePath,
             ) when copySource != null) {
-              await _copy(
-                copySource,
-                filePath,
-                session,
-                cancellation,
-                (progress) => emit(SaveProgressUpdate(progress)),
-              );
+              await _copy(copySource, filePath, session, cancellation, emit);
             } else {
               final source = await _open(input, cancellation);
               if (!cancellation.isCancelled) {
@@ -360,7 +354,7 @@ abstract final class PathLocationWriter {
     String source,
     IOWriteSession session,
     _Cancellation cancellation,
-    void Function(double progress) onProgress,
+    void Function(SaveProgressUpdate update) onProgress,
   ) async {
     if (cancellation.isCancelled) return;
     final copy = copySource(source, session.path, onProgress);

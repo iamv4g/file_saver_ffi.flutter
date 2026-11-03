@@ -487,12 +487,19 @@ class FileSaverAndroid extends FileSaverPlatform {
     });
   }
 
+  /// The update of a progress event (1) from Kotlin.
+  static SaveProgressUpdate _bytesUpdate(double bytesWritten, String? size) =>
+      SaveProgressUpdate.bytes(
+        bytesWritten.toInt(),
+        size == null ? null : int.parse(size),
+      );
+
   /// Copies [source] into the file at [path] in Kotlin, which reads a
   /// `content://` URI through the `ContentResolver`. See [SourceCopier].
   ({Future<void> done, void Function() cancel}) _copyToPath(
     String source,
     String path,
-    void Function(double progress) onProgress,
+    void Function(SaveProgressUpdate update) onProgress,
   ) {
     final done = Completer<void>();
     late final bindings.ProgressCallback callback;
@@ -504,7 +511,7 @@ class FileSaverAndroid extends FileSaverPlatform {
           if (done.isCompleted) return;
           switch (eventType) {
             case 1:
-              onProgress(progress);
+              onProgress(_bytesUpdate(progress, dataStr));
               return;
             case 3 || 4:
               done.complete();
@@ -571,11 +578,15 @@ class FileSaverAndroid extends FileSaverPlatform {
     JString? data,
     JString? message,
   ) {
+    final dataStr = data?.toDartString(releaseOriginal: true);
+    final messageStr = message?.toDartString(releaseOriginal: true);
+    // Kotlin sends the bytes written as the progress, and the size, if known,
+    // as data.
+    if (eventType == 1) return _bytesUpdate(progress, dataStr);
     return parseNativeEvent(
       eventType,
-      progress: progress,
-      data: data?.toDartString(releaseOriginal: true),
-      message: message?.toDartString(releaseOriginal: true),
+      data: dataStr,
+      message: messageStr,
       // Kotlin sends the HTTP status of a network error as the progress.
       statusCode: eventType == 2 && progress > 0 ? progress.toInt() : null,
     );
