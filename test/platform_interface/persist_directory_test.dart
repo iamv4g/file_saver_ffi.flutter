@@ -18,12 +18,17 @@ class _FakeDirPicker extends DirPickerPlatform {
   Object? error;
   String persistToken = 'token';
   PickedLocation? restored;
+  PickedLocation? picked;
 
   @override
   Future<PickedLocation?> pick({
     PickOptions? options,
     PickedLocation? initialDirectory,
-  }) => throw UnimplementedError();
+  }) async {
+    calls['pick'] = options;
+    if (error case final error?) throw error;
+    return picked;
+  }
 
   @override
   Future<List<FileSystemEntry>> listEntries(
@@ -62,6 +67,70 @@ void main() {
     DirPickerPlatform.instance = dirPicker;
   });
 
+  group('pickDirectory', () {
+    test('returns the picked location without options', () async {
+      dirPicker.picked = IOPickedLocation(uri);
+
+      final location = await FileSaver.pickDirectory();
+
+      expect(location!.uri, uri);
+      expect(dirPicker.calls, {'pick': null});
+    });
+
+    test('a picker failure throws NativePlatformException with the '
+        'dir_picker code', () {
+      dirPicker.error = const DirPickerException(
+        DirPickerException.alreadyActive,
+        'Another pick is open',
+      );
+
+      expect(
+        FileSaver.pickDirectory(),
+        throwsA(
+          isA<NativePlatformException>()
+              .having((e) => e.code, 'code', 'ALREADY_ACTIVE')
+              .having(
+                (e) => e.message,
+                'message',
+                'Pick directory failed: Another pick is open',
+              ),
+        ),
+      );
+    });
+
+    group('on Android', () {
+      final contentUri = Uri.parse(
+        'content://com.android.externalstorage.documents/tree/primary%3AX',
+      );
+
+      setUp(() {
+        FileSaverPlatform.instance = FileSaverAndroid();
+        dirPicker.picked = IOPickedLocation(contentUri);
+      });
+
+      test('persists the location by default', () async {
+        final location = await FileSaver.pickDirectory();
+
+        expect(location!.uri, contentUri);
+        expect(dirPicker.calls['persist'], IOPickedLocation(contentUri));
+      });
+
+      test('shouldPersist: false only picks', () async {
+        // ignore: deprecated_member_use_from_same_package
+        await FileSaver.pickDirectory(shouldPersist: false);
+
+        expect(dirPicker.calls.keys, ['pick']);
+      });
+
+      test('a cancelled pick persists nothing', () async {
+        dirPicker.picked = null;
+
+        expect(await FileSaver.pickDirectory(), isNull);
+        expect(dirPicker.calls.keys, ['pick']);
+      });
+    });
+  });
+
   group('persistDirectory', () {
     test(
       'persists the location with dir_picker and returns its token',
@@ -96,17 +165,19 @@ void main() {
       );
     });
 
-    test('a refusal throws NativePlatformException', () {
-      dirPicker.error = Exception('PERSIST_ERROR: No permission');
+    test('a refusal throws NativePlatformException with the dir_picker '
+        'code', () {
+      dirPicker.error = const DirPickerException(
+        DirPickerException.persistError,
+        'No permission',
+      );
 
       expect(
         FileSaver.persistDirectory(PickedDirectoryLocation(uri: uri)),
         throwsA(
-          isA<NativePlatformException>().having(
-            (e) => e.message,
-            'message',
-            contains('PERSIST_ERROR: No permission'),
-          ),
+          isA<NativePlatformException>()
+              .having((e) => e.code, 'code', 'PERSIST_ERROR')
+              .having((e) => e.message, 'message', contains('No permission')),
         ),
       );
     });
@@ -133,11 +204,20 @@ void main() {
     });
 
     test('a failure throws NativePlatformException', () {
-      dirPicker.error = Exception('RESTORE_ERROR: Failed');
+      dirPicker.error = const DirPickerException(
+        DirPickerException.restoreError,
+        'Failed',
+      );
 
       expect(
         FileSaver.restoreDirectory('bookmark'),
-        throwsA(isA<NativePlatformException>()),
+        throwsA(
+          isA<NativePlatformException>().having(
+            (e) => e.code,
+            'code',
+            'RESTORE_ERROR',
+          ),
+        ),
       );
     });
   });
@@ -150,11 +230,20 @@ void main() {
     });
 
     test('a failure throws NativePlatformException', () {
-      dirPicker.error = Exception('RELEASE_ERROR: Failed');
+      dirPicker.error = const DirPickerException(
+        DirPickerException.releaseError,
+        'Failed',
+      );
 
       expect(
         FileSaver.releaseDirectory('bookmark'),
-        throwsA(isA<NativePlatformException>()),
+        throwsA(
+          isA<NativePlatformException>().having(
+            (e) => e.code,
+            'code',
+            'RELEASE_ERROR',
+          ),
+        ),
       );
     });
   });

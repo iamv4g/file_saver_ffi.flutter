@@ -409,7 +409,7 @@ if (location != null) {
 }
 ```
 
-To use the same directory after the app restarts, store a token from `persistDirectory` and restore it on the next launch. On Android the token keeps a persistable URI permission, on iOS and macOS it holds bookmark data.
+To use the same directory after the app restarts, store a token from `persistDirectory` and restore it on the next launch. On Android the token keeps a persistable URI permission, on iOS and macOS it holds bookmark data, and on web it refers to the directory handle stored in IndexedDB. On web a restored directory may need `requestAccess()` from a button first; see [WEB_LIMITATIONS.md](WEB_LIMITATIONS.md#7-keeping-a-picked-directory).
 
 ```dart
 // After picking:
@@ -530,14 +530,14 @@ Future<FileSaverSink?> openWriteAs({
 ```
 
 #### `pickDirectory`
-Open system picker to let user choose a folder.
+Open system picker to let user choose a folder. `shouldPersist` (Android only) is deprecated and will be removed in 1.0.0: call `persistDirectory` on the result instead.
 
 ```dart
 Future<PickedDirectoryLocation?> pickDirectory({bool shouldPersist = true})
 ```
 
 #### `persistDirectory` / `restoreDirectory` / `releaseDirectory`
-Keep access to a picked directory across app restarts. Not supported on web.
+Keep access to a picked directory across app restarts.
 
 ```dart
 static Future<String> persistDirectory(PickedDirectoryLocation location)

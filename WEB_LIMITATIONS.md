@@ -109,11 +109,31 @@ await FileSaver.saveAsAsync(
 
 ## 6. `saveAs()` Fallback Behavior
 
-On browsers that do not support FSA (Firefox / Safari):
+On browsers without `showDirectoryPicker()` (Firefox / Safari):
 
-- `pickDirectory()` throws a `NativePlatformException`.
-- `saveAs()` (when called with `saveLocation: null`) catches this and falls back to a standard browser download.
+- `pickDirectory()` throws an `UnsupportedError`.
+- `saveAs()` and `openWriteAs()` (when called with `saveLocation: null`) catch it and fall back: `saveAs()` to a standard browser download, `openWriteAs()` to a sink that buffers in memory and downloads on `close()`.
 - The browser controls the save location; zero-RAM streaming is not available.
+
+Any other picker failure, such as calling it without a user gesture, is not a fallback: `pickDirectory()` and `openWriteAs()` throw a `NativePlatformException`, and `saveAs()` emits a `SaveProgressError`.
+
+---
+
+## 7. Keeping a Picked Directory
+
+`persistDirectory()` stores the directory handle in IndexedDB and returns a token; `restoreDirectory(token)` gives it back on a later visit, and `releaseDirectory(token)` deletes it.
+
+The browser decides whether the page may still write to a restored directory. Chrome keeps the permission while another tab of the site has it, or for good when the user chose "Allow on every visit". Otherwise, ask again from a button:
+
+```dart
+final location = await FileSaver.restoreDirectory(token);
+if (location is WebPickedDirectoryLocation && !await location.hasAccess()) {
+  // In an onPressed handler: the prompt needs a user gesture.
+  if (!await location.requestAccess()) return;
+}
+```
+
+A save into a directory the page can't write to fails with `PermissionDeniedException`.
 
 ---
 

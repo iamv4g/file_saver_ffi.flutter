@@ -34,32 +34,33 @@ class FileSaverWeb extends FileSaverPlatform {
   // pickDirectory
   // ─────────────────────────────────────────────────────────────────────────
 
-  /// Shows `window.showDirectoryPicker()` via `dir_picker` and returns a
-  /// [WebPickedDirectoryLocation] wrapping the chosen [FileSystemDirectoryHandle].
+  /// Shows `window.showDirectoryPicker()` via `dir_picker`, with write
+  /// access, and returns a [WebPickedDirectoryLocation] wrapping the chosen
+  /// [FileSystemDirectoryHandle].
   ///
   /// Returns `null` if the user cancels.
-  /// Throws [NativePlatformException] if the browser does not support the
-  /// File System Access API (Firefox / Safari).
+  /// Throws [UnsupportedError] if the browser has no `showDirectoryPicker()`
+  /// (Firefox, Safari), and [NativePlatformException] if the picker fails,
+  /// for example without a user gesture.
   @override
   Future<PickedDirectoryLocation?> pickDirectory({
     bool shouldPersist = true,
   }) async {
+    final dp.PickedLocation? location;
     try {
-      final location = await dp.DirPicker.pick();
-      if (location == null) return null; // user cancelled
-      if (location is! dp.WebPickedLocation) {
-        throw const NativePlatformException('Unexpected picker result on web.');
-      }
-
-      return WebPickedDirectoryLocation(location.handle);
-    } catch (e) {
-      // dir_picker is an external package and will not throw FileSaverException.
-      // Any error here means the browser doesn't support showDirectoryPicker.
-      throw NativePlatformException(
-        'Directory picker unavailable. '
-        'File System Access API not supported in this browser. ($e)',
+      location = await dp.DirPicker.pick(
+        options: const dp.PickOptions.web(mode: dp.WebPermissionMode.readwrite),
       );
+    } on UnsupportedError {
+      rethrow;
+    } catch (e) {
+      throw mapDirPickerError(e, 'Pick directory failed');
     }
+    if (location == null) return null; // user cancelled
+    if (location is! dp.WebPickedLocation) {
+      throw const NativePlatformException('Unexpected picker result on web.');
+    }
+    return WebPickedDirectoryLocation(location.handle);
   }
 
   // ─────────────────────────────────────────────
@@ -98,19 +99,52 @@ class FileSaverWeb extends FileSaverPlatform {
     );
   }
 
+  /// Stores the directory handle of [location] in IndexedDB, through
+  /// `dir_picker`, and returns its token.
+  ///
+  /// Throws [InvalidInputException] unless [location] is a
+  /// [WebPickedDirectoryLocation].
   @override
-  Future<String> persistDirectory(PickedDirectoryLocation location) {
-    throw UnsupportedError('persistDirectory is not supported on Web.');
+  Future<String> persistDirectory(PickedDirectoryLocation location) async {
+    if (location is! WebPickedDirectoryLocation) {
+      throw const InvalidInputException(
+        'Persist directory failed: only a location from pickDirectory or '
+        'restoreDirectory can be persisted on web.',
+      );
+    }
+    try {
+      return await dp.DirPicker.persist(
+        dp.WebPickedLocation(location.directoryHandle),
+      );
+    } catch (e) {
+      throw mapDirPickerError(e, 'Persist directory failed');
+    }
+  }
+
+  /// Returns the directory of a [persistDirectory] token. The browser may
+  /// not let the page write to it yet: see
+  /// [WebPickedDirectoryLocation.hasAccess].
+  @override
+  Future<PickedDirectoryLocation?> restoreDirectory(String token) async {
+    final dp.PickedLocation? location;
+    try {
+      location = await dp.DirPicker.restore(token);
+    } catch (e) {
+      throw mapDirPickerError(e, 'Restore directory failed');
+    }
+    return switch (location) {
+      dp.WebPickedLocation(:final handle) => WebPickedDirectoryLocation(handle),
+      _ => null,
+    };
   }
 
   @override
-  Future<PickedDirectoryLocation?> restoreDirectory(String token) {
-    throw UnsupportedError('restoreDirectory is not supported on Web.');
-  }
-
-  @override
-  Future<void> releaseDirectory(String token) {
-    throw UnsupportedError('releaseDirectory is not supported on Web.');
+  Future<void> releaseDirectory(String token) async {
+    try {
+      await dp.DirPicker.release(token);
+    } catch (e) {
+      throw mapDirPickerError(e, 'Release directory failed');
+    }
   }
 
   // saveFile
