@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.flowOn
  *
  * Handles common patterns:
  * - Emits Started event at the beginning
- * - Catches CancellationException and emits Cancelled event
+ * - Rethrows CancellationException; FileSaver reports a cancelled save once it has ended
  * - Catches SecurityException and emits Error with permission denied code
  * - Catches generic Exception and emits Error with platform error code
  * - Sends terminal events with the suspending send, so they are never dropped
@@ -37,10 +37,7 @@ inline fun saveFlow(crossinline block: suspend ProducerScope<SaveProgressEvent>.
         try {
             block()
         } catch (e: CancellationException) {
-            trySend(SaveProgressEvent.Cancelled)
-            close()
-            awaitClose {}
-            throw e // Re-throw to properly cancel coroutine
+            throw e // Not an error: the generic catch below would report it
         } catch (e: SecurityException) {
             send(
                 SaveProgressEvent.Error(

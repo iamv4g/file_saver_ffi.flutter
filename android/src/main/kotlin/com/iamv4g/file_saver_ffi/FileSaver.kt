@@ -28,6 +28,7 @@ import com.iamv4g.file_saver_ffi.utils.ioErrorCode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -308,26 +309,16 @@ class FileSaver(
         sourceUri: String,
         targetPath: String,
         callback: ProgressCallback,
-    ): Long {
-        val operationId = operationIdCounter.incrementAndGet()
-        val job =
-            scope.launch {
-                try {
-                    copy(sourceUri, targetPath, callback)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    callback.onEvent(2, 0.0, Constants.ERROR_PLATFORM, "Unexpected error: ${e.message ?: "Unknown error"}")
-                }
+    ): Long =
+        launchOperation(callback) { callback ->
+            try {
+                copy(sourceUri, targetPath, callback)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                callback.onEvent(2, 0.0, Constants.ERROR_PLATFORM, "Unexpected error: ${e.message ?: "Unknown error"}")
             }
-        activeJobs[operationId] = job
-        job.invokeOnCompletion { cause ->
-            activeJobs.remove(operationId)
-            // Not after dispose(): no Dart code is left to receive it.
-            if (cause is CancellationException && scope.isActive) callback.onEvent(4, 0.0, null, null)
         }
-        return operationId
-    }
 
     private suspend fun copy(
         sourceUri: String,
@@ -549,22 +540,62 @@ class FileSaver(
     private fun launchWithCallback(
         callback: ProgressCallback,
         flow: Flow<SaveProgressEvent>,
-    ): Long {
-        val operationId = operationIdCounter.incrementAndGet()
-        val job =
-            scope.launch {
-                flow.collect { event ->
-                    when (event) {
-                        is SaveProgressEvent.Started -> callback.onEvent(0, 0.0, null, null)
-                        is SaveProgressEvent.Progress -> callback.onEvent(1, event.value, null, null)
-                        is SaveProgressEvent.Error -> callback.onEvent(2, event.statusCode?.toDouble() ?: 0.0, event.code, event.message)
-                        is SaveProgressEvent.Success -> callback.onEvent(3, 1.0, event.uri, null)
-                        is SaveProgressEvent.Cancelled -> callback.onEvent(4, 0.0, null, null)
-                    }
+    ): Long =
+        launchOperation(callback) { callback ->
+            flow.collect { event ->
+                when (event) {
+                    is SaveProgressEvent.Started -> callback.onEvent(0, 0.0, null, null)
+                    is SaveProgressEvent.Progress -> callback.onEvent(1, event.value, null, null)
+                    is SaveProgressEvent.Error -> callback.onEvent(2, event.statusCode?.toDouble() ?: 0.0, event.code, event.message)
+                    is SaveProgressEvent.Success -> callback.onEvent(3, 1.0, event.uri, null)
                 }
             }
+        }
+
+    /**
+     * Runs [block] as an operation that [cancelOperation] can cancel, and
+     * returns its ID. [block] reports its events to the callback it is given.
+     *
+     * A cancelled operation that hasn't reported a result reports cancelled
+     * (4) once [block] and its child coroutines have ended, which is after
+     * they deleted what they wrote, so the Dart side can wait for it.
+     */
+    private fun launchOperation(
+        callback: ProgressCallback,
+        block: suspend CoroutineScope.(ProgressCallback) -> Unit,
+    ): Long {
+        val operationId = operationIdCounter.incrementAndGet()
+        val operation = OperationCallback(callback)
+        // Started once registered, so a fast operation can't end before that.
+        val job = scope.launch(start = CoroutineStart.LAZY) { block(operation) }
         activeJobs[operationId] = job
-        job.invokeOnCompletion { activeJobs.remove(operationId) }
+        job.invokeOnCompletion { cause ->
+            activeJobs.remove(operationId)
+            // Not after dispose(): no Dart code is left to receive it.
+            if (cause is CancellationException && scope.isActive && !operation.hasResult) {
+                callback.onEvent(4, 0.0, null, null)
+            }
+        }
+        job.start()
         return operationId
+    }
+}
+
+/** Passes events on to [callback] and notes whether a result (2 or 3) was sent. */
+private class OperationCallback(
+    private val callback: ProgressCallback,
+) : ProgressCallback {
+    @Volatile
+    var hasResult = false
+        private set
+
+    override fun onEvent(
+        eventType: Int,
+        progress: Double,
+        data: String?,
+        message: String?,
+    ) {
+        if (eventType == 2 || eventType == 3) hasResult = true
+        callback.onEvent(eventType, progress, data, message)
     }
 }

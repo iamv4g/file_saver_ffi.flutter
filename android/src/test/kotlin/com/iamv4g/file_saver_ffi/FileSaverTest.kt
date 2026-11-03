@@ -185,7 +185,7 @@ class FileSaverTest : FileSaverTestBase() {
 
     @Test
     @Config(sdk = [28])
-    fun `cancelling while the storage permission prompt is open reports no error`() {
+    fun `cancelling while the storage permission prompt is open reports cancelled, not an error`() {
         shadowOf(context).denyPermissions(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         val prompt = CompletableDeferred<Boolean>()
         FileSaver.storagePermissionHandler = { prompt.await() }
@@ -195,8 +195,9 @@ class FileSaverTest : FileSaverTestBase() {
             fileSaver.saveBytes(byteArrayOf(1), "photo", "png", "image/png", SaveLocation.PICTURES.ordinal, null, ConflictResolution.AUTO_RENAME.value, callback)
         Thread.sleep(200)
         fileSaver.cancelOperation(operationId)
-        Thread.sleep(300)
 
+        assertEquals("Events: ${callback.events}", 4, callback.awaitTerminal().type)
+        Thread.sleep(300)
         assertTrue("Events: ${callback.events}", callback.events.none { it.type == 2 })
         assertNoCrash()
     }

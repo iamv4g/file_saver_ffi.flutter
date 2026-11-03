@@ -273,12 +273,11 @@ final class NetworkException extends FileSaverException {
       'NetworkException: $message${statusCode != null ? " (HTTP $statusCode)" : ""}';
 }
 
-/// Operation was cancelled by the user.
+/// A write session was cancelled.
 ///
-/// This exception is thrown when:
-/// - User calls `subscription.cancel()` on a save stream
-/// - User breaks from `await for` loop early
-/// - The operation is cancelled programmatically
+/// `FileSaverSink.close()` and `FileSaverSink.result` throw it after
+/// `FileSaverSink.cancel()`. Cancelling the subscription of a save stream
+/// doesn't throw it: the stream just emits nothing more.
 final class CancelledException extends FileSaverException {
   const CancelledException()
     : super('Operation cancelled', FileSaverErrorCode.cancelled);

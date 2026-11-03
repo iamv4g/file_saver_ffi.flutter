@@ -32,6 +32,8 @@
 
 ### Fixed
 
+- **Android/iOS/macOS:** cancelling a save's subscription now completes once the save has stopped and deleted its partial file, as on Windows, Linux and web. Before, `subscription.cancel()` returned at once, while the file was still there. If a blocked read keeps the save from stopping, the cancel completes after 2 s.
+- The docs of `SaveProgressCancelled` and `CancelledException` no longer say that cancelling a subscription emits or throws them: a cancelled stream emits nothing more. `SaveProgressCancelled` means that the `saveAs` picker was dismissed, and `CancelledException` comes from `close()` of a cancelled `FileSaverSink`.
 - `SaveProgressUpdate.progress` and `FileSaverSink.progress` never go above 1.0 or below 0.0. Before, a server that sent more than its `Content-Length`, or a `totalSize` smaller than what was written, gave progress above 100%.
 - **Android/iOS/macOS:** `NetworkException.statusCode` is now set for an HTTP error. Before, it was always `null` there, and the status was only in the message.
 - **Android/iOS/macOS:** exception messages and fields no longer repeat their prefix. `FileExistsException.fileName` is the file name (was `File already exists: x.jpg`, giving `File already exists: File already exists: x.jpg`), `SourceFileNotFoundException.path` is the path, `UnsupportedFormatException.format` is the extension, and `InvalidInputException`, `NetworkException` and `ICloudDownloadException` no longer read like `Invalid input: Invalid input: …` on iOS and macOS.

@@ -187,6 +187,36 @@ class NetworkSaveTest : FileSaverTestBase() {
     }
 
     @Test
+    fun `a cancelled download reports cancelled only once its row is deleted`() {
+        server.stall("/stall", declaredLength = payload.size, sent = 1_000)
+        var rowsWhenCancelled = -1
+        val callback = RecordingCallback { if (it.type == 4) rowsWhenCancelled = mediaStore.rows.size }
+
+        val (id, _) = download(server.url("/stall"), timeoutMs = 60_000, callback = callback)
+        val deadline = System.currentTimeMillis() + 5_000
+        while (mediaStore.rows.isEmpty() && System.currentTimeMillis() < deadline) Thread.sleep(20)
+        assertEquals("Row should exist while downloading", 1, mediaStore.rows.size)
+
+        fileSaver.cancelOperation(id)
+
+        assertEquals("Events: ${callback.events}", 4, callback.awaitTerminal(3_000).type)
+        assertEquals("Rows left when cancelled (4) was sent", 0, rowsWhenCancelled)
+        assertEquals(1, callback.events.count { it.isTerminal })
+    }
+
+    @Test
+    fun `a finished download reports nothing more when cancelled`() {
+        server.serve("/file", payload)
+        val (id, callback) = download(server.url("/file"))
+        assertEquals(3, callback.awaitTerminal().type)
+
+        fileSaver.cancelOperation(id)
+        Thread.sleep(200)
+
+        assertEquals("Events: ${callback.events}", 1, callback.events.count { it.isTerminal })
+    }
+
+    @Test
     fun `cancelling while waiting for the response headers closes the connection right away`() {
         val clientClosed = CountDownLatch(1)
         server.hang("/hang", onClientClosed = clientClosed)

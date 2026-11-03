@@ -172,6 +172,47 @@ void main() {
     });
   });
 
+  testWidgets('cancelling a download completes once the partial file is '
+      'deleted', (_) async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    server.listen((request) {
+      // Sends half of the body, then stalls.
+      request.response
+        ..contentLength = 1024 * 1024
+        ..add(Uint8List(512 * 1024));
+      request.response.flush();
+    });
+    final subDir = '$_subDir/cancel';
+    final dir = Directory('/storage/emulated/0/Download/$subDir');
+
+    final writing = Completer<void>();
+    final events = <SaveProgress>[];
+    final subscription =
+        FileSaver.save(
+          input: SaveInput.network(
+            url: 'http://127.0.0.1:${server.port}/stall',
+          ),
+          fileName: 'stalled',
+          fileType: _text,
+          saveLocation: AndroidSaveLocation.downloads,
+          subDir: subDir,
+        ).listen((event) {
+          events.add(event);
+          // The file exists, as a pending MediaStore entry, once data arrives.
+          if (event is SaveProgressUpdate && event.progress >= 0.3) {
+            if (!writing.isCompleted) writing.complete();
+          }
+        });
+    await writing.future.timeout(const Duration(seconds: 10));
+    expect(dir.listSync(), hasLength(1), reason: 'the partial file');
+
+    await subscription.cancel();
+
+    expect(dir.existsSync() ? dir.listSync() : const [], isEmpty);
+    expect(events.whereType<SaveProgressComplete>(), isEmpty);
+  });
+
   testWidgets('an HTTP error throws NetworkException with the status code', (
     _,
   ) async {

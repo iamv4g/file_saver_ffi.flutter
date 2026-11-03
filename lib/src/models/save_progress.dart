@@ -15,10 +15,15 @@ import '../exceptions/file_saver_exceptions.dart';
 ///     case SaveProgressError(:final exception):
 ///       handleError(exception);
 ///     case SaveProgressCancelled():
-///       handleCancel();
+///       handlePickerDismissed();
 ///   }
 /// }
 /// ```
+///
+/// To cancel a save, cancel its subscription (or leave the `await for`). The
+/// stream emits nothing more after that, and the Future that
+/// `subscription.cancel()` returns completes once the save has stopped and
+/// deleted the partial file.
 sealed class SaveProgress {
   const SaveProgress();
 }
@@ -76,7 +81,11 @@ final class SaveProgressError extends SaveProgress {
   String toString() => 'SaveProgressError($exception)';
 }
 
-/// User cancelled the save operation.
+/// The user dismissed the directory picker of `FileSaver.saveAs`, so nothing
+/// was saved.
+///
+/// Cancelling the subscription doesn't emit it: a cancelled stream emits
+/// nothing more.
 final class SaveProgressCancelled extends SaveProgress {
   const SaveProgressCancelled();
 
