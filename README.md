@@ -475,7 +475,7 @@ Stream<SaveProgress> saveAs({
 ```
 
 #### `saveAsAsync`
-Interactive save (shows picker) or save to specific `PickedDirectoryLocation`.
+Interactive save (shows picker) or save to specific `PickedDirectoryLocation`. Returns `null` when the picker is dismissed. Invalid input, such as empty bytes, throws `InvalidInputException` before the picker opens.
 
 ```dart
 Future<Uri?> saveAsAsync({
@@ -601,7 +601,7 @@ Stream API emits these sealed class events:
 | `CancelledException`          | Operation cancelled by user             | `CANCELLED`              |
 | `NativePlatformException`     | Generic platform error, or a `dir_picker` error with its code | `PLATFORM_ERROR` |
 
-`FileSaverErrorCode` has a constant for each code, plus `INCOMPLETE`, which `saveAsync` throws as a `NativePlatformException` when the stream ends without a result.
+`FileSaverErrorCode` has a constant for each code, plus `INCOMPLETE`, which `saveAsync` and `saveAsAsync` throw as a `NativePlatformException` when the stream ends without a result.
 
 ## Contributing
 

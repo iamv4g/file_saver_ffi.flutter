@@ -124,6 +124,36 @@ void main() {
       },
     );
 
+    test('invalid input throws before the picker opens', () async {
+      globalContext['fsfPicks'] = 0.toJS;
+      stubPicker('''() => {
+        window.fsfPicks++;
+        return Promise.resolve(window.fsfPickedDirectory);
+      }''');
+
+      expect(
+        () => FileSaver.saveAs(
+          input: SaveInput.file('/x.txt'),
+          fileName: 'log',
+          fileType: text,
+        ),
+        throwsA(isA<InvalidInputException>()),
+      );
+      expect(
+        () => FileSaver.saveAs(
+          input: SaveInput.bytes(Uint8List(0)),
+          fileName: 'log',
+          fileType: text,
+        ),
+        throwsA(isA<InvalidInputException>()),
+      );
+      await expectLater(
+        FileSaver.openWriteAs(fileName: '', fileType: text),
+        throwsA(isA<InvalidInputException>()),
+      );
+      expect((globalContext['fsfPicks'] as JSNumber).toDartInt, 0);
+    });
+
     test('a picker error is reported instead of falling back', () async {
       stubPicker(
         '() => Promise.reject(new DOMException("No gesture", "SecurityError"))',

@@ -9,6 +9,8 @@
 
 ### Changed
 
+- `saveAs` now throws `InvalidInputException` for invalid input (empty bytes, an empty path, a non-HTTP URL, an empty name, and on Windows and Linux a name the system can't take) when it is called, before the directory picker opens, as `save` does on every platform. Before, the user picked a directory first, and the error came as a raw stream error on Windows, Linux and web, or as `SaveProgressError` on Android, iOS and macOS. `openWriteAs` checks the name before the picker too.
+- `saveAsAsync` now throws a `NativePlatformException` with code `INCOMPLETE` when the save stream ends without a result, as `saveAsync` does. Before, it returned `null`, as for a dismissed picker.
 - The error codes are now the ones `FileSaverErrorCode` lists. A native error without a code, an unknown native event, a malformed message from Swift and a failed start of the Darwin bridge now have the code `PLATFORM_ERROR` (was `UNKNOWN`, `UNKNOWN_TYPE`, `INVALID_MESSAGE` and `INIT_FAILED`), and so does a `NativePlatformException` created without a code (was `null`). The unused aliases `INVALID_ARGUMENT`, `NO_APP_FOUND` and `FILE_PROVIDER_*` are no longer recognized. `WRITE_SESSION_ERROR` now maps to `WriteSessionException` everywhere.
 - **Android:** an HTTP error now reads `HTTP 404: Not Found`, as on web. Before, it was the status line text alone.
 - `dir_picker` is now `^0.8.0` (was `^0.6.0`).
@@ -30,6 +32,7 @@
 
 ### Fixed
 
+- `SaveProgressUpdate.progress` and `FileSaverSink.progress` never go above 1.0 or below 0.0. Before, a server that sent more than its `Content-Length`, or a `totalSize` smaller than what was written, gave progress above 100%.
 - **Android/iOS/macOS:** `NetworkException.statusCode` is now set for an HTTP error. Before, it was always `null` there, and the status was only in the message.
 - **Android/iOS/macOS:** exception messages and fields no longer repeat their prefix. `FileExistsException.fileName` is the file name (was `File already exists: x.jpg`, giving `File already exists: File already exists: x.jpg`), `SourceFileNotFoundException.path` is the path, `UnsupportedFormatException.format` is the extension, and `InvalidInputException`, `NetworkException` and `ICloudDownloadException` no longer read like `Invalid input: Invalid input: …` on iOS and macOS.
 - **Android:** running out of space while saving, copying or writing a session chunk now fails with `StorageFullException`. Before, it was a `FileIOException`.

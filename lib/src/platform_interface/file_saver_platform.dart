@@ -116,7 +116,9 @@ abstract class FileSaverPlatform {
   /// - [saveLocation]: User-selected directory from [pickDirectory]
   /// - [conflictResolution]: How to handle filename conflicts
   ///
-  /// Yields [SaveProgress] events during save operation.
+  /// Yields [SaveProgress] events during save operation. Throws
+  /// [InvalidInputException] synchronously for input that
+  /// [validateSaveAsInput] rejects.
   Stream<SaveProgress> saveAs({
     required SaveInput input,
     required FileType fileType,
@@ -308,6 +310,29 @@ abstract class FileSaverPlatform {
         'PathLocation, or null for the default.',
       ),
     };
+  }
+
+  /// Throws [InvalidInputException] for input that [saveAs] (or, with a
+  /// null [input], [openWriteAs]) rejects. [FileSaver.saveAs] and
+  /// [FileSaver.openWriteAs] call it before the directory picker opens, so
+  /// that the user isn't asked for a directory the save then can't use.
+  void validateSaveAsInput({
+    SaveInput? input,
+    required String fileName,
+    required FileType fileType,
+  }) {
+    switch (input) {
+      case SaveBytesInput(:final fileBytes):
+        validateBytesInput(fileBytes, fileName);
+      case SaveFileInput(:final filePath):
+        validateFilePathInput(filePath, fileName);
+      case SaveNetworkInput(:final url):
+        validateNetworkInput(url, fileName);
+      case null:
+        if (fileName.isEmpty) {
+          throw const InvalidInputException('File name cannot be empty');
+        }
+    }
   }
 
   /// Validates input for [saveBytes] and [saveBytesAsync].

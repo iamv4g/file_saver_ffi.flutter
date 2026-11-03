@@ -218,6 +218,23 @@ class FileSaverWeb extends FileSaverPlatform {
   // ─────────────────────────────────────────────
   // saveAs (FSA zero-RAM streaming)
   // ─────────────────────────────────────────────
+  /// Also rejects [SaveFileInput], which web can't read.
+  @override
+  void validateSaveAsInput({
+    SaveInput? input,
+    required String fileName,
+    required FileType fileType,
+  }) {
+    if (input is SaveFileInput) {
+      throw const InvalidInputException('saveFile is not supported on web.');
+    }
+    super.validateSaveAsInput(
+      input: input,
+      fileName: fileName,
+      fileType: fileType,
+    );
+  }
+
   @override
   Stream<SaveProgress> saveAs({
     required SaveInput input,
@@ -226,6 +243,7 @@ class FileSaverWeb extends FileSaverPlatform {
     required PickedDirectoryLocation saveLocation,
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
   }) {
+    validateSaveAsInput(input: input, fileName: fileName, fileType: fileType);
     // If FSA is supported and we have a valid WebPickedDirectoryLocation
     if (saveLocation is WebPickedDirectoryLocation) {
       return switch (input) {

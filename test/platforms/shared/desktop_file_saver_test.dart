@@ -6,6 +6,7 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:file_saver_ffi/file_saver_ffi.dart';
+import 'package:file_saver_ffi/src/platform_interface/file_saver_platform.dart';
 import 'package:file_saver_ffi/src/platforms/shared/desktop_file_saver.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
@@ -475,6 +476,26 @@ void main() {
           reason: '$input',
         );
       }
+    });
+
+    test('FileSaver.saveAs and openWriteAs reject a bad name before the '
+        'picker opens', () async {
+      FileSaverPlatform.instance = saver;
+
+      // Without a location they would open the picker, which fails in a
+      // test, so a throw here comes from the name.
+      expect(
+        () => FileSaver.saveAs(
+          input: SaveInput.bytes(bytes),
+          fileName: '../data',
+          fileType: fileType,
+        ),
+        throwsA(isA<InvalidInputException>()),
+      );
+      await expectLater(
+        FileSaver.openWriteAs(fileName: 'a/b', fileType: fileType),
+        throwsA(isA<InvalidInputException>()),
+      );
     });
 
     test('writes into the picked directory', () async {

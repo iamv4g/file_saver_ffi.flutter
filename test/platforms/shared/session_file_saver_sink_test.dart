@@ -77,6 +77,23 @@ void main() {
     }
   }
 
+  test('progress stays at 1.0 once more than totalSize is written', () async {
+    final progress = <double>[];
+    sink.progress.listen(progress.add);
+
+    sink.add([1, 2, 3]);
+    sink.add([4, 5, 6, 7, 8, 9]);
+    await sink.close();
+
+    expect(progress.first, 0.5);
+    expect(progress.last, 1.0);
+    expect(
+      progress.every((p) => p >= 0 && p <= 1),
+      isTrue,
+      reason: '$progress',
+    );
+  });
+
   test('writes added chunks in order and completes with the URI', () async {
     final bytesWritten = <int>[];
     final progress = <double>[];

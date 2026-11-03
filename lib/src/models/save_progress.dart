@@ -38,7 +38,14 @@ final class SaveProgressStarted extends SaveProgress {
 ///
 /// [progress] is a value from 0.0 to 1.0 representing completion percentage.
 final class SaveProgressUpdate extends SaveProgress {
-  const SaveProgressUpdate(this.progress);
+  /// Clamps [progress] to 0.0–1.0, so a server that sends more bytes than its
+  /// `Content-Length` can't report more than 100%. NaN becomes 0.0.
+  const SaveProgressUpdate(double progress)
+    : progress = progress >= 1.0
+          ? 1.0
+          : progress > 0.0
+          ? progress
+          : 0.0;
 
   /// Progress value from 0.0 (0%) to 1.0 (100%)
   final double progress;

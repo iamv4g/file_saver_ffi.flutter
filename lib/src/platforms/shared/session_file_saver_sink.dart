@@ -237,7 +237,10 @@ class SessionFileSaverSink implements FileSaverSink {
     if (_bytesController.isClosed) return;
     _bytesController.add(bytes);
     final total = _totalSize;
-    if (total != null && total > 0) _progressController.add(bytes / total);
+    // A totalSize smaller than what is written stays at 1.0.
+    if (total != null && total > 0) {
+      _progressController.add(bytes >= total ? 1.0 : bytes / total);
+    }
   }
 
   Future<void> _finish() async {

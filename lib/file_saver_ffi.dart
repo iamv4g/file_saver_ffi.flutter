@@ -126,37 +126,48 @@ class FileSaver {
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
     void Function(double progress)? onProgress,
   }) async {
-    Uri? result;
+    final uri = await _result(
+      save(
+        input: input,
+        fileType: fileType,
+        fileName: fileName,
+        saveLocation: saveLocation,
+        subDir: subDir,
+        conflictResolution: conflictResolution,
+      ),
+      onProgress,
+    );
+    return uri ?? (throw const CancelledException());
+  }
 
-    await for (final event in save(
-      input: input,
-      fileType: fileType,
-      fileName: fileName,
-      saveLocation: saveLocation,
-      subDir: subDir,
-      conflictResolution: conflictResolution,
-    )) {
+  /// Runs [saves] to its end and returns the [Uri] of its
+  /// [SaveProgressComplete], or null for [SaveProgressCancelled].
+  ///
+  /// Throws the exception of a [SaveProgressError], and a
+  /// [NativePlatformException] with [FileSaverErrorCode.incomplete] if the
+  /// stream ends without a result.
+  static Future<Uri?> _result(
+    Stream<SaveProgress> saves,
+    void Function(double progress)? onProgress,
+  ) async {
+    await for (final event in saves) {
       switch (event) {
         case SaveProgressStarted():
           break;
         case SaveProgressUpdate(:final progress):
           onProgress?.call(progress);
         case SaveProgressComplete(:final uri):
-          result = uri;
+          return uri;
         case SaveProgressError(:final exception):
           throw exception;
         case SaveProgressCancelled():
-          throw const CancelledException();
+          return null;
       }
     }
-
-    if (result == null) {
-      throw const NativePlatformException(
-        'Save operation did not complete',
-        FileSaverErrorCode.incomplete,
-      );
-    }
-    return result;
+    throw const NativePlatformException(
+      'Save operation did not complete',
+      FileSaverErrorCode.incomplete,
+    );
   }
 
   /// Saves to a user-selected directory with progress streaming.
@@ -170,13 +181,37 @@ class FileSaver {
   /// `showDirectoryPicker()` (Firefox, Safari). Other picker errors, such as
   /// a missing user gesture, are reported as [SaveProgressError].
   ///
-  /// [fileName] works as in [save].
+  /// [fileName] works as in [save]. Invalid input, such as empty bytes or a
+  /// non-HTTP URL, throws [InvalidInputException] when [saveAs] is called,
+  /// as with [save], before the picker opens.
   static Stream<SaveProgress> saveAs({
     required SaveInput input,
     required FileType fileType,
     required String fileName,
     PickedDirectoryLocation? saveLocation,
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
+  }) {
+    final baseName = _baseName(fileName, fileType);
+    _platform.validateSaveAsInput(
+      input: input,
+      fileName: baseName,
+      fileType: fileType,
+    );
+    return _saveAs(
+      input: input,
+      fileType: fileType,
+      fileName: baseName,
+      saveLocation: saveLocation,
+      conflictResolution: conflictResolution,
+    );
+  }
+
+  static Stream<SaveProgress> _saveAs({
+    required SaveInput input,
+    required FileType fileType,
+    required String fileName,
+    required PickedDirectoryLocation? saveLocation,
+    required ConflictResolution conflictResolution,
   }) async* {
     PickedDirectoryLocation? resolvedLocation = saveLocation;
     if (resolvedLocation == null) {
@@ -205,7 +240,7 @@ class FileSaver {
     yield* _platform.saveAs(
       input: input,
       fileType: fileType,
-      fileName: _baseName(fileName, fileType),
+      fileName: fileName,
       saveLocation: resolvedLocation,
       conflictResolution: conflictResolution,
     );
@@ -216,7 +251,8 @@ class FileSaver {
   /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
   ///
   /// Returns the saved [Uri], or null if the picker was cancelled.
-  /// Throws on error.
+  /// Throws on error, and like [saveAsync] a [NativePlatformException] with
+  /// [FileSaverErrorCode.incomplete] if the save ends without a result.
   static Future<Uri?> saveAsAsync({
     required SaveInput input,
     required FileType fileType,
@@ -225,30 +261,16 @@ class FileSaver {
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
     void Function(double progress)? onProgress,
   }) async {
-    Uri? result;
-
-    await for (final event in saveAs(
-      input: input,
-      fileType: fileType,
-      fileName: fileName,
-      saveLocation: saveLocation,
-      conflictResolution: conflictResolution,
-    )) {
-      switch (event) {
-        case SaveProgressStarted():
-          break;
-        case SaveProgressUpdate(:final progress):
-          onProgress?.call(progress);
-        case SaveProgressComplete(:final uri):
-          result = uri;
-        case SaveProgressError(:final exception):
-          throw exception;
-        case SaveProgressCancelled():
-          return null;
-      }
-    }
-
-    return result;
+    return _result(
+      saveAs(
+        input: input,
+        fileType: fileType,
+        fileName: fileName,
+        saveLocation: saveLocation,
+        conflictResolution: conflictResolution,
+      ),
+      onProgress,
+    );
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -318,7 +340,8 @@ class FileSaver {
   /// falls back to in-memory buffering when it has no `showDirectoryPicker()`.
   /// Other picker errors are thrown.
   ///
-  /// [fileName] works as in [save].
+  /// [fileName] works as in [save]. An invalid name throws
+  /// [InvalidInputException] before the picker opens.
   static Future<FileSaverSink?> openWriteAs({
     required String fileName,
     required FileType fileType,
@@ -326,6 +349,8 @@ class FileSaver {
     int? totalSize,
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
   }) async {
+    final baseName = _baseName(fileName, fileType);
+    _platform.validateSaveAsInput(fileName: baseName, fileType: fileType);
     PickedDirectoryLocation? resolvedLocation = saveLocation;
     if (resolvedLocation == null) {
       try {
@@ -340,7 +365,7 @@ class FileSaver {
       }
     }
     return _platform.openWriteAs(
-      fileName: _baseName(fileName, fileType),
+      fileName: baseName,
       fileType: fileType,
       saveLocation: resolvedLocation,
       totalSize: totalSize,
