@@ -338,24 +338,32 @@ class FileSaverWeb extends FileSaverPlatform {
     if (saveLocation is WebPickedDirectoryLocation) {
       final handle = saveLocation.directoryHandle;
       final fileEntity = WebFileEntity(handle);
-      final resolvedName = await ConflictResolver(
+      final resolved = await ConflictResolver(
         fileEntity,
-      ).resolve(fullName, conflictResolution);
-      if (resolvedName == null) return null;
-      final created = !await fileEntity.exists(resolvedName);
+      ).claim(fullName, conflictResolution);
+      if (resolved == null) return null;
 
-      final fileHandle = await handle
-          .getFileHandle(resolvedName, FileSystemGetFileOptions(create: true))
-          .toDart;
-      final writable = await fileHandle.createWritable().toDart;
+      try {
+        final fileHandle = await handle
+            .getFileHandle(
+              resolved.path,
+              FileSystemGetFileOptions(create: true),
+            )
+            .toDart;
+        final writable = await fileHandle.createWritable().toDart;
 
-      return WebFileSaverSink.fsa(
-        directory: handle,
-        name: resolvedName,
-        writable: writable,
-        created: created,
-        totalSize: totalSize,
-      );
+        // The sink releases the claim once it is closed or cancelled.
+        return WebFileSaverSink.fsa(
+          directory: handle,
+          name: resolved.path,
+          writable: writable,
+          created: resolved.isNew,
+          totalSize: totalSize,
+        );
+      } catch (_) {
+        if (resolved.isNew) await fileEntity.release(resolved.path);
+        rethrow;
+      }
     }
 
     // Fallback for browsers without FSA.
@@ -381,20 +389,24 @@ class FileSaverWeb extends FileSaverPlatform {
     final fullName = '$fileName.${fileType.ext}';
 
     return WebUtils.executeSave((token, emit) async {
-      final resolvedName = await _resolve(handle, fullName, conflictResolution);
-      if (resolvedName == null) {
+      final resolved = await _resolve(handle, fullName, conflictResolution);
+      if (resolved == null) {
         emit(
           SaveProgressComplete(Uri(scheme: 'web-directory', path: fullName)),
         );
         return;
       }
 
-      await _writeFile(handle, resolvedName, token, (writable) async {
-        await writable.write(fileBytes.toJS as FileSystemWriteChunkType).toDart;
-        emit(SaveProgressUpdate.bytes(fileBytes.length, fileBytes.length));
+      await _whileClaimed(handle, resolved, () async {
+        await _writeFile(handle, resolved, token, (writable) async {
+          await writable
+              .write(fileBytes.toJS as FileSystemWriteChunkType)
+              .toDart;
+          emit(SaveProgressUpdate.bytes(fileBytes.length, fileBytes.length));
+        });
       });
       emit(
-        SaveProgressComplete(Uri(scheme: 'web-directory', path: resolvedName)),
+        SaveProgressComplete(Uri(scheme: 'web-directory', path: resolved.path)),
       );
     });
   }
@@ -417,37 +429,40 @@ class FileSaverWeb extends FileSaverPlatform {
 
     return WebUtils.executeSave((token, emit) async {
       // Resolved first, so `skip` downloads nothing.
-      final resolvedName = await _resolve(handle, fullName, conflictResolution);
-      if (resolvedName == null) {
+      final resolved = await _resolve(handle, fullName, conflictResolution);
+      if (resolved == null) {
         emit(
           SaveProgressComplete(Uri(scheme: 'web-directory', path: fullName)),
         );
         return;
       }
 
-      final body = await WebUtils.fetch(url, headers, timeout, token);
-      try {
-        await _writeFile(handle, resolvedName, token, (writable) async {
-          var written = 0;
-          await WebUtils.read(body.reader, timeout, token, (chunk) async {
-            await writable.write(chunk as FileSystemWriteChunkType).toDart;
-            written += WebUtils.lengthOf(chunk);
-            emit(SaveProgressUpdate.bytes(written, body.length));
+      await _whileClaimed(handle, resolved, () async {
+        final body = await WebUtils.fetch(url, headers, timeout, token);
+        try {
+          await _writeFile(handle, resolved, token, (writable) async {
+            var written = 0;
+            await WebUtils.read(body.reader, timeout, token, (chunk) async {
+              await writable.write(chunk as FileSystemWriteChunkType).toDart;
+              written += WebUtils.lengthOf(chunk);
+              emit(SaveProgressUpdate.bytes(written, body.length));
+            });
           });
-        });
-      } catch (_) {
-        // Closes the connection of a body that won't be read to the end.
-        body.reader?.cancel().toDart.ignore();
-        rethrow;
-      }
+        } catch (_) {
+          // Closes the connection of a body that won't be read to the end.
+          body.reader?.cancel().toDart.ignore();
+          rethrow;
+        }
+      });
       emit(
-        SaveProgressComplete(Uri(scheme: 'web-directory', path: resolvedName)),
+        SaveProgressComplete(Uri(scheme: 'web-directory', path: resolved.path)),
       );
     });
   }
 
-  /// The name to save [fullName] under in [handle], or null to skip it.
-  Future<String?> _resolve(
+  /// The name to save [fullName] under in [handle], or null to skip it. A
+  /// new name is claimed: run the save with [_whileClaimed].
+  Future<ResolvedPath?> _resolve(
     FileSystemDirectoryHandle handle,
     String fullName,
     ConflictResolution conflictResolution,
@@ -455,7 +470,7 @@ class FileSaverWeb extends FileSaverPlatform {
     try {
       return await ConflictResolver(
         WebFileEntity(handle),
-      ).resolve(fullName, conflictResolution);
+      ).claim(fullName, conflictResolution);
     } on FileSaverException {
       rethrow;
     } catch (e) {
@@ -463,19 +478,34 @@ class FileSaverWeb extends FileSaverPlatform {
     }
   }
 
-  /// Writes the file [name] in [directory] with [write], then closes it.
+  /// Runs [save], then releases the name of [resolved] if it was claimed, so
+  /// no other save of this page takes it while [save] runs.
+  Future<void> _whileClaimed(
+    FileSystemDirectoryHandle directory,
+    ResolvedPath resolved,
+    Future<void> Function() save,
+  ) async {
+    try {
+      await save();
+    } finally {
+      if (resolved.isNew) await WebFileEntity(directory).release(resolved.path);
+    }
+  }
+
+  /// Writes the file of [resolved] in [directory] with [write], then closes
+  /// it.
   ///
   /// A failed or cancelled write deletes the file if it is new. An existing
   /// file keeps its content, because the browser writes to a swap file until
   /// the close.
   Future<void> _writeFile(
     FileSystemDirectoryHandle directory,
-    String name,
+    ResolvedPath resolved,
     WebCancellationToken token,
     Future<void> Function(FileSystemWritableFileStream writable) write,
   ) async {
     final fileEntity = WebFileEntity(directory);
-    final created = !await fileEntity.exists(name);
+    final (path: name, isNew: created) = resolved;
     FileSystemWritableFileStream? writable;
     try {
       token.check();
