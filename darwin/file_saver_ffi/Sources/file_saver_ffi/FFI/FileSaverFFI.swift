@@ -11,95 +11,82 @@ import AppKit
 /// `FileSaver` keeps no state between calls, so every call shares one.
 private let fileSaver = FileSaver()
 
-// MARK: - Cancellation Token Registry (for saveBytes, saveFile)
+// MARK: - Operation Registry
 
-private var tokenCounter: UInt64 = 0
-private var activeTokens: [UInt64: CancellationToken] = [:]
-private let tokenLock = NSLock()
-
-private func generateTokenId() -> UInt64 {
-    tokenLock.lock()
-    defer { tokenLock.unlock() }
-    tokenCounter += 1
-    return tokenCounter
-}
-
-private func registerToken(_ tokenId: UInt64, _ token: CancellationToken) {
-    tokenLock.lock()
-    defer { tokenLock.unlock() }
-    activeTokens[tokenId] = token
-}
-
-private func unregisterToken(_ tokenId: UInt64) {
-    tokenLock.lock()
-    defer { tokenLock.unlock() }
-    activeTokens.removeValue(forKey: tokenId)
-}
-
-private func getToken(_ tokenId: UInt64) -> CancellationToken? {
-    tokenLock.lock()
-    defer { tokenLock.unlock() }
-    return activeTokens[tokenId]
-}
-
-// MARK: - Active Download Registry (for saveNetwork)
-
-/// Holds cancellation state and handler for an active network download operation.
-/// Thread-safe to handle race condition when cancel() is called before cancelHandler is set.
-private class ActiveDownload {
-    let token: CancellationToken
-    private var _cancelHandler: (() -> Void)?
+/// A running one-shot save, which `file_saver_cancel` can cancel.
+final class SaveOperation {
+    let token = CancellationToken()
+    private var cancelHandler: (() -> Void)?
     private let lock = NSLock()
 
-    init(token: CancellationToken) {
-        self.token = token
-    }
-
-    /// Thread-safe setter for cancelHandler.
-    /// If cancel() was already called, executes handler immediately.
+    /// Sets the handler that stops the save's work in progress, such as a
+    /// download task. Runs it at once if the operation is already cancelled.
     func setCancelHandler(_ handler: @escaping () -> Void) {
         lock.lock()
-        _cancelHandler = handler
-        let alreadyCancelled = token.isCancelled
+        cancelHandler = handler
         lock.unlock()
-
-        if alreadyCancelled {
-            handler()
-        }
+        if token.isCancelled { handler() }
     }
 
-    /// Thread-safe cancel.
-    /// Sets token.isCancelled and calls handler if available.
+    /// Marks the operation cancelled and runs its cancel handler, if any.
     func cancel() {
         token.cancel()
-
         lock.lock()
-        let handler = _cancelHandler
+        let handler = cancelHandler
         lock.unlock()
-
         handler?()
     }
 }
 
-private var activeDownloads: [UInt64: ActiveDownload] = [:]
-private let downloadLock = NSLock()
+private var operations: [UInt64: SaveOperation] = [:]
+private var operationCounter: UInt64 = 0
+private let operationLock = NSLock()
 
-private func registerDownload(_ id: UInt64, _ download: ActiveDownload) {
-    downloadLock.lock()
-    defer { downloadLock.unlock() }
-    activeDownloads[id] = download
+private func registerOperation(_ operation: SaveOperation) -> UInt64 {
+    operationLock.lock()
+    defer { operationLock.unlock() }
+    operationCounter += 1
+    operations[operationCounter] = operation
+    return operationCounter
 }
 
-private func getDownload(_ id: UInt64) -> ActiveDownload? {
-    downloadLock.lock()
-    defer { downloadLock.unlock() }
-    return activeDownloads[id]
+private func unregisterOperation(_ id: UInt64) {
+    operationLock.lock()
+    defer { operationLock.unlock() }
+    operations.removeValue(forKey: id)
 }
 
-private func unregisterDownload(_ id: UInt64) {
-    downloadLock.lock()
-    defer { downloadLock.unlock() }
-    activeDownloads.removeValue(forKey: id)
+func cancelOperation(_ id: UInt64) {
+    operationLock.lock()
+    let operation = operations[id]
+    operationLock.unlock()
+    operation?.cancel()
+}
+
+/// Starts a one-shot save on a background queue, and returns its id for
+/// `file_saver_cancel`.
+///
+/// Sends Started, then runs `save`, which must call `done` once the save has
+/// ended. A save cancelled before it starts sends only Cancelled. Copy the C
+/// arguments before calling this: they are only valid until the entry point
+/// returns.
+func runOperation(
+    reporter: ProgressReporter,
+    queue: DispatchQueue = .global(qos: .userInitiated),
+    _ save: @escaping (_ operation: SaveOperation, _ done: @escaping () -> Void) -> Void
+) -> UInt64 {
+    let operation = SaveOperation()
+    let id = registerOperation(operation)
+    queue.async {
+        let done = { unregisterOperation(id) }
+        if operation.token.isCancelled {
+            reporter.sendCancelled()
+            return done()
+        }
+        reporter.sendStarted()
+        save(operation, done)
+    }
+    return id
 }
 
 // MARK: - Write Session Registry
@@ -273,14 +260,8 @@ public func fileSaverInitDartApiDL(_ data: UnsafeMutableRawPointer?) -> Int {
 }
 
 @_cdecl("file_saver_cancel")
-public func fileSaverCancel(_ tokenId: UInt64) {
-    // Try to cancel as download first (saveNetwork)
-    if let download = getDownload(tokenId) {
-        download.cancel()
-        return
-    }
-    // Fall back to token cancellation (saveBytes, saveFile)
-    getToken(tokenId)?.cancel()
+public func fileSaverCancel(_ operationId: UInt64) {
+    cancelOperation(operationId)
 }
 
 @_cdecl("file_saver_save_bytes")
@@ -295,13 +276,6 @@ public func fileSaverSaveBytes(
     _ conflictMode: Int32,
     _ nativePort: Int64
 ) -> UInt64 {
-    let reporter = ProgressReporter(port: nativePort)
-
-    // Create cancellation token
-    let tokenId = generateTokenId()
-    let token = CancellationToken()
-    registerToken(tokenId, token)
-
     // Takes ownership of the buffer: it is freed with the Data.
     let data = Data(bytesNoCopy: fileData, count: Int(fileDataLength), deallocator: .free)
     let fileName = String(cString: baseFileName)
@@ -309,13 +283,9 @@ public func fileSaverSaveBytes(
     let mime = String(cString: mimeType)
     let directory = subDir.map { String(cString: $0) }
 
-    DispatchQueue.global(qos: .userInitiated).async {
-        defer { unregisterToken(tokenId) }
-
-        // Send started event
-        reporter.sendStarted()
-
-        // Perform save with progress and cancellation support
+    let reporter = ProgressReporter(port: nativePort)
+    return runOperation(reporter: reporter) { operation, done in
+        defer { done() }
         fileSaver.saveBytes(
             fileData: data,
             baseFileName: fileName,
@@ -325,11 +295,9 @@ public func fileSaverSaveBytes(
             saveLocationValue: Int(saveLocation),
             conflictMode: Int(conflictMode),
             reporter: reporter,
-            cancellationToken: token
+            cancellationToken: operation.token
         )
     }
-
-    return tokenId
 }
 
 @_cdecl("file_saver_save_file")
@@ -343,27 +311,15 @@ public func fileSaverSaveFile(
     _ conflictMode: Int32,
     _ nativePort: Int64
 ) -> UInt64 {
-    let reporter = ProgressReporter(port: nativePort)
-
-    // Create cancellation token
-    let tokenId = generateTokenId()
-    let token = CancellationToken()
-    registerToken(tokenId, token)
-
-    // Copy strings before async operation (must be done synchronously)
     let path = String(cString: filePath)
     let fileName = String(cString: baseFileName)
     let extStr = String(cString: ext)
     let mime = String(cString: mimeType)
     let directory = subDir.map { String(cString: $0) }
 
-    DispatchQueue.global(qos: .userInitiated).async {
-        defer { unregisterToken(tokenId) }
-
-        // Send started event
-        reporter.sendStarted()
-
-        // Perform save with progress and cancellation support
+    let reporter = ProgressReporter(port: nativePort)
+    return runOperation(reporter: reporter) { operation, done in
+        defer { done() }
         fileSaver.saveFile(
             filePath: path,
             baseFileName: fileName,
@@ -373,11 +329,9 @@ public func fileSaverSaveFile(
             saveLocationValue: Int(saveLocation),
             conflictMode: Int(conflictMode),
             reporter: reporter,
-            cancellationToken: token
+            cancellationToken: operation.token
         )
     }
-
-    return tokenId
 }
 
 @_cdecl("file_saver_save_network")
@@ -393,42 +347,19 @@ public func fileSaverSaveNetwork(
     _ conflictMode: Int32,
     _ nativePort: Int64
 ) -> UInt64 {
-    let reporter = ProgressReporter(port: nativePort)
-
-    // Create active download entry (holds token + cancel handler)
-    let tokenId = generateTokenId()
-    let token = CancellationToken()
-    let activeDownload = ActiveDownload(token: token)
-    registerDownload(tokenId, activeDownload)
-
-    // Copy strings (must be done synchronously before returning)
     let url = String(cString: urlString)
-    let headers = headersJson.map { String(cString: $0) }
-    let timeout = Int(timeoutSeconds)
+    let headers = NetworkHelper.parseHeaders(headersJson.map { String(cString: $0) })
     let fileName = String(cString: baseFileName)
     let extStr = String(cString: ext)
     let mime = String(cString: mimeType)
     let directory = subDir.map { String(cString: $0) }
 
-    DispatchQueue.global(qos: .userInitiated).async {
-        // Check if already cancelled before starting
-        if token.isCancelled {
-            reporter.sendCancelled()
-            unregisterDownload(tokenId)
-            return
-        }
-
-        // Send started event
-        reporter.sendStarted()
-
-        // Parse headers from JSON string
-        let parsedHeaders = NetworkHelper.parseHeaders(headers)
-
-        // Perform save
+    let reporter = ProgressReporter(port: nativePort)
+    return runOperation(reporter: reporter) { operation, done in
         fileSaver.saveNetwork(
             urlString: url,
-            headers: parsedHeaders,
-            timeoutSeconds: timeout,
+            headers: headers,
+            timeoutSeconds: Int(timeoutSeconds),
             baseFileName: fileName,
             extension: extStr,
             mimeType: mime,
@@ -436,17 +367,11 @@ public func fileSaverSaveNetwork(
             saveLocationValue: Int(saveLocation),
             conflictMode: Int(conflictMode),
             reporter: reporter,
-            cancellationToken: token,
-            onCancelHandlerReady: { cancelHandler in
-                activeDownload.setCancelHandler(cancelHandler)
-            },
-            onComplete: {
-                unregisterDownload(tokenId)
-            }
+            cancellationToken: operation.token,
+            onCancelHandlerReady: operation.setCancelHandler,
+            onComplete: done
         )
     }
-
-    return tokenId
 }
 
 // MARK: - Open File helpers
@@ -618,24 +543,15 @@ public func fileSaverSaveBytesAs(
     _ conflictMode: Int32,
     _ nativePort: Int64
 ) -> UInt64 {
-    let reporter = ProgressReporter(port: nativePort)
-
-    // Create cancellation token
-    let tokenId = generateTokenId()
-    let token = CancellationToken()
-    registerToken(tokenId, token)
-
     // Takes ownership of the buffer: it is freed with the Data.
     let data = Data(bytesNoCopy: fileData, count: Int(fileDataLength), deallocator: .free)
     let dirUri = String(cString: directoryUri)
     let fileName = String(cString: baseFileName)
     let extStr = String(cString: ext)
 
-    DispatchQueue.global(qos: .userInitiated).async {
-        defer { unregisterToken(tokenId) }
-
-        reporter.sendStarted()
-
+    let reporter = ProgressReporter(port: nativePort)
+    return runOperation(reporter: reporter) { operation, done in
+        defer { done() }
         fileSaver.saveBytesAs(
             fileData: data,
             directoryUri: dirUri,
@@ -643,11 +559,9 @@ public func fileSaverSaveBytesAs(
             extension: extStr,
             conflictMode: Int(conflictMode),
             reporter: reporter,
-            cancellationToken: token
+            cancellationToken: operation.token
         )
     }
-
-    return tokenId
 }
 
 @_cdecl("file_saver_save_file_as")
@@ -659,24 +573,14 @@ public func fileSaverSaveFileAs(
     _ conflictMode: Int32,
     _ nativePort: Int64
 ) -> UInt64 {
-    let reporter = ProgressReporter(port: nativePort)
-
-    // Create cancellation token
-    let tokenId = generateTokenId()
-    let token = CancellationToken()
-    registerToken(tokenId, token)
-
-    // Copy strings before async operation
     let path = String(cString: filePath)
     let dirUri = String(cString: directoryUri)
     let fileName = String(cString: baseFileName)
     let extStr = String(cString: ext)
 
-    DispatchQueue.global(qos: .userInitiated).async {
-        defer { unregisterToken(tokenId) }
-
-        reporter.sendStarted()
-
+    let reporter = ProgressReporter(port: nativePort)
+    return runOperation(reporter: reporter) { operation, done in
+        defer { done() }
         fileSaver.saveFileAs(
             filePath: path,
             directoryUri: dirUri,
@@ -684,11 +588,9 @@ public func fileSaverSaveFileAs(
             extension: extStr,
             conflictMode: Int(conflictMode),
             reporter: reporter,
-            cancellationToken: token
+            cancellationToken: operation.token
         )
     }
-
-    return tokenId
 }
 
 @_cdecl("file_saver_save_network_as")
@@ -702,56 +604,50 @@ public func fileSaverSaveNetworkAs(
     _ conflictMode: Int32,
     _ nativePort: Int64
 ) -> UInt64 {
-    let reporter = ProgressReporter(port: nativePort)
-
-    // Create active download entry
-    let tokenId = generateTokenId()
-    let token = CancellationToken()
-    let activeDownload = ActiveDownload(token: token)
-    registerDownload(tokenId, activeDownload)
-
-    // Copy strings
     let url = String(cString: urlString)
-    let headers = headersJson.map { String(cString: $0) }
-    let timeout = Int(timeoutSeconds)
+    let headers = NetworkHelper.parseHeaders(headersJson.map { String(cString: $0) })
     let dirUri = String(cString: directoryUri)
     let fileName = String(cString: baseFileName)
     let extStr = String(cString: ext)
 
-    DispatchQueue.global(qos: .userInitiated).async {
-        if token.isCancelled {
-            reporter.sendCancelled()
-            unregisterDownload(tokenId)
-            return
-        }
-
-        reporter.sendStarted()
-
-        let parsedHeaders = NetworkHelper.parseHeaders(headers)
-
+    let reporter = ProgressReporter(port: nativePort)
+    return runOperation(reporter: reporter) { operation, done in
         fileSaver.saveNetworkAs(
             urlString: url,
-            headers: parsedHeaders,
-            timeoutSeconds: timeout,
+            headers: headers,
+            timeoutSeconds: Int(timeoutSeconds),
             directoryUri: dirUri,
             baseFileName: fileName,
             extension: extStr,
             conflictMode: Int(conflictMode),
             reporter: reporter,
-            cancellationToken: token,
-            onCancelHandlerReady: { cancelHandler in
-                activeDownload.setCancelHandler(cancelHandler)
-            },
-            onComplete: {
-                unregisterDownload(tokenId)
-            }
+            cancellationToken: operation.token,
+            onCancelHandlerReady: operation.setCancelHandler,
+            onComplete: done
         )
     }
-
-    return tokenId
 }
 
 // MARK: - Streaming Write Session Functions
+
+/// Opens a write session with `open` on a background queue, and reports its
+/// id, "0" for a `skip` of an existing file, or the error.
+func openSession(reporter: WriteSessionReporter, _ open: @escaping () throws -> WriteSession) {
+    DispatchQueue.global(qos: .userInitiated).async {
+        do {
+            let session = try open()
+            let sessionId = generateWriteSessionId()
+            registerWriteSession(sessionId, session)
+            reporter.sendSuccess(uri: String(sessionId))
+        } catch FileSaverError.writeSessionSkipped {
+            reporter.sendSuccess(uri: "0")
+        } catch let fsError as FileSaverError {
+            reporter.sendError(code: fsError.code, message: fsError.message)
+        } catch {
+            reporter.sendError(code: Constants.errorPlatform, message: error.localizedDescription)
+        }
+    }
+}
 
 @_cdecl("file_saver_open_write")
 public func fileSaverOpenWrite(
@@ -763,42 +659,26 @@ public func fileSaverOpenWrite(
     _ conflictMode: Int32,
     _ nativePort: Int64
 ) {
-    let reporter = ProgressReporter(port: nativePort)
-    // Copy strings synchronously before async block
     let fileName = String(cString: baseFileName)
     let extStr = String(cString: ext)
     let mimeStr = String(cString: mimeType)
     let directory = subDir.map { String(cString: $0) }
 
-    DispatchQueue.global(qos: .userInitiated).async {
-        do {
-            let result = try fileSaver.openWriteSession(
-                baseFileName: fileName,
-                extension: extStr,
-                mimeType: mimeStr,
-                subDir: directory,
-                saveLocationValue: Int(saveLocation),
-                conflictMode: Int(conflictMode)
-            )
-            let sessionId = generateWriteSessionId()
-            registerWriteSession(
-                sessionId,
-                WriteSession(
-                    fileHandle: result.fileHandle,
-                    fileURL: result.fileURL,
-                    securityScopedURL: nil,
-                    commit: result.commit
-                ))
-            reporter.sendSuccess(uri: String(sessionId))
-        } catch let fsError as FileSaverError {
-            if case .writeSessionSkipped = fsError {
-                reporter.sendSuccess(uri: "0")
-                return
-            }
-            reporter.sendError(code: fsError.code, message: fsError.message)
-        } catch {
-            reporter.sendError(code: Constants.errorPlatform, message: error.localizedDescription)
-        }
+    openSession(reporter: ProgressReporter(port: nativePort)) {
+        let result = try fileSaver.openWriteSession(
+            baseFileName: fileName,
+            extension: extStr,
+            mimeType: mimeStr,
+            subDir: directory,
+            saveLocationValue: Int(saveLocation),
+            conflictMode: Int(conflictMode)
+        )
+        return WriteSession(
+            fileHandle: result.fileHandle,
+            fileURL: result.fileURL,
+            securityScopedURL: nil,
+            commit: result.commit
+        )
     }
 }
 
@@ -810,18 +690,16 @@ public func fileSaverOpenWriteAs(
     _ conflictMode: Int32,
     _ nativePort: Int64
 ) {
-    let reporter = ProgressReporter(port: nativePort)
     let dirUri = String(cString: directoryUri)
     let fileName = String(cString: baseFileName)
     let extStr = String(cString: ext)
 
-    DispatchQueue.global(qos: .userInitiated).async {
+    openSession(reporter: ProgressReporter(port: nativePort)) {
         guard let dirURL = URL(string: dirUri) else {
-            reporter.sendError(code: Constants.errorInvalidInput, message: "Invalid directory URI: \(dirUri)")
-            return
+            throw FileSaverError.invalidInput("Invalid directory URI: \(dirUri)")
         }
+        // Held until the session is closed or cancelled.
         let isScoped = dirURL.startAccessingSecurityScopedResource()
-
         do {
             let (fileURL, fileHandle, commit) = try fileSaver.openWriteSessionAs(
                 directoryUri: dirUri,
@@ -829,27 +707,15 @@ public func fileSaverOpenWriteAs(
                 extension: extStr,
                 conflictMode: Int(conflictMode)
             )
-            let sessionId = generateWriteSessionId()
-            registerWriteSession(
-                sessionId,
-                WriteSession(
-                    fileHandle: fileHandle,
-                    fileURL: fileURL,
-                    securityScopedURL: isScoped ? dirURL : nil,
-                    commit: commit
-                ))
-            reporter.sendSuccess(uri: String(sessionId))
-        } catch let fsError as FileSaverError {
-            if case .writeSessionSkipped = fsError {
-                if isScoped { dirURL.stopAccessingSecurityScopedResource() }
-                reporter.sendSuccess(uri: "0")
-                return
-            }
-            if isScoped { dirURL.stopAccessingSecurityScopedResource() }
-            reporter.sendError(code: fsError.code, message: fsError.message)
+            return WriteSession(
+                fileHandle: fileHandle,
+                fileURL: fileURL,
+                securityScopedURL: isScoped ? dirURL : nil,
+                commit: commit
+            )
         } catch {
             if isScoped { dirURL.stopAccessingSecurityScopedResource() }
-            reporter.sendError(code: Constants.errorPlatform, message: error.localizedDescription)
+            throw error
         }
     }
 }

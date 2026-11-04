@@ -1,0 +1,150 @@
+import XCTest
+
+@testable import file_saver_ffi
+
+/// Foundation has a `ProgressReporter` too (macOS 26).
+private typealias ProgressReporter = file_saver_ffi.ProgressReporter
+
+/// How the FFI entry points run one-shot saves (`runOperation`) and open
+/// write sessions (`openSession`).
+final class OperationTests: XCTestCase {
+    private let port = RecordingPort()
+
+    private func reporter() -> ProgressReporter {
+        ProgressReporter(port: 1, post: port.post)
+    }
+
+    // MARK: - runOperation
+
+    func testASaveSendsStartedThenRuns() {
+        let ran = expectation(description: "save")
+
+        _ = runOperation(reporter: reporter()) { _, done in
+            XCTAssertEqual(self.port.messages, [[.int(0)]])
+            done()
+            ran.fulfill()
+        }
+
+        wait(for: [ran], timeout: 5)
+    }
+
+    /// As a download always did: Dart gets Cancelled without Started.
+    func testASaveCancelledBeforeItStartsSendsOnlyCancelledAndDoesNotRun() {
+        let queue = DispatchQueue(label: "OperationTests")
+        queue.suspend()
+        let id = runOperation(reporter: reporter(), queue: queue) { _, done in
+            XCTFail("The save ran")
+            done()
+        }
+
+        fileSaverCancel(id)
+        queue.resume()
+        queue.sync {}
+
+        XCTAssertEqual(port.messages, [[.int(4)]])
+    }
+
+    func testCancellingARunningSaveCancelsItsTokenAndRunsItsHandler() {
+        let started = DispatchSemaphore(value: 0)
+        let handlerRan = expectation(description: "cancel handler")
+        var token: CancellationToken?
+        let id = runOperation(reporter: reporter()) { operation, done in
+            token = operation.token
+            operation.setCancelHandler {
+                handlerRan.fulfill()
+                done()
+            }
+            started.signal()
+        }
+        XCTAssertEqual(started.wait(timeout: .now() + 5), .success)
+
+        fileSaverCancel(id)
+
+        wait(for: [handlerRan], timeout: 5)
+        XCTAssertEqual(token?.isCancelled, true)
+    }
+
+    func testAnEndedSaveIsNoLongerCancelled() {
+        let ended = expectation(description: "save")
+        var token: CancellationToken?
+        let id = runOperation(reporter: reporter()) { operation, done in
+            token = operation.token
+            done()
+            ended.fulfill()
+        }
+        wait(for: [ended], timeout: 5)
+
+        fileSaverCancel(id)
+
+        XCTAssertEqual(token?.isCancelled, false)
+    }
+
+    func testEachSaveGetsItsOwnId() {
+        let ids = (0..<3).map { _ in runOperation(reporter: reporter()) { _, done in done() } }
+
+        XCTAssertEqual(Set(ids).count, 3)
+    }
+
+    // MARK: - SaveOperation
+
+    /// A download sets its handler only once its task exists, which can be
+    /// after the cancel.
+    func testACancelHandlerSetAfterTheCancelRunsAtOnce() {
+        let operation = SaveOperation()
+        operation.cancel()
+        var ran = false
+
+        operation.setCancelHandler { ran = true }
+
+        XCTAssertTrue(ran)
+    }
+
+    // MARK: - openSession
+
+    private func open(_ make: @escaping () throws -> WriteSession) -> (code: Int64, data: PortValue?) {
+        let replied = expectation(description: "reply")
+        let reporter = ProgressReporter(
+            port: 1,
+            post: { [port] in
+                defer { replied.fulfill() }
+                return port.post($0, $1)
+            })
+        openSession(reporter: reporter, make)
+        wait(for: [replied], timeout: 5)
+        let message = port.messages[0]
+        guard case .int(let code) = message[0] else { return (-1, nil) }
+        return (code, message.count > 1 ? message[1] : nil)
+    }
+
+    func testOpeningASessionReportsItsId() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OperationTests-\(UUID().uuidString).txt")
+        FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        let handle = try FileHandle(forWritingTo: fileURL)
+
+        let reply = open {
+            WriteSession(fileHandle: handle, fileURL: fileURL, securityScopedURL: nil, commit: { "" })
+        }
+
+        guard reply.code == 3, case .string(let id) = reply.data, let sessionId = UInt64(id) else {
+            return XCTFail("\(reply)")
+        }
+        XCTAssertGreaterThan(sessionId, 0)
+        fileSaverCancelWrite(sessionId)
+    }
+
+    func testASkippedSessionReportsIdZero() {
+        let reply = open { throw FileSaverError.writeSessionSkipped }
+
+        XCTAssertEqual(reply.code, 3)
+        XCTAssertEqual(reply.data, .string("0"))
+    }
+
+    func testAFailedOpenReportsItsError() {
+        let reply = open { throw FileSaverError.permissionDenied("no access") }
+
+        XCTAssertEqual(reply.code, 2)
+        XCTAssertEqual(reply.data, .string(Constants.errorPermissionDenied))
+    }
+}
