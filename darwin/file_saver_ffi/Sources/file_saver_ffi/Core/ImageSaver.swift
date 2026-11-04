@@ -21,8 +21,7 @@ class ImageSaver: BaseFileSaver {
     func saveBytesToPhotos(
         fileData: Data,
         fileName: String,
-        albumName: String?,
-        onProgress: ((Double) -> Void)?
+        albumName: String?
     ) throws -> String {
         let album = try albumName.map { try findOrCreateAlbum(name: $0) }
 
@@ -58,8 +57,7 @@ class ImageSaver: BaseFileSaver {
     func saveFileToPhotos(
         sourceURL: URL,
         fileName: String,
-        albumName: String?,
-        onProgress: ((Double) -> Void)?
+        albumName: String?
     ) throws -> String {
         let album = try albumName.map { try findOrCreateAlbum(name: $0) }
 
@@ -102,7 +100,7 @@ class ImageSaver: BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
@@ -126,7 +124,7 @@ class ImageSaver: BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
@@ -152,7 +150,7 @@ class ImageSaver: BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: @escaping (String) -> Void,
         onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,

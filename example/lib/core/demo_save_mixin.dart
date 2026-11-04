@@ -31,6 +31,9 @@ mixin DemoSaveScreenMixin<T extends StatefulWidget> on State<T> {
   bool isLoading = false;
   String? savedFilePath;
   double progress = 0.0;
+
+  /// The last [SaveProgressUpdate] of the save stream, with the bytes written.
+  SaveProgressUpdate? progressUpdate;
   int mediaSize = 0;
 
   /// Chosen with [ConflictResolutionSelector].
@@ -55,6 +58,7 @@ mixin DemoSaveScreenMixin<T extends StatefulWidget> on State<T> {
       isLoading = true;
       savedFilePath = null;
       progress = 0.0;
+      progressUpdate = null;
       mediaSize = 0;
     });
   }
@@ -244,6 +248,7 @@ mixin DemoSaveScreenMixin<T extends StatefulWidget> on State<T> {
       isLoading = false;
       demoIsSaving = false;
       progress = 0;
+      progressUpdate = null;
     });
     showAppSnackBar(context, message, isSuccess: isSuccess);
   }
@@ -261,7 +266,10 @@ mixin DemoSaveScreenMixin<T extends StatefulWidget> on State<T> {
           case SaveProgressStarted():
             break;
           case SaveProgressUpdate(:final progress):
-            setState(() => this.progress = progress * 100);
+            setState(() {
+              this.progress = progress * 100;
+              progressUpdate = event;
+            });
           case SaveProgressComplete(:final uri):
             setState(() {
               savedFilePath = uri.toString();
@@ -288,6 +296,7 @@ mixin DemoSaveScreenMixin<T extends StatefulWidget> on State<T> {
               isLoading = false;
               demoIsSaving = false;
               progress = 0;
+              progressUpdate = null;
             });
             showAppSnackBar(context, cancelledMessage, isSuccess: false);
         }

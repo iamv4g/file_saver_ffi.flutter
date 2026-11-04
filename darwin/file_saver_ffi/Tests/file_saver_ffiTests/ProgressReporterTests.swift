@@ -10,7 +10,6 @@ private typealias ProgressReporter = file_saver_ffi.ProgressReporter
 private enum Value: Equatable {
     case null
     case int(Int64)
-    case double(Double)
     case string(String)
 }
 
@@ -26,11 +25,11 @@ private final class Port {
         return _messages
     }
 
-    /// The progress values posted, in order.
-    var progress: [Double] {
+    /// The byte counts of the progress messages posted, in order.
+    var progress: [Int64] {
         messages.compactMap { message in
-            guard message.first == .int(1), case .double(let value) = message[1] else { return nil }
-            return value
+            guard message.first == .int(1), case .int(let bytes) = message[1] else { return nil }
+            return bytes
         }
     }
 
@@ -46,7 +45,6 @@ private final class Port {
     private static func decode(_ object: Dart_CObject) -> Value {
         switch object.type {
         case Dart_CObject_kInt64: return .int(object.value.as_int64)
-        case Dart_CObject_kDouble: return .double(object.value.as_double)
         case Dart_CObject_kString: return .string(String(cString: object.value.as_string))
         default: return .null
         }
@@ -67,44 +65,78 @@ final class ProgressReporterTests: XCTestCase {
         let reporter = reporter()
 
         for i in 1...10_000 {
-            reporter.sendProgress(Double(i) / 10_000)
+            reporter.sendProgress(bytesWritten: Int64(i), totalBytes: 10_000)
         }
 
         let sent = port.progress
         XCTAssertLessThanOrEqual(sent.count, 101)
         XCTAssertGreaterThanOrEqual(sent.count, 100)
-        XCTAssertEqual(sent.first, 0.0001)
-        XCTAssertEqual(sent.last, 1.0)
-        // Every step but the last one, to 1.0, is at least 1%.
+        XCTAssertEqual(sent.first, 1)
+        XCTAssertEqual(sent.last, 10_000)
+        // Every step but the last one, to the size, is at least 1%.
         for (previous, next) in zip(sent, sent.dropFirst().dropLast()) {
-            XCTAssertGreaterThanOrEqual(next - previous, ProgressReporter.minProgressStep - 1e-9)
+            XCTAssertGreaterThanOrEqual(next - previous, 100)
         }
     }
 
     func testSmallerStepsAreSentAfter100Milliseconds() {
         let reporter = reporter()
 
-        reporter.sendProgress(0.001)
-        reporter.sendProgress(0.002)
+        reporter.sendProgress(bytesWritten: 1, totalBytes: 1000)
+        reporter.sendProgress(bytesWritten: 2, totalBytes: 1000)
         time += 0.05
-        reporter.sendProgress(0.003)
+        reporter.sendProgress(bytesWritten: 3, totalBytes: 1000)
         time += 0.05
-        reporter.sendProgress(0.004)
+        reporter.sendProgress(bytesWritten: 4, totalBytes: 1000)
         time += 0.2
-        reporter.sendProgress(0.004)
+        reporter.sendProgress(bytesWritten: 4, totalBytes: 1000)
 
-        XCTAssertEqual(port.progress, [0.001, 0.004])
+        XCTAssertEqual(port.progress, [1, 4])
     }
 
     func testCompletionIsSentOnceAndNotDropped() {
         let reporter = reporter()
 
-        reporter.sendProgress(0.995)
-        reporter.sendProgress(1.0)
-        reporter.sendProgress(1.0)
-        reporter.sendProgress(1.5)
+        reporter.sendProgress(bytesWritten: 995, totalBytes: 1000)
+        reporter.sendProgress(bytesWritten: 1000, totalBytes: 1000)
+        reporter.sendProgress(bytesWritten: 1000, totalBytes: 1000)
 
-        XCTAssertEqual(port.progress, [0.995, 1.0])
+        XCTAssertEqual(port.progress, [995, 1000])
+    }
+
+    func testAnUnknownSizeIsSentAsNullEvery100Milliseconds() {
+        let reporter = reporter()
+
+        reporter.sendProgress(bytesWritten: 1, totalBytes: nil)
+        reporter.sendProgress(bytesWritten: 1_000_000, totalBytes: nil)
+        time += 0.1
+        reporter.sendProgress(bytesWritten: 1_000_001, totalBytes: nil)
+
+        XCTAssertEqual(port.messages, [[.int(1), .int(1), .null], [.int(1), .int(1_000_001), .null]])
+    }
+
+    func testTheLastCountHeldBackIsSentBeforeSuccess() {
+        let reporter = reporter()
+
+        reporter.sendProgress(bytesWritten: 1, totalBytes: nil)
+        reporter.sendProgress(bytesWritten: 2, totalBytes: nil)
+        reporter.sendProgress(bytesWritten: 3, totalBytes: nil)
+        reporter.sendSuccess(uri: "file:///a.txt")
+
+        XCTAssertEqual(
+            port.messages,
+            [[.int(1), .int(1), .null], [.int(1), .int(3), .null], [.int(3), .string("file:///a.txt")]]
+        )
+    }
+
+    func testACountAlreadySentIsNotSentAgainBeforeSuccess() {
+        let reporter = reporter()
+
+        reporter.sendProgress(bytesWritten: 1, totalBytes: 2)
+        reporter.sendProgress(bytesWritten: 1, totalBytes: 2)
+        reporter.sendSuccess(uri: "file:///a.txt")
+
+        XCTAssertEqual(port.messages, [[.int(1), .int(1), .int(2)], [.int(3), .string("file:///a.txt")]])
     }
 
     // MARK: - Terminal events
@@ -114,7 +146,7 @@ final class ProgressReporterTests: XCTestCase {
 
         reporter.sendStarted()
         reporter.sendSuccess(uri: "file:///a.txt")
-        reporter.sendProgress(1.0)
+        reporter.sendProgress(bytesWritten: 1, totalBytes: 1)
         reporter.sendBytes(1)
         reporter.sendError(code: "FILE_IO", message: "late")
         reporter.sendCancelled()
@@ -133,7 +165,7 @@ final class ProgressReporterTests: XCTestCase {
                 case 1: reporter.sendError(code: "E", message: "\(i)")
                 default: reporter.sendCancelled()
                 }
-                reporter.sendProgress(Double(i) / 16)
+                reporter.sendProgress(bytesWritten: Int64(i) + 1, totalBytes: 16)
             }
 
             let terminal = port.messages.filter { [.int(2), .int(3), .int(4)].contains($0[0]) }

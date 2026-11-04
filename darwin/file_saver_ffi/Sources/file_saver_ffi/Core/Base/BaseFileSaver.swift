@@ -21,8 +21,7 @@ protocol BaseFileSaver: AnyObject {
     func saveBytesToPhotos(
         fileData: Data,
         fileName: String,
-        albumName: String?,
-        onProgress: ((Double) -> Void)?
+        albumName: String?
     ) throws -> String
 
     /// Save file to Photos Library - only Image/Video override this
@@ -30,8 +29,7 @@ protocol BaseFileSaver: AnyObject {
     func saveFileToPhotos(
         sourceURL: URL,
         fileName: String,
-        albumName: String?,
-        onProgress: ((Double) -> Void)?
+        albumName: String?
     ) throws -> String
     #endif
 
@@ -44,7 +42,7 @@ protocol BaseFileSaver: AnyObject {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws
@@ -56,7 +54,7 @@ protocol BaseFileSaver: AnyObject {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws
@@ -70,7 +68,7 @@ protocol BaseFileSaver: AnyObject {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: @escaping (String) -> Void,
         onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,
@@ -91,8 +89,7 @@ extension BaseFileSaver {
     func saveBytesToPhotos(
         fileData: Data,
         fileName: String,
-        albumName: String?,
-        onProgress: ((Double) -> Void)?
+        albumName: String?
     ) throws -> String {
         throw FileSaverError.unsupportedFormat((fileName as NSString).pathExtension)
     }
@@ -100,8 +97,7 @@ extension BaseFileSaver {
     func saveFileToPhotos(
         sourceURL: URL,
         fileName: String,
-        albumName: String?,
-        onProgress: ((Double) -> Void)?
+        albumName: String?
     ) throws -> String {
         throw FileSaverError.unsupportedFormat(sourceURL.pathExtension)
     }
@@ -142,19 +138,6 @@ extension BaseFileSaver {
         return targetDir
     }
 
-    /// Creates progress mapper for phase-based progress reporting
-    func progressMapper(
-        from onProgress: ((Double) -> Void)?,
-        startProgress: Double,
-        endProgress: Double
-    ) -> ((Double) -> Void)? {
-        return onProgress.map { handler in
-            { phaseProgress in
-                handler(startProgress + phaseProgress * (endProgress - startProgress))
-            }
-        }
-    }
-
     #if os(iOS)
     /// Handles Photos permission and conflict resolution.
     /// Nothing is deleted here: for `overwrite` the outcome carries the asset to
@@ -193,7 +176,7 @@ extension BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
@@ -219,8 +202,6 @@ extension BaseFileSaver {
             )
 
         case .photos:
-            onProgress?(0.0)
-
             let (hasReadAccess, outcome) = try handlePhotosSetup(
                 fileName: fileName,
                 subDir: subDir,
@@ -228,7 +209,6 @@ extension BaseFileSaver {
             )
 
             if case .existing(let existingUri) = outcome {
-                onProgress?(1.0)
                 onSuccess(existingUri)
                 return
             }
@@ -239,11 +219,12 @@ extension BaseFileSaver {
             let uri = try saveBytesToPhotos(
                 fileData: fileData,
                 fileName: fileName,
-                albumName: hasReadAccess ? subDir : nil,
-                onProgress: onProgress
+                albumName: hasReadAccess ? subDir : nil
             )
             PhotosHelper.deleteReplacedAsset(outcome)
-            onProgress?(1.0)
+            // Photos takes the whole file at once.
+            let size = Int64(fileData.count)
+            onProgress?(size, size)
             onSuccess(uri)
         }
         #elseif os(macOS)
@@ -266,7 +247,7 @@ extension BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
@@ -278,7 +259,6 @@ extension BaseFileSaver {
         )
 
         if case .existing(let existingURL) = target {
-            onProgress?(1.0)
             onSuccess(existingURL.absoluteString)
             return
         }
@@ -309,7 +289,7 @@ extension BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
@@ -334,8 +314,6 @@ extension BaseFileSaver {
             )
 
         case .photos:
-            let downloadProgressHandler = progressMapper(from: onProgress, startProgress: 0.0, endProgress: 0.8)
-
             let (hasReadAccess, outcome) = try handlePhotosSetup(
                 fileName: fileName,
                 subDir: subDir,
@@ -343,31 +321,24 @@ extension BaseFileSaver {
             )
 
             if case .existing(let existingUri) = outcome {
-                onProgress?(1.0)
                 onSuccess(existingUri)
                 return
             }
 
             try cancellationToken?.throwIfCancelled()
-            let sourceFile = try FileHelper.openSourceFile(
-                at: filePath,
-                onDownloadProgress: downloadProgressHandler,
-                cancellationToken: cancellationToken
-            )
+            let sourceFile = try FileHelper.openSourceFile(at: filePath, cancellationToken: cancellationToken)
             defer { sourceFile.close() }
-
-            onProgress?(0.8)
 
             // Once the asset is being added, it can't be stopped.
             try cancellationToken?.throwIfCancelled()
             let uri = try saveFileToPhotos(
                 sourceURL: sourceFile.url,
                 fileName: fileName,
-                albumName: hasReadAccess ? subDir : nil,
-                onProgress: onProgress
+                albumName: hasReadAccess ? subDir : nil
             )
             PhotosHelper.deleteReplacedAsset(outcome)
-            onProgress?(1.0)
+            // Photos takes the whole file at once.
+            onProgress?(sourceFile.totalSize, sourceFile.totalSize)
             onSuccess(uri)
         }
         #elseif os(macOS)
@@ -390,7 +361,7 @@ extension BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
@@ -404,34 +375,25 @@ extension BaseFileSaver {
         // Resolve before opening the source so a skip never reads it (or waits
         // for an iCloud download).
         if case .existing(let existingURL) = target {
-            onProgress?(1.0)
             onSuccess(existingURL.absoluteString)
             return
         }
 
-        let downloadProgressHandler = progressMapper(from: onProgress, startProgress: 0.0, endProgress: 0.8)
-
         let sourceFile: FileHelper.SourceFile
         do {
-            sourceFile = try FileHelper.openSourceFile(
-                at: filePath,
-                onDownloadProgress: downloadProgressHandler,
-                cancellationToken: cancellationToken
-            )
+            sourceFile = try FileHelper.openSourceFile(at: filePath, cancellationToken: cancellationToken)
         } catch {
             target.discard()
             throw error
         }
         defer { sourceFile.close() }
 
-        let copyProgressHandler = progressMapper(from: onProgress, startProgress: 0.8, endProgress: 1.0)
-
         do {
             try FileHelper.copyFileWithProgress(
                 from: sourceFile.handle,
                 to: target.writeURL,
                 totalSize: sourceFile.totalSize,
-                onProgress: copyProgressHandler,
+                onProgress: onProgress,
                 cancellationToken: cancellationToken
             )
         } catch {

@@ -33,7 +33,7 @@ class FileSaver {
                 saveLocation: saveLocation,
                 subDir: subDir,
                 conflictResolution: conflictResolution,
-                onProgress: { reporter.sendProgress($0) },
+                onProgress: { reporter.sendProgress(bytesWritten: $0, totalBytes: $1) },
                 onSuccess: { reporter.sendSuccess(uri: $0) },
                 cancellationToken: cancellationToken
             )
@@ -67,7 +67,7 @@ class FileSaver {
                 saveLocation: saveLocation,
                 subDir: subDir,
                 conflictResolution: conflictResolution,
-                onProgress: { reporter.sendProgress($0) },
+                onProgress: { reporter.sendProgress(bytesWritten: $0, totalBytes: $1) },
                 onSuccess: { reporter.sendSuccess(uri: $0) },
                 cancellationToken: cancellationToken
             )
@@ -106,7 +106,7 @@ class FileSaver {
             saveLocation: saveLocation,
             subDir: subDir,
             conflictResolution: conflictResolution,
-            onProgress: { reporter.sendProgress($0) },
+            onProgress: { reporter.sendProgress(bytesWritten: $0, totalBytes: $1) },
             onSuccess: { reporter.sendSuccess(uri: $0) },
             onError: { reporter.sendError($0) },
             onCancelled: { reporter.sendCancelled() },
@@ -138,7 +138,7 @@ class FileSaver {
                 directoryURL: directoryURL,
                 fileName: fileName,
                 conflictResolution: conflictResolution,
-                onProgress: { reporter.sendProgress($0) },
+                onProgress: { reporter.sendProgress(bytesWritten: $0, totalBytes: $1) },
                 onSuccess: { reporter.sendSuccess(uri: $0) },
                 cancellationToken: cancellationToken
             )
@@ -167,7 +167,7 @@ class FileSaver {
                 directoryURL: directoryURL,
                 fileName: fileName,
                 conflictResolution: conflictResolution,
-                onProgress: { reporter.sendProgress($0) },
+                onProgress: { reporter.sendProgress(bytesWritten: $0, totalBytes: $1) },
                 onSuccess: { reporter.sendSuccess(uri: $0) },
                 cancellationToken: cancellationToken
             )
@@ -201,7 +201,7 @@ class FileSaver {
             directoryURL: directoryURL,
             fileName: fileName,
             conflictResolution: conflictResolution,
-            onProgress: { reporter.sendProgress($0) },
+            onProgress: { reporter.sendProgress(bytesWritten: $0, totalBytes: $1) },
             onSuccess: { reporter.sendSuccess(uri: $0) },
             onError: { reporter.sendError($0) },
             onCancelled: { reporter.sendCancelled() },
@@ -338,8 +338,7 @@ class FileSaver {
             let uri = try saver.saveFileToPhotos(
                 sourceURL: tmpURL,
                 fileName: fullFileName,
-                albumName: albumName,
-                onProgress: nil
+                albumName: albumName
             )
             PhotosHelper.deleteReplacedAsset(outcome)
             return uri

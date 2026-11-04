@@ -9,7 +9,7 @@ extension BaseFileSaver {
         directoryURL: URL,
         fileName: String,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
@@ -27,7 +27,6 @@ extension BaseFileSaver {
         )
 
         if case .existing(let existingURL) = target {
-            onProgress?(1.0)
             onSuccess(existingURL.absoluteString)
             return
         }
@@ -55,7 +54,7 @@ extension BaseFileSaver {
         directoryURL: URL,
         fileName: String,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
@@ -71,34 +70,25 @@ extension BaseFileSaver {
         )
 
         if case .existing(let existingURL) = target {
-            onProgress?(1.0)
             onSuccess(existingURL.absoluteString)
             return
         }
 
-        let downloadProgressHandler = progressMapper(from: onProgress, startProgress: 0.0, endProgress: 0.8)
-
         let sourceFile: FileHelper.SourceFile
         do {
-            sourceFile = try FileHelper.openSourceFile(
-                at: filePath,
-                onDownloadProgress: downloadProgressHandler,
-                cancellationToken: cancellationToken
-            )
+            sourceFile = try FileHelper.openSourceFile(at: filePath, cancellationToken: cancellationToken)
         } catch {
             target.discard()
             throw error
         }
         defer { sourceFile.close() }
 
-        let copyProgressHandler = progressMapper(from: onProgress, startProgress: 0.8, endProgress: 1.0)
-
         do {
             try FileHelper.copyFileWithProgress(
                 from: sourceFile.handle,
                 to: target.writeURL,
                 totalSize: sourceFile.totalSize,
-                onProgress: copyProgressHandler,
+                onProgress: onProgress,
                 cancellationToken: cancellationToken
             )
         } catch {
@@ -117,7 +107,7 @@ extension BaseFileSaver {
         directoryURL: URL,
         fileName: String,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: @escaping (String) -> Void,
         onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,
@@ -153,7 +143,6 @@ extension BaseFileSaver {
 
         if case .existing(let existingURL) = target {
             endAccess()
-            onProgress?(1.0)
             onSuccess(existingURL.absoluteString)
             onComplete()
             return
@@ -173,9 +162,9 @@ extension BaseFileSaver {
             headers: headers,
             timeoutSeconds: timeoutSeconds,
             destinationURL: target.writeURL,
-            onProgress: { [weak cancellationToken] progress in
+            onProgress: { [weak cancellationToken] bytesWritten, totalBytes in
                 if let token = cancellationToken, token.isCancelled { return }
-                onProgress?(progress)
+                onProgress?(bytesWritten, totalBytes)
             },
             cancellationToken: cancellationToken,
             onCancelHandlerReady: onCancelHandlerReady,

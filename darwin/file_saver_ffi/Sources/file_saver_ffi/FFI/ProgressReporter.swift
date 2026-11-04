@@ -9,7 +9,7 @@ import Foundation
 /// | Message              | Array sent                          |
 /// |----------------------|-------------------------------------|
 /// | Started              | `[0]`                               |
-/// | Progress (0.0–1.0)   | `[1, Double]`  ← `sendProgress`     |
+/// | Progress             | `[1, Int64(bytesWritten), Int64(totalBytes) or null]` ← `sendProgress` |
 /// | Error                | `[2, errorCode, errorMessage]`      |
 /// | Success              | `[3, fileUri]`                      |
 /// | Cancelled            | `[4]`                               |
@@ -22,12 +22,14 @@ import Foundation
 /// | Session opened       | `[3, sessionId]`                    |
 /// | Session closed       | `[3, fileUri]`                      |
 ///
-/// **Note**: `sendProgress` clamps to 0.0–1.0 and sends `Double`.
+/// **Note**: `sendProgress` sends the size as null when it isn't known.
 /// `sendBytes` sends raw `Int64` — Dart reads it as `(msg[1] as num).toInt()`.
 ///
-/// Progress is throttled: a value is sent when it is 1.0, has grown by at least
-/// 1% since the last one sent, or has grown and 100 ms have passed. A network
-/// download reports thousands of values per file.
+/// Progress is throttled: a count is sent when it is the first, equals the
+/// size, has grown by at least 1% of the size since the last one sent, or has
+/// grown and 100 ms have passed. A network download reports thousands of
+/// counts per file. A count held back is sent before success, so Dart always
+/// gets the last one.
 ///
 /// Every method can be called from any thread. Nothing is sent after a
 /// terminal event (error, success, cancelled).
@@ -35,7 +37,6 @@ final class ProgressReporter {
     /// Posts a message to a Dart port. Tests replace `FileSaver_PostCObject_DL`.
     typealias Post = (Int64, UnsafeMutablePointer<Dart_CObject>) -> Bool
 
-    static let minProgressStep = 0.01
     static let minProgressInterval: TimeInterval = 0.1
 
     private let port: Int64
@@ -43,8 +44,10 @@ final class ProgressReporter {
     private let now: () -> TimeInterval
     private let lock = NSLock()
     private var isClosed = false
-    private var lastProgress = -1.0
-    private var lastProgressTime: TimeInterval = 0
+    private var lastBytes: Int64 = 0
+    private var lastProgressTime: TimeInterval?
+    /// The last count not sent, by the throttle.
+    private var heldBack: (bytesWritten: Int64, totalBytes: Int64?)?
 
     init(
         port: Int64,
@@ -61,12 +64,11 @@ final class ProgressReporter {
         send { [createInt(0)] }
     }
 
-    /// Send progress update. Value is clamped to 0.0–1.0, throttled, and sent as `Double`.
+    /// Sends the bytes written so far and the size, nil if unknown. Throttled.
     /// Use `sendBytes` instead for write-session chunk/flush ACKs.
-    func sendProgress(_ value: Double) {
-        let clampedValue = max(0.0, min(1.0, value))
-        send(when: { self.shouldSendProgress(clampedValue) }) {
-            [createInt(1), createDouble(clampedValue)]
+    func sendProgress(bytesWritten: Int64, totalBytes: Int64?) {
+        send(when: { self.shouldSendProgress(bytesWritten, totalBytes) }) {
+            progressMessage(bytesWritten, totalBytes)
         }
     }
 
@@ -88,8 +90,15 @@ final class ProgressReporter {
 
     /// Send success event. For `save()`/`saveAs()`: `uri` is the file URI.
     /// For write sessions: `uri` is the sessionId string (open) or file URI (close).
+    /// Sends the progress the throttle held back first.
     func sendSuccess(uri: String) {
-        send(closing: true) { [createInt(3), createString(uri)] }
+        send(closing: true) {
+            if let (bytesWritten, totalBytes) = heldBack {
+                heldBack = nil
+                sendArray(progressMessage(bytesWritten, totalBytes))
+            }
+            return [createInt(3), createString(uri)]
+        }
     }
 
     /// Send chunk/flush ACK for streaming write sessions. Sends cumulative `bytesWritten` as `Int64`.
@@ -118,18 +127,27 @@ final class ProgressReporter {
         sendArray(elements())
     }
 
-    /// Called with the lock held.
-    private func shouldSendProgress(_ value: Double) -> Bool {
+    /// Called with the lock held. A count no larger than the last one sent is
+    /// never sent.
+    private func shouldSendProgress(_ bytes: Int64, _ totalBytes: Int64?) -> Bool {
+        guard bytes > lastBytes else { return false }
         let time = now()
         let send =
-            value >= 1.0 && lastProgress < 1.0
-            || value - lastProgress >= Self.minProgressStep
-            || value > lastProgress && time - lastProgressTime >= Self.minProgressInterval
+            lastProgressTime.map { time - $0 >= Self.minProgressInterval } ?? true
+            || bytes == totalBytes
+            || totalBytes.map { (bytes - lastBytes) * 100 >= $0 } ?? false
         if send {
-            lastProgress = value
+            lastBytes = bytes
             lastProgressTime = time
+            heldBack = nil
+        } else {
+            heldBack = (bytes, totalBytes)
         }
         return send
+    }
+
+    private func progressMessage(_ bytesWritten: Int64, _ totalBytes: Int64?) -> [UnsafeMutablePointer<Dart_CObject>] {
+        [createInt(1), createInt(bytesWritten), totalBytes.map(createInt) ?? createNull()]
     }
 
     // MARK: - Private helpers
@@ -165,10 +183,9 @@ final class ProgressReporter {
         return obj
     }
 
-    private func createDouble(_ value: Double) -> UnsafeMutablePointer<Dart_CObject> {
+    private func createNull() -> UnsafeMutablePointer<Dart_CObject> {
         let obj = UnsafeMutablePointer<Dart_CObject>.allocate(capacity: 1)
-        obj.pointee.type = Dart_CObject_kDouble
-        obj.pointee.value.as_double = value
+        obj.pointee.type = Dart_CObject_kNull
         return obj
     }
 
