@@ -233,8 +233,8 @@ jobs:
           sparse-checkout: tool/ci_result.sh
           sparse-checkout-cone-mode: false
       # Fails unless every job succeeded, or was skipped because the change
-      # doesn't need it. A job GitHub cancels for want of a runner doesn't
-      # always show as `cancelled` here, so nothing but success counts.
+      # doesn't need it. A job no runner picked up shows as `abandoned` here,
+      # not `cancelled`, so nothing but success counts.
       - name: Check that every job the change needs succeeded
         env:
           NEEDS: ${{ toJSON(needs) }}

@@ -77,7 +77,14 @@ void main() {
   });
 
   group('fails', skip: skip, () {
-    for (final outcome in ['failure', 'cancelled', 'skipped', '']) {
+    // `abandoned` is what GitHub reports for a job no runner picked up.
+    for (final outcome in [
+      'failure',
+      'cancelled',
+      'abandoned',
+      'skipped',
+      '',
+    ]) {
       test('when a job the change needs ends "$outcome"', () async {
         final result = await check(
           needs(scope: darwin, results: {'darwin-unit-test': outcome}),

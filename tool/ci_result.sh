@@ -6,7 +6,7 @@
 # job, and fails unless every job succeeded. A platform job may also be
 # skipped, but only when the change doesn't need it (the outputs of the
 # `changes` job). Any other result fails, whatever GitHub calls it: a job
-# that never got a runner, for one, must not count as passed.
+# that never got a runner, for one, is `abandoned`, not `cancelled`.
 #
 # Try it locally:
 #   echo '{"changes":{"result":"success","outputs":{...}}, ...}' | bash tool/ci_result.sh
