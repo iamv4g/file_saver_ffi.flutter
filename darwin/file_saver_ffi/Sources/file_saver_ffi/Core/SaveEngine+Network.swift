@@ -2,8 +2,8 @@ import Foundation
 
 // MARK: - Shared saveNetwork Implementation
 
-extension BaseFileSaver {
-    func saveNetworkImpl(
+extension SaveEngine {
+    func saveNetwork(
         urlString: String,
         headers: [String: String]?,
         timeoutSeconds: Int,
@@ -313,8 +313,9 @@ extension BaseFileSaver {
         let fileName = buildFileName(base: baseFileName, extension: fileType.ext)
 
         do {
-            let uri = try saveFileToPhotos(
-                sourceURL: tmpURL,
+            let uri = try PhotosHelper.createAsset(
+                from: .file(tmpURL),
+                fileType: fileType,
                 fileName: fileName,
                 albumName: hasReadAccess ? subDir : nil
             )

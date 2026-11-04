@@ -111,7 +111,7 @@ final class FileSaveTests: XCTestCase {
     func testSaveAsWritesWhenTheDirectoryHasNoSecurityScope() throws {
         var saved: String?
 
-        try CustomFileSaver().saveBytesAs(
+        try SaveEngine().saveBytesAs(
             fileData: Data("hello".utf8),
             directoryURL: directory,
             fileName: "a.txt",
@@ -129,7 +129,7 @@ final class FileSaveTests: XCTestCase {
         try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
 
         XCTAssertThrowsError(
-            try CustomFileSaver().saveBytesAs(
+            try SaveEngine().saveBytesAs(
                 fileData: Data("hello".utf8),
                 directoryURL: directory,
                 fileName: "a.txt",
@@ -148,7 +148,7 @@ final class FileSaveTests: XCTestCase {
         token.cancel()
 
         XCTAssertThrowsError(
-            try CustomFileSaver().saveBytesAs(
+            try SaveEngine().saveBytesAs(
                 fileData: Data("hello".utf8),
                 directoryURL: directory,
                 fileName: "a.txt",
@@ -164,7 +164,7 @@ final class FileSaveTests: XCTestCase {
 
     func testSaveFileAsOfAMissingSourceLeavesNoFile() throws {
         XCTAssertThrowsError(
-            try CustomFileSaver().saveFileAs(
+            try SaveEngine().saveFileAs(
                 filePath: directory.appendingPathComponent("missing.txt").path,
                 directoryURL: directory,
                 fileName: "copy.txt",
@@ -193,7 +193,7 @@ final class FileSaveTests: XCTestCase {
 
         let missing = directory.appendingPathComponent("missing.txt").path
         XCTAssertThrowsError(
-            try CustomFileSaver().saveFileAs(
+            try SaveEngine().saveFileAs(
                 filePath: missing,
                 directoryURL: directory,
                 fileName: "copy.txt",

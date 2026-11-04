@@ -98,12 +98,7 @@ private class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
             case .timedOut:
                 complete(with: .failure(.networkError("Request timed out", statusCode: statusCode)))
             case .cancelled:
-                // Check if this was user-initiated cancellation
-                if let token = cancellationToken, token.isCancelled {
-                    complete(with: .failure(.cancelled))
-                } else {
-                    complete(with: .failure(.cancelled))
-                }
+                complete(with: .failure(.cancelled))
             case .notConnectedToInternet:
                 complete(with: .failure(.networkError("No internet connection", statusCode: statusCode)))
             default:

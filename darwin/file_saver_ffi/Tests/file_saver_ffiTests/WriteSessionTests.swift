@@ -61,7 +61,6 @@ final class WriteSessionTests: XCTestCase {
         return WriteSession(
             fileHandle: handle,
             fileURL: fileURL,
-            totalSize: -1,
             securityScopedURL: nil,
             commit: commit ?? { [unowned self] in
                 commits += 1

@@ -256,7 +256,6 @@ bool file_saver_can_open_file(const char* uri);
 /// @param saveLocation Save location index
 /// @param subDir      Optional subdirectory (can be NULL)
 /// @param conflictMode Conflict resolution mode (0-3)
-/// @param totalSize   Total expected bytes (-1 if unknown)
 /// @param native_port Dart NativePort for result delivery
 void file_saver_open_write(
     const char* baseFileName,
@@ -265,7 +264,6 @@ void file_saver_open_write(
     int32_t saveLocation,
     const char* subDir,
     int32_t conflictMode,
-    int64_t totalSize,
     int64_t native_port
 );
 
@@ -279,14 +277,12 @@ void file_saver_open_write(
 /// @param baseFileName File name without extension
 /// @param ext         File extension without dot
 /// @param conflictMode Conflict resolution mode (0-3)
-/// @param totalSize   Total expected bytes (-1 if unknown)
 /// @param native_port Dart NativePort for result delivery
 void file_saver_open_write_as(
     const char* directoryUri,
     const char* baseFileName,
     const char* ext,
     int32_t conflictMode,
-    int64_t totalSize,
     int64_t native_port
 );
 

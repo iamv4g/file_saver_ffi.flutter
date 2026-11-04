@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Save*As Implementation (User-Selected Directory)
 
-extension BaseFileSaver {
+extension SaveEngine {
     /// Save bytes to user-selected directory
     func saveBytesAs(
         fileData: Data,

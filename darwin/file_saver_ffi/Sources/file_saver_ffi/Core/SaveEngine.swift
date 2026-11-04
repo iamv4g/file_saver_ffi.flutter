@@ -4,109 +4,14 @@ import Foundation
 import Photos
 #endif
 
-protocol BaseFileSaver: AnyObject {
-    // MARK: - Hooks for Subclasses
-
-    /// Format validation hook - override in subclasses to validate file type
-    /// Default implementation does nothing (no validation)
-    func validateFormat(_ fileType: FileType) throws
-
-    #if os(iOS)
-    /// Whether this saver supports Photos Library saves
-    /// Default is false: saving to `.photos` throws `invalidInput`
-    var supportsPhotosLibrary: Bool { get }
-
-    /// Save data to Photos Library - only Image/Video override this
-    /// Default implementation throws unsupportedFormat error
-    func saveBytesToPhotos(
-        fileData: Data,
-        fileName: String,
-        albumName: String?
-    ) throws -> String
-
-    /// Save file to Photos Library - only Image/Video override this
-    /// Default implementation throws unsupportedFormat error
-    func saveFileToPhotos(
-        sourceURL: URL,
-        fileName: String,
-        albumName: String?
-    ) throws -> String
-    #endif
-
-    // MARK: - Core Methods (Required)
-
-    func saveBytes(
-        fileData: Data,
-        fileType: FileType,
-        baseFileName: String,
-        saveLocation: SaveLocation,
-        subDir: String?,
-        conflictResolution: ConflictResolution,
-        onProgress: ProgressHandler?,
-        onSuccess: (String) -> Void,
-        cancellationToken: CancellationToken?
-    ) throws
-
-    func saveFile(
-        filePath: String,
-        fileType: FileType,
-        baseFileName: String,
-        saveLocation: SaveLocation,
-        subDir: String?,
-        conflictResolution: ConflictResolution,
-        onProgress: ProgressHandler?,
-        onSuccess: (String) -> Void,
-        cancellationToken: CancellationToken?
-    ) throws
-
-    func saveNetwork(
-        urlString: String,
-        headers: [String: String]?,
-        timeoutSeconds: Int,
-        fileType: FileType,
-        baseFileName: String,
-        saveLocation: SaveLocation,
-        subDir: String?,
-        conflictResolution: ConflictResolution,
-        onProgress: ProgressHandler?,
-        onSuccess: @escaping (String) -> Void,
-        onError: @escaping (FileSaverError) -> Void,
-        onCancelled: @escaping () -> Void,
-        onCancelHandlerReady: @escaping (@escaping () -> Void) -> Void,
-        onComplete: @escaping () -> Void,
-        cancellationToken: CancellationToken?
-    )
-}
-
-// MARK: - Default Hook Implementations
-
-extension BaseFileSaver {
-    func validateFormat(_ fileType: FileType) throws {}
-
-    #if os(iOS)
-    var supportsPhotosLibrary: Bool { false }
-
-    func saveBytesToPhotos(
-        fileData: Data,
-        fileName: String,
-        albumName: String?
-    ) throws -> String {
-        throw FileSaverError.unsupportedFormat((fileName as NSString).pathExtension)
-    }
-
-    func saveFileToPhotos(
-        sourceURL: URL,
-        fileName: String,
-        albumName: String?
-    ) throws -> String {
-        throw FileSaverError.unsupportedFormat(sourceURL.pathExtension)
-    }
-    #endif
-}
+/// Saves bytes, a file or a download, for files of every type: to a directory
+/// (Documents on iOS, the save location on macOS), to a user-picked directory,
+/// or, for images and videos on iOS, to the Photos Library.
+final class SaveEngine {}
 
 // MARK: - Helper Methods
 
-extension BaseFileSaver {
+extension SaveEngine {
     func validateFileData(_ fileData: Data) throws {
         guard !fileData.isEmpty else {
             throw FileSaverError.invalidInput("File data is empty")
@@ -116,12 +21,6 @@ extension BaseFileSaver {
     func buildFileName(base: String, extension ext: String) -> String {
         return FileHelper.buildFileName(fileName: base, extension: ext)
     }
-
-    #if os(iOS)
-    func findOrCreateAlbum(name: String) throws -> PHAssetCollection {
-        return try PhotosHelper.findOrCreateAlbum(name: name)
-    }
-    #endif
 
     /// Resolves target directory based on save location and optional subdirectory
     func resolveTargetDirectory(saveLocation: SaveLocation, subDir: String?) throws -> URL {
@@ -160,7 +59,7 @@ extension BaseFileSaver {
     /// Throws for a file type the Photos Library doesn't take: only images and
     /// videos can be saved to `.photos`, by every API.
     func checkPhotosSupport(saveLocation: SaveLocation, fileType: FileType) throws {
-        guard saveLocation == .photos, !supportsPhotosLibrary else { return }
+        guard saveLocation == .photos, !PhotosHelper.supports(fileType) else { return }
         throw FileSaverError.photosUnsupported(fileType)
     }
     #endif
@@ -168,8 +67,8 @@ extension BaseFileSaver {
 
 // MARK: - Shared saveBytes Implementation
 
-extension BaseFileSaver {
-    func saveBytesImpl(
+extension SaveEngine {
+    func saveBytes(
         fileData: Data,
         fileType: FileType,
         baseFileName: String,
@@ -180,7 +79,6 @@ extension BaseFileSaver {
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
-        try validateFormat(fileType)
         try validateFileData(fileData)
 
         let fileName = buildFileName(base: baseFileName, extension: fileType.ext)
@@ -216,8 +114,9 @@ extension BaseFileSaver {
             // The permission dialog can stay open for a while. Once the asset
             // is being added, it can't be stopped.
             try cancellationToken?.throwIfCancelled()
-            let uri = try saveBytesToPhotos(
-                fileData: fileData,
+            let uri = try PhotosHelper.createAsset(
+                from: .data(fileData),
+                fileType: fileType,
                 fileName: fileName,
                 albumName: hasReadAccess ? subDir : nil
             )
@@ -281,8 +180,8 @@ extension BaseFileSaver {
 
 // MARK: - Shared saveFile Implementation
 
-extension BaseFileSaver {
-    func saveFileImpl(
+extension SaveEngine {
+    func saveFile(
         filePath: String,
         fileType: FileType,
         baseFileName: String,
@@ -293,7 +192,6 @@ extension BaseFileSaver {
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
-        try validateFormat(fileType)
 
         let fileName = buildFileName(base: baseFileName, extension: fileType.ext)
 
@@ -331,8 +229,9 @@ extension BaseFileSaver {
 
             // Once the asset is being added, it can't be stopped.
             try cancellationToken?.throwIfCancelled()
-            let uri = try saveFileToPhotos(
-                sourceURL: sourceFile.url,
+            let uri = try PhotosHelper.createAsset(
+                from: .file(sourceFile.url),
+                fileType: fileType,
                 fileName: fileName,
                 albumName: hasReadAccess ? subDir : nil
             )

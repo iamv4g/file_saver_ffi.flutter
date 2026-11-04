@@ -1,10 +1,7 @@
 import Foundation
 
 class FileSaver {
-    let imageSaver = ImageSaver()
-    let videoSaver = VideoSaver()
-    let audioSaver = AudioSaver()
-    let customFileSaver = CustomFileSaver()
+    private let engine = SaveEngine()
 
     // MARK: - Standard Save Methods
 
@@ -23,10 +20,8 @@ class FileSaver {
 
         let fileType = FileHelper.getFileType(ext: ext, mimeType: mimeType)
         let saveLocation = SaveLocation.fromInt(saveLocationValue)
-        let saver = getSaver(for: fileType)
-
         do {
-            try saver.saveBytes(
+            try engine.saveBytes(
                 fileData: fileData,
                 fileType: fileType,
                 baseFileName: baseFileName,
@@ -57,10 +52,8 @@ class FileSaver {
 
         let fileType = FileHelper.getFileType(ext: ext, mimeType: mimeType)
         let saveLocation = SaveLocation.fromInt(saveLocationValue)
-        let saver = getSaver(for: fileType)
-
         do {
-            try saver.saveFile(
+            try engine.saveFile(
                 filePath: filePath,
                 fileType: fileType,
                 baseFileName: baseFileName,
@@ -95,9 +88,7 @@ class FileSaver {
 
         let fileType = FileHelper.getFileType(ext: ext, mimeType: mimeType)
         let saveLocation = SaveLocation.fromInt(saveLocationValue)
-        let saver = getSaver(for: fileType)
-
-        saver.saveNetwork(
+        engine.saveNetwork(
             urlString: urlString,
             headers: headers,
             timeoutSeconds: timeoutSeconds,
@@ -133,7 +124,7 @@ class FileSaver {
         let fileName = FileHelper.buildFileName(fileName: baseFileName, extension: ext)
 
         do {
-            try customFileSaver.saveBytesAs(
+            try engine.saveBytesAs(
                 fileData: fileData,
                 directoryURL: directoryURL,
                 fileName: fileName,
@@ -162,7 +153,7 @@ class FileSaver {
         let fileName = FileHelper.buildFileName(fileName: baseFileName, extension: ext)
 
         do {
-            try customFileSaver.saveFileAs(
+            try engine.saveFileAs(
                 filePath: filePath,
                 directoryURL: directoryURL,
                 fileName: fileName,
@@ -194,7 +185,7 @@ class FileSaver {
 
         let fileName = FileHelper.buildFileName(fileName: baseFileName, extension: ext)
 
-        customFileSaver.saveNetworkAs(
+        engine.saveNetworkAs(
             urlString: urlString,
             headers: headers,
             timeoutSeconds: timeoutSeconds,
@@ -305,9 +296,7 @@ class FileSaver {
         conflictMode: Int
     ) throws -> (fileURL: URL, fileHandle: FileHandle, commit: () throws -> String) {
         let fileType = FileHelper.getFileType(ext: ext, mimeType: mimeType)
-        let saver = getSaver(for: fileType)
-
-        try saver.checkPhotosSupport(saveLocation: .photos, fileType: fileType)
+        try engine.checkPhotosSupport(saveLocation: .photos, fileType: fileType)
 
         let fullFileName = FileHelper.buildFileName(fileName: baseFileName, extension: ext)
         let conflictResolution = ConflictResolution.fromInt(conflictMode)
@@ -335,8 +324,9 @@ class FileSaver {
         // Closure captures everything needed for commit; caller invokes on closeWrite.
         let photosCommit: () throws -> String = {
             defer { try? FileManager.default.removeItem(at: tmpURL) }
-            let uri = try saver.saveFileToPhotos(
-                sourceURL: tmpURL,
+            let uri = try PhotosHelper.createAsset(
+                from: .file(tmpURL),
+                fileType: fileType,
                 fileName: fullFileName,
                 albumName: albumName
             )
@@ -381,15 +371,6 @@ class FileSaver {
             return nil
         }
         return resolution
-    }
-
-    private func getSaver(for fileType: FileType) -> BaseFileSaver {
-        switch fileType.category {
-        case .image: return imageSaver
-        case .video: return videoSaver
-        case .audio: return audioSaver
-        case .custom: return customFileSaver
-        }
     }
 
     private func parseDirectoryURL(

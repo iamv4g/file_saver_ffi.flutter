@@ -121,7 +121,6 @@ final class WriteSession {
     /// File the chunks are written to. Never an existing file: for `overwrite` it
     /// is a temp file, so `cancel` and a failed `close` can always delete it.
     let fileURL: URL
-    let totalSize: Int64  // -1 if unknown
     let serialQueue: DispatchQueue
     let securityScopedURL: URL?  // non-nil for openWriteAs
     private(set) var bytesWritten: Int64 = 0
@@ -136,13 +135,11 @@ final class WriteSession {
     init(
         fileHandle: FileHandle,
         fileURL: URL,
-        totalSize: Int64,
         securityScopedURL: URL?,
         commit: @escaping () throws -> String
     ) {
         self.fileHandle = fileHandle
         self.fileURL = fileURL
-        self.totalSize = totalSize
         self.securityScopedURL = securityScopedURL
         self.commit = commit
         self.serialQueue = DispatchQueue(
@@ -503,18 +500,7 @@ private func fileSaverPresentPreview(url: URL, from viewController: UIViewContro
     if !doc.presentPreview(animated: true) {
         _fileSaverDocDelegate = nil
         // Fallback: share sheet (e.g. for file types without a QuickLook preview)
-        let activityVC = UIActivityViewController(activityItems: [url], applicationActivities: nil)
-        if let popover = activityVC.popoverPresentationController {
-            popover.sourceView = viewController.view
-            popover.sourceRect = CGRect(
-                x: viewController.view.bounds.midX,
-                y: viewController.view.bounds.midY,
-                width: 0,
-                height: 0
-            )
-            popover.permittedArrowDirections = []
-        }
-        viewController.present(activityVC, animated: true)
+        fileSaverPresentActivityVC([url], from: viewController)
     }
 }
 
@@ -775,7 +761,6 @@ public func fileSaverOpenWrite(
     _ saveLocation: Int32,
     _ subDir: UnsafePointer<CChar>?,
     _ conflictMode: Int32,
-    _ totalSize: Int64,
     _ nativePort: Int64
 ) {
     let reporter = ProgressReporter(port: nativePort)
@@ -801,7 +786,6 @@ public func fileSaverOpenWrite(
                 WriteSession(
                     fileHandle: result.fileHandle,
                     fileURL: result.fileURL,
-                    totalSize: totalSize,
                     securityScopedURL: nil,
                     commit: result.commit
                 ))
@@ -824,7 +808,6 @@ public func fileSaverOpenWriteAs(
     _ baseFileName: UnsafePointer<CChar>,
     _ ext: UnsafePointer<CChar>,
     _ conflictMode: Int32,
-    _ totalSize: Int64,
     _ nativePort: Int64
 ) {
     let reporter = ProgressReporter(port: nativePort)
@@ -852,7 +835,6 @@ public func fileSaverOpenWriteAs(
                 WriteSession(
                     fileHandle: fileHandle,
                     fileURL: fileURL,
-                    totalSize: totalSize,
                     securityScopedURL: isScoped ? dirURL : nil,
                     commit: commit
                 ))

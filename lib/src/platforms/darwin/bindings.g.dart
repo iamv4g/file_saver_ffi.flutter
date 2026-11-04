@@ -541,7 +541,6 @@ class FileSaverFFI {
   /// @param saveLocation Save location index
   /// @param subDir      Optional subdirectory (can be NULL)
   /// @param conflictMode Conflict resolution mode (0-3)
-  /// @param totalSize   Total expected bytes (-1 if unknown)
   /// @param native_port Dart NativePort for result delivery
   void openWrite(
     ffi.Pointer<ffi.Char> baseFileName,
@@ -550,7 +549,6 @@ class FileSaverFFI {
     int saveLocation,
     ffi.Pointer<ffi.Char> subDir,
     int conflictMode,
-    int totalSize,
     int native_port,
   ) {
     return _openWrite(
@@ -560,7 +558,6 @@ class FileSaverFFI {
       saveLocation,
       subDir,
       conflictMode,
-      totalSize,
       native_port,
     );
   }
@@ -576,7 +573,6 @@ class FileSaverFFI {
             ffi.Pointer<ffi.Char>,
             ffi.Int32,
             ffi.Int64,
-            ffi.Int64,
           )
         >
       >('file_saver_open_write');
@@ -588,7 +584,6 @@ class FileSaverFFI {
           ffi.Pointer<ffi.Char>,
           int,
           ffi.Pointer<ffi.Char>,
-          int,
           int,
           int,
         )
@@ -604,14 +599,12 @@ class FileSaverFFI {
   /// @param baseFileName File name without extension
   /// @param ext         File extension without dot
   /// @param conflictMode Conflict resolution mode (0-3)
-  /// @param totalSize   Total expected bytes (-1 if unknown)
   /// @param native_port Dart NativePort for result delivery
   void openWriteAs(
     ffi.Pointer<ffi.Char> directoryUri,
     ffi.Pointer<ffi.Char> baseFileName,
     ffi.Pointer<ffi.Char> ext,
     int conflictMode,
-    int totalSize,
     int native_port,
   ) {
     return _openWriteAs(
@@ -619,7 +612,6 @@ class FileSaverFFI {
       baseFileName,
       ext,
       conflictMode,
-      totalSize,
       native_port,
     );
   }
@@ -633,7 +625,6 @@ class FileSaverFFI {
             ffi.Pointer<ffi.Char>,
             ffi.Int32,
             ffi.Int64,
-            ffi.Int64,
           )
         >
       >('file_saver_open_write_as');
@@ -643,7 +634,6 @@ class FileSaverFFI {
           ffi.Pointer<ffi.Char>,
           ffi.Pointer<ffi.Char>,
           ffi.Pointer<ffi.Char>,
-          int,
           int,
           int,
         )
