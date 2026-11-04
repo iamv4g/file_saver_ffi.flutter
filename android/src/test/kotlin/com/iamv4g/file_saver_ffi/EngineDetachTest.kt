@@ -1,5 +1,6 @@
 package com.iamv4g.file_saver_ffi
 
+import android.provider.MediaStore.MediaColumns
 import com.iamv4g.file_saver_ffi.models.ConflictResolution
 import com.iamv4g.file_saver_ffi.models.SaveLocation
 import com.iamv4g.file_saver_ffi.testing.FakeEngine
@@ -100,6 +101,39 @@ class EngineDetachTest : FileSaverTestBase() {
         release.countDown()
 
         awaitRows(0)
+        assertNoCrash()
+    }
+
+    @Test
+    fun `destroying an engine while a write session commits an overwrite keeps the new file`() {
+        saveBytes(byteArrayOf(9), "log", "txt", "text/plain", SaveLocation.DOWNLOADS, subDir = null)
+        val engine = engine()
+        val saver = FileSaver(engine.id)
+        val open = RecordingCallback()
+        saver.openWriteSession("log", "txt", "text/plain", SaveLocation.DOWNLOADS.ordinal, null, ConflictResolution.OVERWRITE.value, open)
+        val sessionId = open.awaitTerminal().data!!.toLong()
+        writeChunk(saver, sessionId, byteArrayOf(1, 2, 3))
+        val renaming = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        // The rename runs after the commit has deleted the replaced row.
+        mediaStore.updateResult = { row, values ->
+            if (values.containsKey(MediaColumns.DISPLAY_NAME)) {
+                renaming.countDown()
+                release.await(5, TimeUnit.SECONDS)
+            }
+            row.values.putAll(values)
+            1
+        }
+
+        saver.closeSession(sessionId, RecordingCallback())
+        assertTrue(renaming.await(5, TimeUnit.SECONDS))
+        engine.destroy()
+        release.countDown()
+
+        Thread.sleep(500)
+        val row = mediaStore.rowNamed("log.txt")
+        assertTrue("Rows: ${mediaStore.rows.values.map { it.displayName }}", row != null && !row.isPending)
+        assertArrayEquals(byteArrayOf(1, 2, 3), row!!.file.readBytes())
         assertNoCrash()
     }
 
