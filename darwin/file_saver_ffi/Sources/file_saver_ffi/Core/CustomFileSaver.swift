@@ -16,7 +16,7 @@ class CustomFileSaver: BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
@@ -40,7 +40,7 @@ class CustomFileSaver: BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
@@ -66,7 +66,7 @@ class CustomFileSaver: BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: @escaping (String) -> Void,
         onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,

@@ -20,12 +20,12 @@ enum FileHelper {
     /// - Parameters:
     ///   - data: Data to write
     ///   - url: File URL to write to
-    ///   - onProgress: Optional progress callback (0.0 to 1.0)
+    ///   - onProgress: Called with the bytes written after each chunk
     ///   - cancellationToken: Optional token to check for cancellation between chunks
     static func writeFileWithProgress(
         data: Data,
         to url: URL,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         cancellationToken: CancellationToken? = nil
     ) throws {
         let fileHandle = try openForWriting(url)
@@ -49,11 +49,7 @@ enum FileHelper {
             }
             offset += length
 
-            // Report progress
-            if let onProgress = onProgress, totalBytes > 0 {
-                let progress = Double(offset) / Double(totalBytes)
-                onProgress(progress)
-            }
+            onProgress?(Int64(offset), Int64(totalBytes))
         }
     }
 
@@ -148,12 +144,11 @@ enum FileHelper {
     ///
     /// - Parameters:
     ///   - filePath: The file path or URL string
-    ///   - onDownloadProgress: Optional callback for iCloud download progress (0.0 to 1.0)
+    ///   - cancellationToken: Checked while waiting for an iCloud download
     /// - Returns: SourceFile containing URL, FileHandle, totalSize, and security scope info
     /// - Throws: FileSaverError on failure
     static func openSourceFile(
         at filePath: String,
-        onDownloadProgress: ((Double) -> Void)? = nil,
         cancellationToken: CancellationToken? = nil
     ) throws -> SourceFile {
         // A plain path is taken as is: `#`, `?` and `%` are part of the name.
@@ -171,12 +166,8 @@ enum FileHelper {
                 throw FileSaverError.fileNotFound(filePath)
             }
             
-            // Handle iCloud files that may need to be downloaded (with progress)
-            try waitForICloudDownload(
-                at: url,
-                onProgress: onDownloadProgress,
-                cancellationToken: cancellationToken
-            )
+            // Handle iCloud files that may need to be downloaded
+            try waitForICloudDownload(at: url, cancellationToken: cancellationToken)
             
             // Get file size
             let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
@@ -200,23 +191,20 @@ enum FileHelper {
         }
     }
     
-    /// Waits for an iCloud file to finish downloading with progress reporting
+    /// Waits for an iCloud file to finish downloading
     ///
-    /// Uses polling to monitor download progress and NSFileCoordinator to ensure completion
+    /// Polls the download status, then uses NSFileCoordinator to ensure completion.
+    /// iOS doesn't report how much of the file has been downloaded.
     ///
     /// - Parameters:
     ///   - url: The URL of the file to check
     ///   - timeout: Maximum time to wait for download (default 60 seconds)
-    ///   - onProgress: Optional progress callback, called with 0.0 when the
-    ///     download starts and 1.0 when it is done. iOS doesn't report the
-    ///     progress in between.
     ///   - cancellationToken: Checked between polls.
     /// - Throws: FileSaverError.iCloudDownloadFailed on timeout or failure,
     ///   FileSaverError.cancelled when cancelled
     static func waitForICloudDownload(
         at url: URL,
         timeout: TimeInterval = Constants.iCloudDownloadTimeout,
-        onProgress: ((Double) -> Void)? = nil,
         cancellationToken: CancellationToken? = nil
     ) throws {
         // Check if file is in iCloud
@@ -231,25 +219,13 @@ enum FileHelper {
             downloadStatus = values.ubiquitousItemDownloadingStatus
         }
         
-        // Not an iCloud file, return immediately
-        guard isUbiquitous else {
-            onProgress?(1.0)
-            return
-        }
-        
-        // Already downloaded
-        if downloadStatus == .current {
-            onProgress?(1.0)
-            return
-        }
+        // Not an iCloud file, or already downloaded
+        guard isUbiquitous, downloadStatus != .current else { return }
         
         // Not downloaded, or only an older version (`.downloaded`)
         try FileManager.default.startDownloadingUbiquitousItem(at: url)
         
-        // Report initial progress
-        onProgress?(0.0)
-        
-        // Poll for download progress
+        // Poll for the download status
         let startTime = Date()
         let pollInterval: TimeInterval = 0.2  // Poll every 200ms
         
@@ -263,7 +239,7 @@ enum FileHelper {
                     "Download timed out after \(Int(timeout)) seconds")
             }
             
-            // Get current download status and progress
+            // Get current download status
             if let values = try? url.resourceValues(forKeys: [
                 .ubiquitousItemDownloadingStatusKey,
                 .ubiquitousItemDownloadingErrorKey,
@@ -275,7 +251,6 @@ enum FileHelper {
                 
                 // Check if download is complete
                 if values.ubiquitousItemDownloadingStatus == .current {
-                    onProgress?(1.0)
                     break
                 }
             }
@@ -331,13 +306,13 @@ enum FileHelper {
     ///   - source: Source file handle (for reading)
     ///   - destination: Destination URL to write to
     ///   - totalSize: Total size of source file in bytes
-    ///   - onProgress: Progress callback (0.0 to 1.0)
+    ///   - onProgress: Called with the bytes copied after each chunk
     ///   - cancellationToken: Optional token to check for cancellation between chunks
     static func copyFileWithProgress(
         from source: FileHandle,
         to destination: URL,
         totalSize: Int64,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         cancellationToken: CancellationToken? = nil
     ) throws {
         let destHandle = try openForWriting(destination)
@@ -361,10 +336,7 @@ enum FileHelper {
             }
             bytesWritten += Int64(data.count)
 
-            if let onProgress = onProgress, totalSize > 0 {
-                let progress = Double(bytesWritten) / Double(totalSize)
-                onProgress(min(progress, 1.0))
-            }
+            onProgress?(bytesWritten, totalSize)
         }
     }
 }

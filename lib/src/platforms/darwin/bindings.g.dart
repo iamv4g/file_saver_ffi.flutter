@@ -52,7 +52,7 @@ class FileSaverFFI {
   ///
   /// Progress messages sent to native_port:
   /// - Started:    [0]
-  /// - Progress:   [1, progress]    (progress is 0.0 to 1.0)
+  /// - Progress:   [1, bytesWritten, totalBytes]  (totalBytes is null if unknown)
   /// - Error:      [2, errorCode, errorMessage]
   /// - Success:    [3, fileUri]
   /// - Cancelled:  [4]
@@ -132,7 +132,7 @@ class FileSaverFFI {
   ///
   /// Progress messages sent to native_port:
   /// - Started:    [0]
-  /// - Progress:   [1, progress]    (progress is 0.0 to 1.0)
+  /// - Progress:   [1, bytesWritten, totalBytes]  (totalBytes is null if unknown)
   /// - Error:      [2, errorCode, errorMessage]
   /// - Success:    [3, fileUri]
   /// - Cancelled:  [4]
@@ -206,7 +206,7 @@ class FileSaverFFI {
   ///
   /// Progress messages sent to native_port:
   /// - Started:    [0]
-  /// - Progress:   [1, progress]    (progress is 0.0 to 1.0)
+  /// - Progress:   [1, bytesWritten, totalBytes]  (totalBytes is null if unknown)
   /// - Error:      [2, errorCode, errorMessage]
   /// - Success:    [3, fileUri]
   /// - Cancelled:  [4]
@@ -288,7 +288,7 @@ class FileSaverFFI {
   ///
   /// Progress messages sent to native_port:
   /// - Started:    [0]
-  /// - Progress:   [1, progress]    (progress is 0.0 to 1.0)
+  /// - Progress:   [1, bytesWritten, totalBytes]  (totalBytes is null if unknown)
   /// - Error:      [2, errorCode, errorMessage]
   /// - Success:    [3, fileUri]
   /// - Cancelled:  [4]
@@ -356,7 +356,7 @@ class FileSaverFFI {
   ///
   /// Progress messages sent to native_port:
   /// - Started:    [0]
-  /// - Progress:   [1, progress]    (progress is 0.0 to 1.0)
+  /// - Progress:   [1, bytesWritten, totalBytes]  (totalBytes is null if unknown)
   /// - Error:      [2, errorCode, errorMessage]
   /// - Success:    [3, fileUri]
   /// - Cancelled:  [4]
@@ -418,7 +418,7 @@ class FileSaverFFI {
   ///
   /// Progress messages sent to native_port:
   /// - Started:    [0]
-  /// - Progress:   [1, progress]    (progress is 0.0 to 1.0)
+  /// - Progress:   [1, bytesWritten, totalBytes]  (totalBytes is null if unknown)
   /// - Error:      [2, errorCode, errorMessage]
   /// - Success:    [3, fileUri]
   /// - Cancelled:  [4]

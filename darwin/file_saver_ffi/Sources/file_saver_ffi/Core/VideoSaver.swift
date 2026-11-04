@@ -21,8 +21,7 @@ class VideoSaver: BaseFileSaver {
     func saveBytesToPhotos(
         fileData: Data,
         fileName: String,
-        albumName: String?,
-        onProgress: ((Double) -> Void)?
+        albumName: String?
     ) throws -> String {
         // Videos must be saved from a file URL (not directly from data). The UUID
         // keeps concurrent saves of the same name from overwriting each other's
@@ -42,8 +41,7 @@ class VideoSaver: BaseFileSaver {
     func saveFileToPhotos(
         sourceURL: URL,
         fileName: String,
-        albumName: String?,
-        onProgress: ((Double) -> Void)?
+        albumName: String?
     ) throws -> String {
         return try saveVideoToPhotosLibrary(
             sourceURL: sourceURL,
@@ -98,7 +96,7 @@ class VideoSaver: BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
@@ -122,7 +120,7 @@ class VideoSaver: BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: (String) -> Void,
         cancellationToken: CancellationToken?
     ) throws {
@@ -148,7 +146,7 @@ class VideoSaver: BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: @escaping (String) -> Void,
         onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,

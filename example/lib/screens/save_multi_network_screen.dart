@@ -60,6 +60,7 @@ class _SaveMultiNetworkScreenState extends State<SaveMultiNetworkScreen> {
     setState(() {
       item.status = _DownloadStatus.downloading;
       item.progress = 0;
+      item.update = null;
       item.savedUri = null;
       item.errorMessage = null;
     });
@@ -72,7 +73,10 @@ class _SaveMultiNetworkScreenState extends State<SaveMultiNetworkScreen> {
           case SaveProgressStarted():
             break;
           case SaveProgressUpdate(:final progress):
-            setState(() => item.progress = progress * 100);
+            setState(() {
+              item.progress = progress * 100;
+              item.update = event;
+            });
           case SaveProgressComplete(:final uri):
             setState(() {
               item.status = _DownloadStatus.completed;
@@ -194,6 +198,9 @@ class _DownloadItem {
   final NetworkDemoConfig config;
   _DownloadStatus status = _DownloadStatus.idle;
   double progress = 0;
+
+  /// The last update, with the bytes downloaded.
+  SaveProgressUpdate? update;
   StreamSubscription<SaveProgress>? subscription;
   Uri? savedUri;
   String? errorMessage;
@@ -213,6 +220,13 @@ class _DownloadItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDownloading = item.status == _DownloadStatus.downloading;
+    // A download without a known size shows its bytes on an indeterminate bar.
+    final unknownSizeBytes = switch (item.update) {
+      SaveProgressUpdate(:final bytesWritten, totalBytes: null)
+          when isDownloading =>
+        bytesWritten,
+      _ => null,
+    };
     final statusLabel = switch (item.status) {
       _DownloadStatus.idle => 'Idle',
       _DownloadStatus.downloading => 'Downloading',
@@ -239,11 +253,15 @@ class _DownloadItemTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   LinearProgressIndicator(
-                    value: (item.progress / 100).clamp(0.0, 1.0),
+                    value: unknownSizeBytes != null
+                        ? null
+                        : (item.progress / 100).clamp(0.0, 1.0),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    '$statusLabel • ${item.progress.toStringAsFixed(1)}%',
+                    unknownSizeBytes != null
+                        ? '$statusLabel • ${formatBytes(unknownSizeBytes)}'
+                        : '$statusLabel • ${item.progress.toStringAsFixed(1)}%',
                     style: Theme.of(context).textTheme.labelSmall,
                   ),
                   if (item.errorMessage != null) ...[

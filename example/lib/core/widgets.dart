@@ -120,23 +120,38 @@ class ProgressSection extends StatelessWidget {
   const ProgressSection({
     super.key,
     required this.progress,
+    this.update,
     this.label = 'Saving',
   });
 
+  /// From 0 to 100.
   final double progress;
+
+  /// The last update of a save stream, with the bytes written. Without a
+  /// `totalBytes` the size is unknown, and the bar is indeterminate.
+  final SaveProgressUpdate? update;
   final String label;
 
   @override
   Widget build(BuildContext context) {
+    final update = this.update;
+    final totalBytes = update?.totalBytes;
+    final text = switch (update) {
+      null => '$label: ${progress.toStringAsFixed(1)}%',
+      _ when totalBytes == null =>
+        '$label: ${formatBytes(update.bytesWritten)}',
+      _ =>
+        '$label: ${progress.toStringAsFixed(1)}% '
+            '(${formatBytes(update.bytesWritten)} of ${formatBytes(totalBytes)})',
+    };
     return Column(
       children: [
         const SizedBox(height: 16),
-        LinearProgressIndicator(value: progress / 100),
-        const SizedBox(height: 8),
-        Text(
-          '$label: ${progress.toStringAsFixed(1)}%',
-          textAlign: TextAlign.center,
+        LinearProgressIndicator(
+          value: update != null && totalBytes == null ? null : progress / 100,
         ),
+        const SizedBox(height: 8),
+        Text(text, textAlign: TextAlign.center),
       ],
     );
   }

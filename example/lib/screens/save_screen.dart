@@ -246,7 +246,8 @@ class _SaveScreenState extends State<SaveScreen> with DemoSaveScreenMixin {
               const SizedBox(height: 8),
               CancelButton(onPressed: _cancelSave),
             ],
-            if (isLoading && progress > 0) ProgressSection(progress: progress),
+            if (isLoading && (progress > 0 || progressUpdate != null))
+              ProgressSection(progress: progress, update: progressUpdate),
             if (mediaSize > 0) FileSizeCard(sizeInBytes: mediaSize),
             if (savedFilePath != null) ...[
               SuccessCard(savedPath: savedFilePath!),

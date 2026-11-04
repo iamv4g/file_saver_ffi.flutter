@@ -8,10 +8,13 @@ void main() {
       expect(parseNativeEvent(0), isA<SaveProgressStarted>());
     });
 
-    test('1 -> Update with progress', () {
-      final event = parseNativeEvent(1, progress: 0.25);
+    test('1 -> Update with the bytes written of the size', () {
+      final event = parseNativeEvent(1, bytesWritten: 25, totalBytes: 100);
       expect(event, isA<SaveProgressUpdate>());
-      expect((event as SaveProgressUpdate).progress, 0.25);
+      event as SaveProgressUpdate;
+      expect(event.bytesWritten, 25);
+      expect(event.totalBytes, 100);
+      expect(event.progress, 0.25);
     });
 
     test('2 -> Error mapped from error code', () {
@@ -74,15 +77,14 @@ void main() {
   group('parseDarwinMessage', () {
     test('decodes every protocol message', () {
       expect(parseDarwinMessage([0]), isA<SaveProgressStarted>());
-      expect(
-        (parseDarwinMessage([1, 0.5]) as SaveProgressUpdate).progress,
-        0.5,
-      );
-      expect(
-        (parseDarwinMessage([1, 1]) as SaveProgressUpdate).progress,
-        1.0,
-        reason: 'integer progress from native must be accepted',
-      );
+      final update = parseDarwinMessage([1, 512, 1024]) as SaveProgressUpdate;
+      expect(update.bytesWritten, 512);
+      expect(update.totalBytes, 1024);
+      expect(update.progress, 0.5);
+      final unknown = parseDarwinMessage([1, 512, null]) as SaveProgressUpdate;
+      expect(unknown.bytesWritten, 512);
+      expect(unknown.totalBytes, isNull);
+      expect(unknown.progress, 0.0);
       expect(
         (parseDarwinMessage([2, 'FILE_EXISTS', 'dup']) as SaveProgressError)
             .exception,

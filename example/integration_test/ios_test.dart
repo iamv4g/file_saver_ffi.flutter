@@ -299,6 +299,95 @@ void main() {
     expect(progress.length, lessThan(150), reason: '$progress');
   }, timeout: const Timeout(Duration(minutes: 2)));
 
+  group('a download reports the bytes written', () {
+    final body = _pattern(256 * 1024);
+    late HttpServer server;
+
+    setUp(() async {
+      server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        // Without a contentLength, HttpServer sends the body chunked.
+        if (request.uri.path == '/sized') {
+          request.response.contentLength = body.length;
+        }
+        for (var offset = 0; offset < body.length; offset += 64 * 1024) {
+          request.response.add(body.sublist(offset, offset + 64 * 1024));
+          await request.response.flush();
+          await Future<void>.delayed(const Duration(milliseconds: 150));
+        }
+        await request.response.close();
+      });
+    });
+
+    tearDown(() => server.close(force: true));
+
+    Future<List<SaveProgressUpdate>> download(String path) async {
+      final events = await FileSaver.save(
+        input: SaveInput.network(url: 'http://127.0.0.1:${server.port}$path'),
+        fileName: path.substring(1),
+        fileType: _text,
+        saveLocation: IosSaveLocation.documents,
+        subDir: _subDir,
+        conflictResolution: ConflictResolution.overwrite,
+      ).toList();
+      expect(events.last, isA<SaveProgressComplete>());
+      return events.whereType<SaveProgressUpdate>().toList();
+    }
+
+    testWidgets('of the Content-Length', (_) async {
+      final updates = await download('/sized');
+
+      expect(updates.length, greaterThan(1));
+      expect(updates.map((e) => e.totalBytes), everyElement(body.length));
+      expect(updates.last.bytesWritten, body.length);
+      expect(updates.last.progress, 1.0);
+    });
+
+    testWidgets('of an unknown size without Content-Length', (_) async {
+      final updates = await download('/chunked');
+
+      expect(updates.length, greaterThan(1));
+      expect(updates.map((e) => e.totalBytes), everyElement(isNull));
+      expect(updates.map((e) => e.progress), everyElement(0.0));
+      expect(updates.last.bytesWritten, body.length);
+    });
+  });
+
+  testWidgets('a file save reports the bytes copied of its size, and a skip '
+      'reports none', (_) async {
+    final bytes = _pattern(3 * 1024 * 1024 + 17);
+    final source = File(
+      '${(await getTemporaryDirectory()).path}/fsf_source.txt',
+    );
+    await source.writeAsBytes(bytes);
+    addTearDown(source.delete);
+
+    Future<List<SaveProgress>> save(ConflictResolution conflictResolution) =>
+        FileSaver.save(
+          input: SaveInput.file(source.path),
+          fileName: 'copied',
+          fileType: _text,
+          saveLocation: IosSaveLocation.documents,
+          subDir: _subDir,
+          conflictResolution: conflictResolution,
+        ).toList();
+
+    final updates = (await save(
+      ConflictResolution.overwrite,
+    )).whereType<SaveProgressUpdate>().toList();
+    expect(updates.map((e) => e.totalBytes), everyElement(bytes.length));
+    expect(updates.map((e) => e.bytesWritten), [
+      1024 * 1024,
+      2 * 1024 * 1024,
+      3 * 1024 * 1024,
+      bytes.length,
+    ]);
+
+    final skipped = await save(ConflictResolution.skip);
+    expect(skipped.whereType<SaveProgressUpdate>(), isEmpty);
+    expect(skipped.last, isA<SaveProgressComplete>());
+  });
+
   testWidgets('a location of another platform throws InvalidInputException', (
     _,
   ) async {
@@ -412,6 +501,21 @@ void main() {
         ),
         uri,
       );
+    });
+
+    testWidgets('a save reports one update with the whole size', (_) async {
+      final events = await FileSaver.save(
+        input: SaveInput.bytes(_png),
+        fileName: _photoName('bytes_progress'),
+        fileType: ImageType.png,
+        saveLocation: IosSaveLocation.photos,
+      ).toList();
+
+      final updates = events.whereType<SaveProgressUpdate>().toList();
+      expect(updates, hasLength(1));
+      expect(updates.single.bytesWritten, _png.length);
+      expect(updates.single.totalBytes, _png.length);
+      expect(events.last, isA<SaveProgressComplete>());
     });
 
     testWidgets('audio and other files are rejected instead of being saved to '

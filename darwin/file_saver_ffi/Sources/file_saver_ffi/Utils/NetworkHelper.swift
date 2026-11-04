@@ -3,7 +3,7 @@ import Foundation
 /// Delegate class for URLSession download progress tracking.
 private class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
     let destinationURL: URL
-    let onProgress: ((Double) -> Void)?
+    let onProgress: ProgressHandler?
     let cancellationToken: CancellationToken?
     let completion: (Result<(URL, Int64), FileSaverError>) -> Void
     
@@ -13,7 +13,7 @@ private class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
     
     init(
         destinationURL: URL,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         cancellationToken: CancellationToken?,
         completion: @escaping (Result<(URL, Int64), FileSaverError>) -> Void
     ) {
@@ -74,10 +74,8 @@ private class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
             return
         }
         
-        if let onProgress = onProgress, totalBytesExpectedToWrite > 0 {
-            let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
-            onProgress(min(progress, 1.0))
-        }
+        let size = NetworkHelper.downloadSize(totalBytesExpectedToWrite, of: downloadTask.response)
+        onProgress?(totalBytesWritten, size)
     }
     
     func urlSession(
@@ -128,7 +126,7 @@ enum NetworkHelper {
     ///   - headers: Optional HTTP headers as dictionary
     ///   - timeoutSeconds: Timeout in seconds
     ///   - destinationURL: The file URL to save the download to
-    ///   - onProgress: Optional download progress callback (0.0 to 1.0)
+    ///   - onProgress: Called with the bytes downloaded, and the size if known
     ///   - cancellationToken: Optional cancellation token
     ///   - onCancelHandlerReady: Callback to receive the cancel handler for direct task cancellation
     ///   - completion: Completion handler with Result containing total size or error
@@ -137,7 +135,7 @@ enum NetworkHelper {
         headers: [String: String]?,
         timeoutSeconds: Int,
         destinationURL: URL,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         cancellationToken: CancellationToken?,
         onCancelHandlerReady: @escaping (@escaping () -> Void) -> Void,
         completion: @escaping (Result<Int64, FileSaverError>) -> Void
@@ -169,7 +167,7 @@ enum NetworkHelper {
     ///   - headers: Optional HTTP headers as dictionary
     ///   - timeoutSeconds: Timeout in seconds
     ///   - fileName: Name for the temporary file (including extension)
-    ///   - onProgress: Optional download progress callback (0.0 to 1.0)
+    ///   - onProgress: Called with the bytes downloaded, and the size if known
     ///   - cancellationToken: Optional cancellation token
     ///   - onCancelHandlerReady: Callback to receive the cancel handler for direct task cancellation
     ///   - completion: Completion handler with Result containing (temporary file URL, total size) or error
@@ -178,7 +176,7 @@ enum NetworkHelper {
         headers: [String: String]?,
         timeoutSeconds: Int,
         fileName: String,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         cancellationToken: CancellationToken?,
         onCancelHandlerReady: @escaping (@escaping () -> Void) -> Void,
         completion: @escaping (Result<(URL, Int64), FileSaverError>) -> Void
@@ -214,6 +212,16 @@ enum NetworkHelper {
         return obj
     }
     
+    /// The size of the file being downloaded, from the `Content-Length` URLSession
+    /// expects: nil if unknown (`NSURLSessionTransferSizeUnknown`), or if the body
+    /// is compressed, because URLSession writes it decompressed.
+    static func downloadSize(_ expectedBytes: Int64, of response: URLResponse?) -> Int64? {
+        guard expectedBytes > 0 else { return nil }
+        let encoding = (response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Content-Encoding")
+        if let encoding = encoding, encoding.lowercased() != "identity" { return nil }
+        return expectedBytes
+    }
+
     // MARK: - Private
 
     private static func performDownload(
@@ -221,7 +229,7 @@ enum NetworkHelper {
         headers: [String: String]?,
         timeoutSeconds: Int,
         destinationURL: URL,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         cancellationToken: CancellationToken?,
         onCancelHandlerReady: @escaping (@escaping () -> Void) -> Void,
         completion: @escaping (Result<(URL, Int64), FileSaverError>) -> Void

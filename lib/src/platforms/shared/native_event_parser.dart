@@ -8,7 +8,7 @@ import '../../models/save_progress.dart';
 ///
 /// Event codes:
 /// - 0: Started
-/// - 1: Progress ([progress] is 0.0 to 1.0)
+/// - 1: Progress ([bytesWritten], and [totalBytes] if known)
 /// - 2: Error ([data] = error code, [message] = its detail, see
 ///   [FileSaverErrorCode]; [statusCode] = HTTP status of a network error)
 /// - 3: Success ([data] = file URI)
@@ -17,7 +17,8 @@ import '../../models/save_progress.dart';
 ///   sees it.
 SaveProgress parseNativeEvent(
   int eventType, {
-  double progress = 0,
+  int bytesWritten = 0,
+  int? totalBytes,
   String? data,
   String? message,
   int? statusCode,
@@ -27,7 +28,7 @@ SaveProgress parseNativeEvent(
       return const SaveProgressStarted();
 
     case 1: // Progress
-      return SaveProgressUpdate(progress);
+      return SaveProgressUpdate.bytes(bytesWritten, totalBytes);
 
     case 2: // Error
       return SaveProgressError(
@@ -55,7 +56,8 @@ SaveProgress parseNativeEvent(
 ///
 /// Protocol:
 /// - Started:    [0]
-/// - Progress:   [1, progress]    (progress is 0.0 to 1.0)
+/// - Progress:   [1, bytesWritten, totalBytes]   (totalBytes is null if
+///               unknown)
 /// - Error:      [2, errorCode, errorMessage, statusCode]   (statusCode is
 ///               an int for a network error with an HTTP status, else null)
 /// - Success:    [3, fileUri]
@@ -69,7 +71,11 @@ SaveProgress parseDarwinMessage(dynamic message) {
 
   final type = message[0] as int;
   return switch (type) {
-    1 => parseNativeEvent(type, progress: (message[1] as num).toDouble()),
+    1 => parseNativeEvent(
+      type,
+      bytesWritten: message[1] as int,
+      totalBytes: message[2] as int?,
+    ),
     2 => parseNativeEvent(
       type,
       data: message[1] as String,

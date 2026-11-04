@@ -12,7 +12,7 @@ extension BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: @escaping (String) -> Void,
         onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,
@@ -101,7 +101,7 @@ extension BaseFileSaver {
         saveLocation: SaveLocation,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: @escaping (String) -> Void,
         onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,
@@ -128,7 +128,6 @@ extension BaseFileSaver {
         }
 
         if case .existing(let existingURL) = target {
-            onProgress?(1.0)
             onSuccess(existingURL.absoluteString)
             onComplete()
             return
@@ -147,9 +146,9 @@ extension BaseFileSaver {
             headers: headers,
             timeoutSeconds: timeoutSeconds,
             destinationURL: target.writeURL,
-            onProgress: { [weak cancellationToken] progress in
+            onProgress: { [weak cancellationToken] bytesWritten, totalBytes in
                 if let token = cancellationToken, token.isCancelled { return }
-                onProgress?(progress)
+                onProgress?(bytesWritten, totalBytes)
             },
             cancellationToken: cancellationToken,
             onCancelHandlerReady: onCancelHandlerReady,
@@ -192,7 +191,7 @@ extension BaseFileSaver {
         baseFileName: String,
         subDir: String?,
         conflictResolution: ConflictResolution,
-        onProgress: ((Double) -> Void)?,
+        onProgress: ProgressHandler?,
         onSuccess: @escaping (String) -> Void,
         onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,
@@ -219,7 +218,6 @@ extension BaseFileSaver {
             outcome = result.outcome
 
             if case .existing(let existingUri) = outcome {
-                onProgress?(1.0)
                 onSuccess(existingUri)
                 onComplete()
                 return
@@ -241,16 +239,14 @@ extension BaseFileSaver {
         }
 
         // Download after permission granted
-        let downloadProgressHandler = progressMapper(from: onProgress, startProgress: 0.0, endProgress: 0.8)
-
         NetworkHelper.downloadToTempFile(
             urlString: urlString,
             headers: headers,
             timeoutSeconds: timeoutSeconds,
             fileName: fileName,
-            onProgress: { [weak cancellationToken] downloadProgress in
+            onProgress: { [weak cancellationToken] bytesWritten, totalBytes in
                 if let token = cancellationToken, token.isCancelled { return }
-                downloadProgressHandler?(downloadProgress)
+                onProgress?(bytesWritten, totalBytes)
             },
             cancellationToken: cancellationToken,
             onCancelHandlerReady: onCancelHandlerReady,
@@ -271,7 +267,6 @@ extension BaseFileSaver {
                         fileType: fileType,
                         baseFileName: baseFileName,
                         subDir: subDir,
-                        onProgress: onProgress,
                         onSuccess: onSuccess,
                         onError: onError,
                         onCancelled: onCancelled,
@@ -298,7 +293,6 @@ extension BaseFileSaver {
         fileType: FileType,
         baseFileName: String,
         subDir: String?,
-        onProgress: ((Double) -> Void)?,
         onSuccess: @escaping (String) -> Void,
         onError: @escaping (FileSaverError) -> Void,
         onCancelled: @escaping () -> Void,
@@ -316,21 +310,17 @@ extension BaseFileSaver {
             return
         }
 
-        onProgress?(0.8)
-
         let fileName = buildFileName(base: baseFileName, extension: fileType.ext)
 
         do {
             let uri = try saveFileToPhotos(
                 sourceURL: tmpURL,
                 fileName: fileName,
-                albumName: hasReadAccess ? subDir : nil,
-                onProgress: progressMapper(from: onProgress, startProgress: 0.8, endProgress: 1.0)
+                albumName: hasReadAccess ? subDir : nil
             )
 
             cleanup()
             PhotosHelper.deleteReplacedAsset(outcome)
-            onProgress?(1.0)
             onSuccess(uri)
             onComplete()
         } catch FileSaverError.cancelled {
