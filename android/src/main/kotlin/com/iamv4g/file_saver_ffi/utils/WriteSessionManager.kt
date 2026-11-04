@@ -15,7 +15,9 @@ import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
@@ -230,7 +232,10 @@ internal class WriteSessionManager(
             }
             try {
                 session.entry.outputStream.close()
-                val uri = session.entryFactory.commitEntry(context, session.entry)
+                // NonCancellable, as in SaveEntryFactory.finishSave: once the
+                // replaced file may be gone, a cancellation must not make the
+                // catch below delete the new one as well.
+                val uri = withContext(NonCancellable) { session.entryFactory.commitEntry(context, session.entry) }
                 callback.onEvent(3, 1.0, uri.toString(), null)
             } catch (e: Exception) {
                 session.entryFactory.deleteEntry(context, session.entry.uri)
@@ -268,13 +273,13 @@ internal class WriteSessionManager(
         context: Context,
         scopeJob: Job,
     ) {
-        val sessions = writeSessions.values.toList()
-        writeSessions.clear()
-        if (sessions.isEmpty()) return
-
         CoroutineScope(Dispatchers.IO + CoroutineExceptionHandler { _, e -> Log.e(TAG, "Failed to discard write sessions", e) })
             .launch {
                 scopeJob.join()
+                // Only now: a session still being opened when the scope was
+                // cancelled is registered by the time its coroutine ends.
+                val sessions = writeSessions.values.toList()
+                writeSessions.clear()
                 sessions.forEach { session ->
                     try {
                         session.entry.outputStream.close()

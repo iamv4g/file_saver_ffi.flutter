@@ -45,6 +45,10 @@ class FakeDocumentsProvider : DocumentsProvider() {
     val childQueries = AtomicInteger()
 
     private var nextId = 1
+
+    /** Runs before `openDocument` opens a document's file, e.g. to block like a slow provider. */
+    @Volatile
+    var beforeOpenDocument: () -> Unit = {}
     private val storageDir: File by lazy { Files.createTempDirectory("fake-saf").toFile() }
 
     /** The tree URI a directory picker would return for the root directory. */
@@ -134,6 +138,7 @@ class FakeDocumentsProvider : DocumentsProvider() {
         mode: String,
         signal: CancellationSignal?,
     ): ParcelFileDescriptor {
+        beforeOpenDocument()
         val file =
             synchronized(this) {
                 val doc = docs[documentId] ?: throw FileNotFoundException(documentId)

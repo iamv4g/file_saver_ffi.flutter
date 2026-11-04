@@ -13,6 +13,7 @@ import com.iamv4g.file_saver_ffi.models.ConflictResolution
 import com.iamv4g.file_saver_ffi.models.FileType
 import com.iamv4g.file_saver_ffi.models.SaveLocation
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -52,7 +53,10 @@ object StoreHelper {
         subDir: String? = null,
         conflictResolution: ConflictResolution,
     ): SaveEntry =
-        withContext(Dispatchers.IO) {
+        // NonCancellable: a cancel while the entry is being created must not
+        // drop it, or its row would never be deleted. The caller deletes it
+        // once it sees the cancel, at its next suspension point.
+        withContext(Dispatchers.IO + NonCancellable) {
             val isVersionQPlus = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
 
             if (isVersionQPlus) {

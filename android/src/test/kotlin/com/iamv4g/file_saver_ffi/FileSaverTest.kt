@@ -20,6 +20,8 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import java.io.File
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Drives [FileSaver] through the same entry points the Dart side calls over
@@ -122,6 +124,30 @@ class FileSaverTest : FileSaverTestBase() {
         assertEquals(listOf(1, 2, 3).map { it * Constants.CHUNK_SIZE.toDouble() }, progress.map { it.progress })
         assertEquals(setOf("${data.size}"), progress.map { it.data }.toSet())
         assertArrayEquals(data, mediaStore.rowNamed("photo.png")!!.file.readBytes())
+    }
+
+    @Test
+    fun `cancelling right after the row is inserted deletes it`() {
+        val opening = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        // Runs while the entry is being created: the row exists, but the save
+        // hasn't got the entry yet.
+        mediaStore.beforeOpenFile = {
+            opening.countDown()
+            release.await(5, TimeUnit.SECONDS)
+        }
+        val callback = RecordingCallback()
+
+        val operationId =
+            fileSaver.saveBytes(byteArrayOf(1), "photo", "png", "image/png", SaveLocation.PICTURES.ordinal, null, ConflictResolution.AUTO_RENAME.value, callback)
+        assertTrue(opening.await(5, TimeUnit.SECONDS))
+        assertEquals(1, mediaStore.rows.size)
+        fileSaver.cancelOperation(operationId)
+        release.countDown()
+
+        assertEquals("Events: ${callback.events}", 4, callback.awaitTerminal().type)
+        assertEquals("Rows: ${mediaStore.rows.values.map { it.displayName }}", 0, mediaStore.rows.size)
+        assertNoCrash()
     }
 
     @Test

@@ -14,6 +14,8 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Saves to a user-picked directory (Storage Access Framework), against
@@ -119,6 +121,30 @@ class SafSaveTest : FileSaverTestBase() {
         assertEquals("Events: $event", 3, event.type)
         assertEquals(listOf("note.txt"), documents.names())
         assertArrayEquals(byteArrayOf(5, 6), documents.contentOf("note.txt"))
+    }
+
+    @Test
+    fun `cancelling right after the document is created deletes it`() {
+        val opening = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        // Runs while the entry is being created: the document exists, but the
+        // save hasn't got the entry yet.
+        documents.beforeOpenDocument = {
+            opening.countDown()
+            release.await(5, TimeUnit.SECONDS)
+        }
+        val callback = RecordingCallback()
+
+        val operationId =
+            fileSaver.saveBytesAs(byteArrayOf(1), documents.treeUri.toString(), "note", "txt", "text/plain", ConflictResolution.AUTO_RENAME.value, callback)
+        assertTrue(opening.await(5, TimeUnit.SECONDS))
+        assertEquals(listOf("note.txt"), documents.names())
+        fileSaver.cancelOperation(operationId)
+        release.countDown()
+
+        assertEquals("Events: ${callback.events}", 4, callback.awaitTerminal().type)
+        assertEquals(emptyList<String>(), documents.names())
+        assertNoCrash()
     }
 
     private fun saveAs(
