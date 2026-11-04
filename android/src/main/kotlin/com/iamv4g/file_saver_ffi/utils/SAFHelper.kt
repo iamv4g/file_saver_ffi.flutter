@@ -9,6 +9,7 @@ import com.iamv4g.file_saver_ffi.exception.FileExistsException
 import com.iamv4g.file_saver_ffi.models.ConflictResolution
 import com.iamv4g.file_saver_ffi.models.FileType
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import java.io.IOException
 
@@ -38,7 +39,9 @@ object SAFHelper {
         baseFileName: String,
         conflictResolution: ConflictResolution,
     ): SaveEntry =
-        withContext(Dispatchers.IO) {
+        // NonCancellable, as in StoreHelper.createEntry: the caller deletes a
+        // created document once it sees the cancel.
+        withContext(Dispatchers.IO + NonCancellable) {
             val fileName = FileHelper.buildFileName(baseFileName, fileType.ext)
             val mimeType = fileType.mimeType
             val docDir =

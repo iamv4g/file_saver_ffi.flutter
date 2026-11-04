@@ -268,13 +268,13 @@ internal class WriteSessionManager(
         context: Context,
         scopeJob: Job,
     ) {
-        val sessions = writeSessions.values.toList()
-        writeSessions.clear()
-        if (sessions.isEmpty()) return
-
         CoroutineScope(Dispatchers.IO + CoroutineExceptionHandler { _, e -> Log.e(TAG, "Failed to discard write sessions", e) })
             .launch {
                 scopeJob.join()
+                // Only now: a session still being opened when the scope was
+                // cancelled is registered by the time its coroutine ends.
+                val sessions = writeSessions.values.toList()
+                writeSessions.clear()
                 sessions.forEach { session ->
                     try {
                         session.entry.outputStream.close()

@@ -74,6 +74,36 @@ class EngineDetachTest : FileSaverTestBase() {
     }
 
     @Test
+    fun `destroying an engine while a write session is opening deletes its row`() {
+        val engine = engine()
+        val opening = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        // Runs while the entry is being created: the row exists, but the
+        // session isn't registered yet.
+        mediaStore.beforeOpenFile = {
+            opening.countDown()
+            release.await(5, TimeUnit.SECONDS)
+        }
+        FileSaver(engine.id).openWriteSession(
+            "log",
+            "txt",
+            "text/plain",
+            SaveLocation.DOWNLOADS.ordinal,
+            null,
+            ConflictResolution.AUTO_RENAME.value,
+            RecordingCallback(),
+        )
+        assertTrue(opening.await(5, TimeUnit.SECONDS))
+        assertEquals(1, mediaStore.rows.size)
+
+        engine.destroy()
+        release.countDown()
+
+        awaitRows(0)
+        assertNoCrash()
+    }
+
+    @Test
     fun `destroying an engine leaves the saves of other engines running`() {
         val destroyed = engine()
         val running = engine()
