@@ -7,11 +7,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
-import com.iamv4g.file_saver_ffi.core.AudioSaver
-import com.iamv4g.file_saver_ffi.core.CustomFileSaver
-import com.iamv4g.file_saver_ffi.core.ImageSaver
-import com.iamv4g.file_saver_ffi.core.VideoSaver
-import com.iamv4g.file_saver_ffi.core.base.BaseFileSaver
+import com.iamv4g.file_saver_ffi.core.base.EntrySaver
 import com.iamv4g.file_saver_ffi.core.base.SaveEntryFactory
 import com.iamv4g.file_saver_ffi.exception.FileOpenException
 import com.iamv4g.file_saver_ffi.models.ConflictResolution
@@ -58,10 +54,7 @@ class FileSaver(
 ) {
     private val context: Context
         get() = appContext ?: error("FileSaver not initialized. FileSaverFfiPlugin must be attached first.")
-    private val imageSaver get() = ImageSaver(context)
-    private val videoSaver get() = VideoSaver(context)
-    private val audioSaver get() = AudioSaver(context)
-    private val customFileSaver get() = CustomFileSaver(context)
+    private val saver by lazy { EntrySaver(context) }
 
     /**
      * Runs every save and write-session coroutine. [SupervisorJob] keeps one
@@ -101,7 +94,7 @@ class FileSaver(
          * the Activity of any attached engine.
          */
         @Volatile
-        var storagePermissionHandler: StoragePermissionHandler? = null
+        internal var storagePermissionHandler: StoragePermissionHandler? = null
     }
 
     /**
@@ -192,7 +185,7 @@ class FileSaver(
     ): Long =
         launchWithCallback(
             callback,
-            mediaStoreFlow(extension, mimeType, saveLocationIndex, baseFileName, subDir, conflictMode) { saver, ef, cr ->
+            mediaStoreFlow(extension, mimeType, saveLocationIndex, baseFileName, subDir, conflictMode) { ef, cr ->
                 saver.saveBytes(fileData, ef, cr)
             },
         )
@@ -209,7 +202,7 @@ class FileSaver(
     ): Long =
         launchWithCallback(
             callback,
-            mediaStoreFlow(extension, mimeType, saveLocationIndex, baseFileName, subDir, conflictMode) { saver, ef, cr ->
+            mediaStoreFlow(extension, mimeType, saveLocationIndex, baseFileName, subDir, conflictMode) { ef, cr ->
                 saver.saveFile(filePath, ef, cr)
             },
         )
@@ -228,7 +221,7 @@ class FileSaver(
     ): Long =
         launchWithCallback(
             callback,
-            mediaStoreFlow(extension, mimeType, saveLocationIndex, baseFileName, subDir, conflictMode) { saver, ef, cr ->
+            mediaStoreFlow(extension, mimeType, saveLocationIndex, baseFileName, subDir, conflictMode) { ef, cr ->
                 saver.saveNetwork(url, headersJson, timeoutMs, ef, cr)
             },
         )
@@ -249,7 +242,7 @@ class FileSaver(
         launchWithCallback(
             callback,
             safFlow(directoryUri, baseFileName, extension, mimeType, conflictMode) { ef, cr ->
-                customFileSaver.saveBytes(fileData, ef, cr)
+                saver.saveBytes(fileData, ef, cr)
             },
         )
 
@@ -265,7 +258,7 @@ class FileSaver(
         launchWithCallback(
             callback,
             safFlow(directoryUri, baseFileName, extension, mimeType, conflictMode) { ef, cr ->
-                customFileSaver.saveFile(filePath, ef, cr)
+                saver.saveFile(filePath, ef, cr)
             },
         )
 
@@ -283,7 +276,7 @@ class FileSaver(
         launchWithCallback(
             callback,
             safFlow(directoryUri, baseFileName, extension, mimeType, conflictMode) { ef, cr ->
-                customFileSaver.saveNetwork(url, headersJson, timeoutMs, ef, cr)
+                saver.saveNetwork(url, headersJson, timeoutMs, ef, cr)
             },
         )
 
@@ -370,7 +363,6 @@ class FileSaver(
         saveLocationIndex: Int,
         subDir: String?,
         conflictMode: Int,
-        totalSize: Long,
         callback: ProgressCallback,
     ) = sessionManager.openWriteSession(
         context,
@@ -380,7 +372,6 @@ class FileSaver(
         saveLocationIndex,
         subDir,
         conflictMode,
-        totalSize,
         callback,
         ensureStoragePermission = { ensureStoragePermission() },
     )
@@ -391,7 +382,6 @@ class FileSaver(
         extension: String,
         mimeType: String,
         conflictMode: Int,
-        totalSize: Long,
         callback: ProgressCallback,
     ) = sessionManager.openWriteSessionAs(
         context,
@@ -400,7 +390,6 @@ class FileSaver(
         extension,
         mimeType,
         conflictMode,
-        totalSize,
         callback,
     )
 
@@ -439,7 +428,7 @@ class FileSaver(
         baseFileName: String,
         subDir: String?,
         conflictMode: Int,
-        save: (BaseFileSaver, SaveEntryFactory, ConflictResolution) -> Flow<SaveProgressEvent>,
+        save: (SaveEntryFactory, ConflictResolution) -> Flow<SaveProgressEvent>,
     ): Flow<SaveProgressEvent> =
         flow {
             ensureStoragePermission()
@@ -447,7 +436,6 @@ class FileSaver(
             val fileType = FileType(extension, mimeType)
             val conflictResolution = ConflictResolution.fromInt(conflictMode)
             val saveLocation = SaveLocation.fromInt(saveLocationIndex)
-            val saver = getSaverForFileType(fileType)
             val entryFactory =
                 SaveEntryFactory.MediaStore(
                     fileType = fileType,
@@ -456,7 +444,7 @@ class FileSaver(
                     subDir = subDir,
                 )
 
-            emitAll(save(saver, entryFactory, conflictResolution))
+            emitAll(save(entryFactory, conflictResolution))
         }.reportErrors().flowOn(Dispatchers.IO)
 
     /**
@@ -523,14 +511,6 @@ class FileSaver(
             throw SecurityException("Storage permission denied by user")
         }
     }
-
-    private fun getSaverForFileType(fileType: FileType): BaseFileSaver =
-        when {
-            fileType.isImage -> imageSaver
-            fileType.isVideo -> videoSaver
-            fileType.isAudio -> audioSaver
-            else -> customFileSaver
-        }
 
     private fun launchWithCallback(
         callback: ProgressCallback,

@@ -86,78 +86,6 @@ extension type FileSaver$Companion._(jni$_.JObject _$this)
   }
 }
 
-extension FileSaver$Companion$$Methods on FileSaver$Companion {
-  static final _id_get$storagePermissionHandler = FileSaver$Companion._class
-      .instanceMethodId(
-        r'getStoragePermissionHandler',
-        r'()Lcom/iamv4g/file_saver_ffi/utils/StoragePermissionHandler;',
-      );
-
-  static final _get$storagePermissionHandler =
-      jni$_.ProtectedJniExtensions.lookup<
-            jni$_.NativeFunction<
-              jni$_.JniResult Function(
-                jni$_.Pointer<jni$_.Void>,
-                jni$_.JMethodIDPtr,
-              )
-            >
-          >('globalEnv_CallObjectMethod')
-          .asFunction<
-            jni$_.JniResult Function(
-              jni$_.Pointer<jni$_.Void>,
-              jni$_.JMethodIDPtr,
-            )
-          >();
-
-  /// from: `public final com.iamv4g.file_saver_ffi.utils.StoragePermissionHandler getStoragePermissionHandler()`
-  /// The returned object must be released after use, by calling the [release] method.
-  StoragePermissionHandler? get storagePermissionHandler {
-    final _$$selfRef = reference;
-    return _get$storagePermissionHandler(
-      _$$selfRef.pointer,
-      _id_get$storagePermissionHandler.pointer,
-    ).object<StoragePermissionHandler?>();
-  }
-
-  static final _id_set$storagePermissionHandler = FileSaver$Companion._class
-      .instanceMethodId(
-        r'setStoragePermissionHandler',
-        r'(Lcom/iamv4g/file_saver_ffi/utils/StoragePermissionHandler;)V',
-      );
-
-  static final _set$storagePermissionHandler =
-      jni$_.ProtectedJniExtensions.lookup<
-            jni$_.NativeFunction<
-              jni$_.JThrowablePtr Function(
-                jni$_.Pointer<jni$_.Void>,
-                jni$_.JMethodIDPtr,
-                jni$_.VarArgs<(jni$_.Pointer<jni$_.Void>,)>,
-              )
-            >
-          >('globalEnv_CallVoidMethod')
-          .asFunction<
-            jni$_.JThrowablePtr Function(
-              jni$_.Pointer<jni$_.Void>,
-              jni$_.JMethodIDPtr,
-              jni$_.Pointer<jni$_.Void>,
-            )
-          >();
-
-  /// from: `public final void setStoragePermissionHandler(com.iamv4g.file_saver_ffi.utils.StoragePermissionHandler storagePermissionHandler)`
-  set storagePermissionHandler(
-    StoragePermissionHandler? storagePermissionHandler,
-  ) {
-    final _$$selfRef = reference;
-    final _$storagePermissionHandler =
-        storagePermissionHandler?.reference ?? jni$_.jNullReference;
-    _set$storagePermissionHandler(
-      _$$selfRef.pointer,
-      _id_set$storagePermissionHandler.pointer,
-      _$storagePermissionHandler.pointer,
-    ).check();
-  }
-}
-
 final class $FileSaver$Companion$Type$
     extends jni$_.JType<FileSaver$Companion> {
   @jni$_.internal
@@ -834,7 +762,7 @@ extension FileSaver$$Methods on FileSaver {
 
   static final _id_openWriteSession = FileSaver._class.instanceMethodId(
     r'openWriteSession',
-    r'(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;IJLcom/iamv4g/file_saver_ffi/models/ProgressCallback;)V',
+    r'(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/String;ILcom/iamv4g/file_saver_ffi/models/ProgressCallback;)V',
   );
 
   static final _openWriteSession =
@@ -851,7 +779,6 @@ extension FileSaver$$Methods on FileSaver {
                     jni$_.Int32,
                     jni$_.Pointer<jni$_.Void>,
                     jni$_.Int32,
-                    jni$_.Int64,
                     jni$_.Pointer<jni$_.Void>,
                   )
                 >,
@@ -868,12 +795,11 @@ extension FileSaver$$Methods on FileSaver {
               core$_.int,
               jni$_.Pointer<jni$_.Void>,
               core$_.int,
-              core$_.int,
               jni$_.Pointer<jni$_.Void>,
             )
           >();
 
-  /// from: `public fun openWriteSession(baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, saveLocationIndex: kotlin.Int, subDir: kotlin.String?, conflictMode: kotlin.Int, totalSize: kotlin.Long, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
+  /// from: `public fun openWriteSession(baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, saveLocationIndex: kotlin.Int, subDir: kotlin.String?, conflictMode: kotlin.Int, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
   void openWriteSession(
     jni$_.JString string,
     jni$_.JString string1,
@@ -881,7 +807,6 @@ extension FileSaver$$Methods on FileSaver {
     core$_.int i,
     jni$_.JString? string3,
     core$_.int i1,
-    core$_.int j,
     ProgressCallback progressCallback,
   ) {
     final _$$selfRef = reference;
@@ -899,14 +824,13 @@ extension FileSaver$$Methods on FileSaver {
       i,
       _$string3.pointer,
       i1,
-      j,
       _$progressCallback.pointer,
     ).check();
   }
 
   static final _id_openWriteSessionAs = FileSaver._class.instanceMethodId(
     r'openWriteSessionAs',
-    r'(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;IJLcom/iamv4g/file_saver_ffi/models/ProgressCallback;)V',
+    r'(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILcom/iamv4g/file_saver_ffi/models/ProgressCallback;)V',
   );
 
   static final _openWriteSessionAs =
@@ -922,7 +846,6 @@ extension FileSaver$$Methods on FileSaver {
                     jni$_.Pointer<jni$_.Void>,
                     jni$_.Pointer<jni$_.Void>,
                     jni$_.Int32,
-                    jni$_.Int64,
                     jni$_.Pointer<jni$_.Void>,
                   )
                 >,
@@ -938,19 +861,17 @@ extension FileSaver$$Methods on FileSaver {
               jni$_.Pointer<jni$_.Void>,
               jni$_.Pointer<jni$_.Void>,
               core$_.int,
-              core$_.int,
               jni$_.Pointer<jni$_.Void>,
             )
           >();
 
-  /// from: `public fun openWriteSessionAs(directoryUri: kotlin.String, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, conflictMode: kotlin.Int, totalSize: kotlin.Long, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
+  /// from: `public fun openWriteSessionAs(directoryUri: kotlin.String, baseFileName: kotlin.String, extension: kotlin.String, mimeType: kotlin.String, conflictMode: kotlin.Int, callback: com.iamv4g.file_saver_ffi.models.ProgressCallback): kotlin.Unit`
   void openWriteSessionAs(
     jni$_.JString string,
     jni$_.JString string1,
     jni$_.JString string2,
     jni$_.JString string3,
     core$_.int i,
-    core$_.int j,
     ProgressCallback progressCallback,
   ) {
     final _$$selfRef = reference;
@@ -967,7 +888,6 @@ extension FileSaver$$Methods on FileSaver {
       _$string2.pointer,
       _$string3.pointer,
       i,
-      j,
       _$progressCallback.pointer,
     ).check();
   }
@@ -1335,28 +1255,6 @@ final class $ProgressCallback$Type$ extends jni$_.JType<ProgressCallback> {
   @core$_.override
   String get signature =>
       r'Lcom/iamv4g/file_saver_ffi/models/ProgressCallback;';
-}
-
-/// from: `com.iamv4g.file_saver_ffi.utils.StoragePermissionHandler`
-///
-/// WARNING: StoragePermissionHandler is a stub. To generate bindings for this class, include
-/// com.iamv4g.file_saver_ffi.utils.StoragePermissionHandler in your config's classes list.
-///
-extension type StoragePermissionHandler._(jni$_.JObject _$this)
-    implements jni$_.JObject {
-  static const jni$_.JType<StoragePermissionHandler> type =
-      $StoragePermissionHandler$Type$();
-}
-
-final class $StoragePermissionHandler$Type$
-    extends jni$_.JType<StoragePermissionHandler> {
-  @jni$_.internal
-  const $StoragePermissionHandler$Type$();
-
-  @jni$_.internal
-  @core$_.override
-  String get signature =>
-      r'Lcom/iamv4g/file_saver_ffi/utils/StoragePermissionHandler;';
 }
 
 /// from: `kotlin.jvm.internal.DefaultConstructorMarker`

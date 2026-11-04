@@ -56,7 +56,6 @@ class FileSaverTest : FileSaverTestBase() {
             "png",
             "image/png",
             ConflictResolution.AUTO_RENAME.value,
-            -1,
             callback,
         )
 
