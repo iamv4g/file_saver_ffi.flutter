@@ -8,7 +8,7 @@ import 'dart:typed_data';
 import 'package:dir_picker/dir_picker.dart'
     show DirPickerPlatform, DirPickerWeb;
 import 'package:file_saver_ffi/file_saver_ffi.dart';
-import 'package:file_saver_ffi/src/platform_interface/file_saver_platform.dart';
+import 'package:file_saver_ffi/platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web/web.dart';
 

@@ -1,6 +1,6 @@
 import 'package:dir_picker/dir_picker.dart';
 import 'package:file_saver_ffi/file_saver_ffi.dart';
-import 'package:file_saver_ffi/src/platform_interface/file_saver_platform.dart';
+import 'package:file_saver_ffi/platform_interface.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// A platform that keeps the default directory methods of
