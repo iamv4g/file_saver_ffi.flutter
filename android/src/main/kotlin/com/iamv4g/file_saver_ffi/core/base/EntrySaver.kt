@@ -15,14 +15,15 @@ import java.io.FileNotFoundException
 import java.io.IOException
 
 /**
- * Shared save flows. Each one asks [SaveEntryFactory.createEntry] for the
+ * Saves bytes, a file or a download to the entry of a [SaveEntryFactory]
+ * (MediaStore or SAF), for files of every type. Each flow asks [SaveEntryFactory.createEntry] for the
  * target: [SaveEntry.Existing] (SKIP) completes immediately with the existing
  * file, and [SaveEntry.Created] is written and then committed by
  * [SaveEntryFactory.finishSave]. A failed or cancelled write deletes only the
  * new entry, never the file it would replace.
  */
-abstract class BaseFileSaver(
-    protected val context: Context,
+class EntrySaver(
+    private val context: Context,
 ) {
     /**
      * Saves byte array data with real-time progress streaming.
@@ -31,7 +32,7 @@ abstract class BaseFileSaver(
      * @param entryFactory Factory for creating save entry (MediaStore or SAF)
      * @param conflictResolution Strategy for handling existing files
      */
-    open fun saveBytes(
+    fun saveBytes(
         fileData: ByteArray,
         entryFactory: SaveEntryFactory,
         conflictResolution: ConflictResolution,
@@ -80,7 +81,7 @@ abstract class BaseFileSaver(
      * @param entryFactory Factory for creating save entry (MediaStore or SAF)
      * @param conflictResolution Strategy for handling existing files
      */
-    open fun saveFile(
+    fun saveFile(
         filePath: String,
         entryFactory: SaveEntryFactory,
         conflictResolution: ConflictResolution,
@@ -143,7 +144,7 @@ abstract class BaseFileSaver(
      * @param entryFactory Factory for creating save entry (MediaStore or SAF)
      * @param conflictResolution Strategy for handling existing files
      */
-    open fun saveNetwork(
+    fun saveNetwork(
         url: String,
         headersJson: String?,
         timeoutMs: Int,

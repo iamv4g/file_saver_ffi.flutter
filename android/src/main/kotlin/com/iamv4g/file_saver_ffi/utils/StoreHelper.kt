@@ -252,45 +252,4 @@ object StoreHelper {
         }
         return replaces
     }
-
-    /**
-     * Converts content URI to file path
-     *
-     * Note: On Android 10+, file path may not be accessible directly
-     * This is a best-effort attempt
-     *
-     * @param context Application context
-     * @param uri Content URI
-     * @return File path if available, empty string otherwise
-     */
-    suspend fun uriToFilePath(
-        context: Context,
-        uri: Uri,
-    ): String =
-        withContext(Dispatchers.IO) {
-            try {
-                // Try to get DATA column (file path)
-                context.contentResolver
-                    .query(
-                        uri,
-                        arrayOf(MediaStore.Images.Media.DATA),
-                        null,
-                        null,
-                        null,
-                    )?.use { cursor ->
-                        if (cursor.moveToFirst()) {
-                            val columnIndex = cursor.getColumnIndex(MediaStore.Images.Media.DATA)
-                            if (columnIndex >= 0) {
-                                return@withContext cursor.getString(columnIndex) ?: ""
-                            }
-                        }
-                    }
-            } catch (_: Exception) {
-                // Ignore errors, fall back to empty string
-            }
-
-            // Fallback: Return empty string
-            // On Android 10+, direct file paths are often not available
-            ""
-        }
 }

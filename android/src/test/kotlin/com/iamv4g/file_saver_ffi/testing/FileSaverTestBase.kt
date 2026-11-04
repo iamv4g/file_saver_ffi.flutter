@@ -77,7 +77,6 @@ abstract class FileSaverTestBase {
         location.ordinal,
         subDir,
         ConflictResolution.AUTO_RENAME.value,
-        -1,
         callback,
     )
 }

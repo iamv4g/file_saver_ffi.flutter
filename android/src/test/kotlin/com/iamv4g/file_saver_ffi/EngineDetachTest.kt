@@ -133,7 +133,7 @@ class EngineDetachTest : FileSaverTestBase() {
         name: String,
     ): Long {
         val open = RecordingCallback()
-        saver.openWriteSession(name, "txt", "text/plain", SaveLocation.DOWNLOADS.ordinal, null, ConflictResolution.AUTO_RENAME.value, -1, open)
+        saver.openWriteSession(name, "txt", "text/plain", SaveLocation.DOWNLOADS.ordinal, null, ConflictResolution.AUTO_RENAME.value, open)
         val opened = open.awaitTerminal()
         assertEquals("Events: ${open.events}", 3, opened.type)
         return opened.data!!.toLong()

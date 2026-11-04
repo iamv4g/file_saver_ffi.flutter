@@ -20,12 +20,6 @@ object Constants {
     const val ERROR_PERMISSION_DENIED = "PERMISSION_DENIED"
 
     /**
-     * File format not supported on this Android version
-     * Example: HEIC/HEIF on Android 9 and below
-     */
-    const val ERROR_UNSUPPORTED_FORMAT = "UNSUPPORTED_FORMAT"
-
-    /**
      * Insufficient storage space available
      */
     const val ERROR_STORAGE_FULL = "STORAGE_FULL"
@@ -59,11 +53,6 @@ object Constants {
      * Network download error (HTTP error, timeout, connection failed)
      */
     const val ERROR_NETWORK = "NETWORK_ERROR"
-
-    /**
-     * Operation was cancelled by user
-     */
-    const val ERROR_CANCELLED = "CANCELLED"
 
     /**
      * Chunk size for file writing: 1MB

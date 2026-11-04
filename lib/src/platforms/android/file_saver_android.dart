@@ -335,7 +335,6 @@ class FileSaverAndroid extends FileSaverPlatform {
         saveLocationIndex,
         subDir?.toJString()?..releasedBy(arena),
         conflictResolution.index,
-        totalSize ?? -1,
         callback,
       ),
     );
@@ -364,7 +363,6 @@ class FileSaverAndroid extends FileSaverPlatform {
         fileType.ext.toJString()..releasedBy(arena),
         fileType.mimeType.toJString()..releasedBy(arena),
         conflictResolution.index,
-        totalSize ?? -1,
         callback,
       ),
     );

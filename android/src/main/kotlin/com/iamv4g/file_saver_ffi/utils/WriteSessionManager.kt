@@ -35,7 +35,6 @@ internal class WriteSessionManager(
     private data class WriteSession(
         val entry: SaveEntry.Created,
         val entryFactory: SaveEntryFactory,
-        val totalSize: Long, // -1 if unknown
         val sessionScope: CoroutineScope, // limited(1) → guarantees chunk ordering
         var bytesWritten: Long = 0L,
         // The first write or flush error. Later calls report it again, and
@@ -65,7 +64,6 @@ internal class WriteSessionManager(
         saveLocationIndex: Int,
         subDir: String?,
         conflictMode: Int,
-        totalSize: Long,
         callback: ProgressCallback,
         ensureStoragePermission: suspend () -> Unit,
     ) {
@@ -83,7 +81,7 @@ internal class WriteSessionManager(
                         saveLocation = saveLocation,
                         subDir = subDir,
                     )
-                startSession(context, entryFactory, conflictResolution, totalSize, callback)
+                startSession(context, entryFactory, conflictResolution, callback)
             } catch (e: Exception) {
                 reportError(callback, e)
             }
@@ -103,7 +101,6 @@ internal class WriteSessionManager(
         extension: String,
         mimeType: String,
         conflictMode: Int,
-        totalSize: Long,
         callback: ProgressCallback,
     ) {
         scope.launch {
@@ -117,7 +114,7 @@ internal class WriteSessionManager(
                         fileType = fileType,
                         baseFileName = baseFileName,
                     )
-                startSession(context, entryFactory, conflictResolution, totalSize, callback)
+                startSession(context, entryFactory, conflictResolution, callback)
             } catch (e: Exception) {
                 reportError(callback, e)
             }
@@ -134,7 +131,6 @@ internal class WriteSessionManager(
         context: Context,
         entryFactory: SaveEntryFactory,
         conflictResolution: ConflictResolution,
-        totalSize: Long,
         callback: ProgressCallback,
     ) {
         when (val entry = entryFactory.createEntryDirect(context, conflictResolution)) {
@@ -145,7 +141,7 @@ internal class WriteSessionManager(
             is SaveEntry.Created -> {
                 val sessionId = sessionIdCounter.incrementAndGet()
                 val sessionScope = CoroutineScope(scope.coroutineContext + Dispatchers.IO.limitedParallelism(1))
-                writeSessions[sessionId] = WriteSession(entry, entryFactory, totalSize, sessionScope)
+                writeSessions[sessionId] = WriteSession(entry, entryFactory, sessionScope)
                 callback.onEvent(3, 0.0, sessionId.toString(), null)
             }
         }
