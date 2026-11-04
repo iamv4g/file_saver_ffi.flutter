@@ -116,6 +116,8 @@ await FileSaver.saveAsAsync(
 
 **Not supported:** Firefox, Safari — `saveAs()` falls back to browser-controlled download automatically.
 
+**Conflicts:** the File System Access API can't create a file only if it doesn't exist yet. The package keeps track of the names its own saves are writing, so saves of the same name in the same page at the same time each get their own file (`autoRename`) or fail (`fail`). A file that another tab or app creates in the directory at the same moment can still get the same name, and then one save replaces the other.
+
 ---
 
 ## 6. `saveAs()` Fallback Behavior

@@ -91,6 +91,67 @@ void main() {
       expect(await contentOf('log.txt'), 'original');
     });
 
+    test('two sessions of the same name opened at the same time get '
+        'different files, so cancelling one keeps the other', () async {
+      final [first, second] = await Future.wait([
+        openFsa(conflictResolution: ConflictResolution.autoRename),
+        openFsa(conflictResolution: ConflictResolution.autoRename),
+      ]);
+      first.add('first'.codeUnits);
+      await first.close();
+      second.add('second'.codeUnits);
+
+      await second.cancel();
+
+      final saved = Uri.decodeComponent((await first.result).path);
+      expect(saved, anyOf('log.txt', 'log (1).txt'));
+      expect(await contentOf(saved), 'first');
+      final other = saved == 'log.txt' ? 'log (1).txt' : 'log.txt';
+      expect(await contentOf(other), isNull);
+    });
+
+    test('a session of the same name opened through another handle of the '
+        'directory gets another file', () async {
+      final root = await window.navigator.storage.getDirectory().toDart;
+      final sameDirectory = await root
+          .getDirectoryHandle(directory.name)
+          .toDart;
+      final [first, second] = await Future.wait([
+        openFsa(conflictResolution: ConflictResolution.autoRename),
+        FileSaverWeb()
+            .openWriteAs(
+              fileName: 'log',
+              fileType: text,
+              saveLocation: WebPickedDirectoryLocation(sameDirectory),
+            )
+            .then((sink) => sink!),
+      ]);
+      await first.close();
+      await second.close();
+
+      expect(
+        {await first.result, await second.result},
+        {
+          Uri(scheme: 'web-directory', path: 'log.txt'),
+          Uri(scheme: 'web-directory', path: 'log (1).txt'),
+        },
+      );
+    });
+
+    test('a cancelled session frees its name for the next one', () async {
+      final cancelled = await openFsa(
+        conflictResolution: ConflictResolution.autoRename,
+      );
+      await cancelled.cancel();
+
+      final next = await openFsa(
+        conflictResolution: ConflictResolution.autoRename,
+      );
+      await next.close();
+
+      expect(await next.result, Uri(scheme: 'web-directory', path: 'log.txt'));
+    });
+
     test('close while addStream runs throws StateError instead of waiting '
         'forever', () async {
       final sink = await openFsa();

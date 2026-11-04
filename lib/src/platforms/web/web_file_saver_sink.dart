@@ -6,6 +6,7 @@ import 'package:web/web.dart';
 
 import '../../models/file_saver_sink.dart';
 import '../shared/session_file_saver_sink.dart';
+import 'web_file_entity.dart';
 import 'web_utils.dart';
 
 /// Web implementation of [FileSaverSink].
@@ -19,7 +20,9 @@ class WebFileSaverSink extends SessionFileSaverSink {
   /// Creates an FSA-backed sink that writes [name] in [directory] through
   /// [writable].
   ///
-  /// Set [created] when [name] didn't exist before, so cancelling deletes it.
+  /// Set [created] when [name] didn't exist before and was claimed with
+  /// [WebFileEntity.claim], so cancelling deletes it. The sink releases the
+  /// claim once it is closed or cancelled.
   /// An existing file keeps its content until [close], because the browser
   /// writes to a swap file.
   WebFileSaverSink.fsa({
@@ -48,6 +51,7 @@ class _FsaWriteSession implements WriteSession {
   final FileSystemWritableFileStream _writable;
   final bool _created;
   var _bytesWritten = 0;
+  var _released = false;
 
   @override
   Future<int> write(List<int> data) async {
@@ -74,6 +78,7 @@ class _FsaWriteSession implements WriteSession {
       await cancel();
       throw mapFsaError(e);
     }
+    await _release();
     return Uri(scheme: 'web-directory', path: _name);
   }
 
@@ -87,6 +92,15 @@ class _FsaWriteSession implements WriteSession {
         await _directory.removeEntry(_name).toDart;
       } catch (_) {}
     }
+    await _release();
+  }
+
+  /// Releases the claim on a new file, once. Releasing it again could drop
+  /// the claim of a later save of the same name.
+  Future<void> _release() async {
+    if (!_created || _released) return;
+    _released = true;
+    await WebFileEntity(_directory).release(_name);
   }
 }
 

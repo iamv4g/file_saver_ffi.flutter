@@ -372,6 +372,33 @@ void main() {
     });
   });
 
+  group('saves of the same name into a picked directory at the same time', () {
+    Future<SaveProgress> saveBytes(List<int> content) => saver
+        .saveAs(
+          input: SaveInput.bytes(Uint8List.fromList(content)),
+          fileType: bin,
+          fileName: 'data',
+          saveLocation: WebPickedDirectoryLocation(directory),
+        )
+        .last;
+
+    /// The name in the URI of a [SaveProgressComplete].
+    String savedName(SaveProgress event) =>
+        Uri.decodeComponent((event as SaveProgressComplete).uri.path);
+
+    test('each get their own file', () async {
+      final results = await Future.wait([
+        saveBytes([1]),
+        saveBytes([2]),
+      ]);
+
+      final names = results.map(savedName).toList();
+      expect(names.toSet(), {'data.bin', 'data (1).bin'});
+      expect(await contentOf(names[0]), [1]);
+      expect(await contentOf(names[1]), [2]);
+    });
+  });
+
   group('saveNetwork with headers (browser download)', () {
     Stream<SaveProgress> download() => saver.saveNetwork(
       url: 'https://example.com/data.bin',
