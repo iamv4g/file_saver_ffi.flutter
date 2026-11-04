@@ -6,53 +6,8 @@ import XCTest
 /// Foundation has a `ProgressReporter` too (macOS 26).
 private typealias ProgressReporter = file_saver_ffi.ProgressReporter
 
-/// A message posted to the Dart port, decoded from its `Dart_CObject` array.
-private enum Value: Equatable {
-    case null
-    case int(Int64)
-    case string(String)
-}
-
-/// Records the messages a `ProgressReporter` posts, standing in for
-/// `FileSaver_PostCObject_DL`. Thread-safe.
-private final class Port {
-    private let lock = NSLock()
-    private var _messages: [[Value]] = []
-
-    var messages: [[Value]] {
-        lock.lock()
-        defer { lock.unlock() }
-        return _messages
-    }
-
-    /// The byte counts of the progress messages posted, in order.
-    var progress: [Int64] {
-        messages.compactMap { message in
-            guard message.first == .int(1), case .int(let bytes) = message[1] else { return nil }
-            return bytes
-        }
-    }
-
-    func post(_ port: Int64, _ message: UnsafeMutablePointer<Dart_CObject>) -> Bool {
-        let array = message.pointee.value.as_array
-        let values = (0..<array.length).map { Self.decode(array.values[$0]!.pointee) }
-        lock.lock()
-        _messages.append(values)
-        lock.unlock()
-        return true
-    }
-
-    private static func decode(_ object: Dart_CObject) -> Value {
-        switch object.type {
-        case Dart_CObject_kInt64: return .int(object.value.as_int64)
-        case Dart_CObject_kString: return .string(String(cString: object.value.as_string))
-        default: return .null
-        }
-    }
-}
-
 final class ProgressReporterTests: XCTestCase {
-    private let port = Port()
+    private let port = RecordingPort()
     private var time: TimeInterval = 0
 
     private func reporter() -> ProgressReporter {
@@ -156,7 +111,7 @@ final class ProgressReporterTests: XCTestCase {
 
     func testConcurrentTerminalEventsSendOnlyOne() {
         for _ in 0..<50 {
-            let port = Port()
+            let port = RecordingPort()
             let reporter = ProgressReporter(port: 1, post: port.post)
 
             DispatchQueue.concurrentPerform(iterations: 16) { i in
