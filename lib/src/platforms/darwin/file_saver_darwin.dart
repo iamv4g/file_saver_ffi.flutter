@@ -358,7 +358,6 @@ class FileSaverDarwin extends FileSaverPlatform {
         saveLocationIndex,
         subDirCStr?.cast() ?? nullptr,
         conflictResolution.index,
-        totalSize ?? -1,
         receivePort.sendPort.nativePort,
       );
     });
@@ -411,7 +410,6 @@ class FileSaverDarwin extends FileSaverPlatform {
         fileNameCStr.cast(),
         extCStr.cast(),
         conflictResolution.index,
-        totalSize ?? -1,
         receivePort.sendPort.nativePort,
       );
     });

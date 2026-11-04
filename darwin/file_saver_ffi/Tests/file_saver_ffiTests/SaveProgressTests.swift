@@ -53,7 +53,7 @@ final class SaveProgressTests: XCTestCase {
         let data = Data(count: 2 * Constants.chunkSize + 1)
         let size = Int64(data.count)
 
-        try CustomFileSaver().saveBytesAs(
+        try SaveEngine().saveBytesAs(
             fileData: data,
             directoryURL: directory,
             fileName: "a.bin",
@@ -73,7 +73,7 @@ final class SaveProgressTests: XCTestCase {
         try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
         let size = Int64(2 * Constants.chunkSize + 1)
 
-        try CustomFileSaver().saveFileAs(
+        try SaveEngine().saveFileAs(
             filePath: source.path,
             directoryURL: target,
             fileName: "copy.bin",
@@ -90,7 +90,7 @@ final class SaveProgressTests: XCTestCase {
         FileManager.default.createFile(atPath: directory.appendingPathComponent("a.txt").path, contents: Data("x".utf8))
         var saved: String?
 
-        try CustomFileSaver().saveBytesAs(
+        try SaveEngine().saveBytesAs(
             fileData: Data("hello".utf8),
             directoryURL: directory,
             fileName: "a.txt",
@@ -118,7 +118,7 @@ final class SaveProgressTests: XCTestCase {
         var saved: String?
         var failure: FileSaverError?
 
-        CustomFileSaver().saveNetworkAs(
+        SaveEngine().saveNetworkAs(
             urlString: server.url(path),
             headers: nil,
             timeoutSeconds: 10,

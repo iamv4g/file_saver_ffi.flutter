@@ -85,6 +85,70 @@ class PhotosHelper {
         return album
     }
 
+    /// What `createAsset` adds to the library.
+    enum AssetSource {
+        case data(Data)
+        case file(URL)
+    }
+
+    /// Whether the Photos Library takes files of `fileType`: only images and
+    /// videos.
+    static func supports(_ fileType: FileType) -> Bool {
+        fileType.category == .image || fileType.category == .video
+    }
+
+    /// Adds an image or a video to the Photos Library, to `albumName` if it is
+    /// given, and returns the `ph://` URI of the new asset.
+    static func createAsset(
+        from source: AssetSource,
+        fileType: FileType,
+        fileName: String,
+        albumName: String?
+    ) throws -> String {
+        let isVideo = fileType.category == .video
+        // Photos takes a video only from a file. The UUID keeps concurrent saves
+        // of the same name from overwriting each other's temp file; Photos uses
+        // `originalFilename`, not this name.
+        if isVideo, case .data(let data) = source {
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("\(UUID().uuidString)-\(fileName)")
+            try data.write(to: tempURL)
+            defer { try? FileManager.default.removeItem(at: tempURL) }
+            return try createAsset(from: .file(tempURL), fileType: fileType, fileName: fileName, albumName: albumName)
+        }
+
+        let album = try albumName.map { try findOrCreateAlbum(name: $0) }
+        let kind = isVideo ? "video" : "image"
+        var assetId: String?
+
+        do {
+            try PHPhotoLibrary.shared().performChangesAndWait {
+                let request = PHAssetCreationRequest.forAsset()
+                let options = PHAssetResourceCreationOptions()
+                options.originalFilename = fileName
+                let type: PHAssetResourceType = isVideo ? .video : .photo
+                switch source {
+                case .data(let data): request.addResource(with: type, data: data, options: options)
+                case .file(let url): request.addResource(with: type, fileURL: url, options: options)
+                }
+
+                if let album = album, let placeholder = request.placeholderForCreatedAsset {
+                    PHAssetCollectionChangeRequest(for: album)?.addAssets([placeholder] as NSArray)
+                }
+
+                assetId = request.placeholderForCreatedAsset?.localIdentifier
+            }
+        } catch {
+            throw FileSaverError.fileIO("Failed to save \(kind): \(error.localizedDescription)")
+        }
+
+        guard let assetId = assetId else {
+            throw FileSaverError.fileIO("Failed to save \(kind) to Photos library")
+        }
+
+        return "ph://\(assetId)"
+    }
+
     /// Handle conflict resolution for Photos Library.
     ///
     /// Nothing is deleted here. For `overwrite` the outcome carries the existing

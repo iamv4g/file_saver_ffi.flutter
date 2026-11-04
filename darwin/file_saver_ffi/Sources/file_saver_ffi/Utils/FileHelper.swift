@@ -11,10 +11,6 @@ enum FileHelper {
         return cleanExt.isEmpty ? fileName : "\(fileName).\(cleanExt)"
     }
 
-    static func writeFile(data: Data, to url: URL) throws {
-        try writeFileWithProgress(data: data, to: url, onProgress: nil, cancellationToken: nil)
-    }
-
     /// Writes data to file with progress reporting and cancellation support
     ///
     /// - Parameters:

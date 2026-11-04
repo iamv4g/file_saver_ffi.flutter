@@ -1,18 +1,8 @@
 import Foundation
 
 struct FileType {
-
-    var ext: String {
-        didSet {
-            ext = ext.lowercased()
-        }
-    }
-
-    var mimeType: String {
-        didSet {
-            mimeType = mimeType.lowercased()
-        }
-    }
+    let ext: String
+    let mimeType: String
 
     init(ext: String, mimeType: String) {
         self.ext = ext.lowercased()
@@ -37,9 +27,5 @@ struct FileType {
             return .custom
         }
     }
-
-    var isImage: Bool { category == .image }
-    var isVideo: Bool { category == .video }
-    var isAudio: Bool { category == .audio }
 }
 

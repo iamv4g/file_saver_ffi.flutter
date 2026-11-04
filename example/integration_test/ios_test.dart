@@ -25,6 +25,38 @@ final _png = base64Decode(
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
 );
 
+/// A 16×16 H.264 MP4 of one frame, small enough to save to Photos quickly.
+final _mp4 = base64Decode(
+  'AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAMObW9vdgAAAGxtdmhkAAAAAAAA'
+  'AAAAAAAAAAAD6AAAAGQAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAA'
+  'AAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAjl0cmFrAAAAXHRr'
+  'aGQAAAADAAAAAAAAAAAAAAABAAAAAAAAAGQAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAA'
+  'AAAAAAABAAAAAAAAAAAAAAAAAABAAAAAABAAAAAQAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAA'
+  'AAEAAABkAAAAAAABAAAAAAGxbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAAAoAAAABABVxAAA'
+  'AAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABXG1pbmYA'
+  'AAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAA'
+  'AQAAARxzdGJsAAAAuHN0c2QAAAAAAAAAAQAAAKhhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAA'
+  'AAAAABAAEABIAAAASAAAAAAAAAABFExhdmM2My4xLjEwMCBsaWJ4MjY0AAAAAAAAAAAAAAAA'
+  'GP//AAAALmF2Y0MBQsAK/+EAFmdCwArZHsBEAAADAAQAAAMAUDxImSABAAVoy4PLIAAAABBw'
+  'YXNwAAAAAQAAAAEAAAAUYnRydAAAAAAAAMvAAAAAAAAAABhzdHRzAAAAAAAAAAEAAAABAAAE'
+  'AAAAABxzdHNjAAAAAAAAAAEAAAABAAAAAQAAAAEAAAAUc3RzegAAAAAAAAKMAAAAAQAAABRz'
+  'dGNvAAAAAAAAAAEAAAM+AAAAYXVkdGEAAABZbWV0YQAAAAAAAAAhaGRscgAAAAAAAAAAbWRp'
+  'cmFwcGwAAAAAAAAAAAAAAAAsaWxzdAAAACSpdG9vAAAAHGRhdGEAAAABAAAAAExhdmY2My4x'
+  'LjEwMAAAAAhmcmVlAAAClG1kYXQAAAJxBgX//23cRem95tlIt5Ys2CDZI+7veDI2NCAtIGNv'
+  'cmUgMTY1IHIzMjIyIGIzNTYwNWEgLSBILjI2NC9NUEVHLTQgQVZDIGNvZGVjIC0gQ29weWxl'
+  'ZnQgMjAwMy0yMDI1IC0gaHR0cDovL3d3dy52aWRlb2xhbi5vcmcveDI2NC5odG1sIC0gb3B0'
+  'aW9uczogY2FiYWM9MCByZWY9MyBkZWJsb2NrPTE6MDowIGFuYWx5c2U9MHgxOjB4MTExIG1l'
+  'PWhleCBzdWJtZT03IHBzeT0xIHBzeV9yZD0xLjAwOjAuMDAgbWl4ZWRfcmVmPTEgbWVfcmFu'
+  'Z2U9MTYgY2hyb21hX21lPTEgdHJlbGxpcz0xIDh4OGRjdD0wIGNxbT0wIGRlYWR6b25lPTIx'
+  'LDExIGZhc3RfcHNraXA9MSBjaHJvbWFfcXBfb2Zmc2V0PS0yIHRocmVhZHM9MSBsb29rYWhl'
+  'YWRfdGhyZWFkcz0xIHNsaWNlZF90aHJlYWRzPTAgbnI9MCBkZWNpbWF0ZT0xIGludGVybGFj'
+  'ZWQ9MCBibHVyYXlfY29tcGF0PTAgY29uc3RyYWluZWRfaW50cmE9MCBiZnJhbWVzPTAgd2Vp'
+  'Z2h0cD0wIGtleWludD0yNTAga2V5aW50X21pbj0xMCBzY2VuZWN1dD00MCBpbnRyYV9yZWZy'
+  'ZXNoPTAgcmNfbG9va2FoZWFkPTQwIHJjPWNyZiBtYnRyZWU9MSBjcmY9MjMuMCBxY29tcD0w'
+  'LjYwIHFwbWluPTAgcXBtYXg9NjkgcXBzdGVwPTQgaXBfcmF0aW89MS40MCBhcT0xOjEuMDAA'
+  'gAAAABNliIQN8RigACWfHAAEVGOAAKFG',
+);
+
 /// A Photos asset name that is unique to this run.
 String _photoName(String name) => 'fsf_${_subDir.split('/').last}_$name';
 
@@ -516,6 +548,56 @@ void main() {
       expect(updates.single.bytesWritten, _png.length);
       expect(updates.single.totalBytes, _png.length);
       expect(events.last, isA<SaveProgressComplete>());
+    });
+
+    testWidgets('images and videos are added from bytes, a file, a write '
+        'session and a download', (_) async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      final media = {'/png': _png, '/mp4': _mp4};
+      server.listen((request) {
+        request.response
+          ..add(media[request.uri.path]!)
+          ..close();
+      });
+      final dir = await getTemporaryDirectory();
+
+      for (final (type, bytes) in [
+        (ImageType.png as FileType, _png),
+        (VideoType.mp4 as FileType, _mp4),
+      ]) {
+        final name = _photoName('source_${type.ext}');
+        final file = File('${dir.path}/$name.${type.ext}')
+          ..writeAsBytesSync(bytes);
+        Future<Uri> save(SaveInput input) => FileSaver.saveAsync(
+          input: input,
+          fileName: name,
+          fileType: type,
+          saveLocation: IosSaveLocation.photos,
+        );
+
+        final sink = (await FileSaver.openWrite(
+          fileName: name,
+          fileType: type,
+          saveLocation: IosSaveLocation.photos,
+        ))!;
+        sink.add(bytes);
+        final uris = [
+          await save(SaveInput.bytes(bytes)),
+          await save(SaveInput.file(file.path)),
+          await sink.close(),
+          await save(
+            SaveInput.network(
+              url: 'http://127.0.0.1:${server.port}/${type.ext}',
+            ),
+          ),
+        ];
+
+        for (final uri in uris) {
+          expect(uri.scheme, 'ph', reason: '$type');
+          expect(await FileSaver.canOpenFile(uri), isTrue, reason: '$uri');
+        }
+      }
     });
 
     testWidgets('audio and other files are rejected instead of being saved to '
