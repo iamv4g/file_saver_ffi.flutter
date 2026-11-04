@@ -52,8 +52,10 @@ private class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
         }
 
         do {
-            try? FileManager.default.removeItem(at: destinationURL)
-            try FileManager.default.moveItem(at: location, to: destinationURL)
+            NetworkHelper.beforeDownloadEnds?()
+            // The destination is the file the save claimed. Replacing it in one
+            // step keeps the name taken, so no other save can claim it meanwhile.
+            try FileHelper.moveReplacing(location, onto: destinationURL)
 
             let totalSize = downloadTask.countOfBytesReceived
             complete(with: .success((destinationURL, totalSize)))
@@ -88,9 +90,12 @@ private class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
         }
         
         guard let error = error else { return }
-        
-        try? FileManager.default.removeItem(at: destinationURL)
-        
+
+        // The destination is left to the save: it discards the file it claimed.
+        // Removing it here would free the name before that, for another save to
+        // claim and this save's discard to delete.
+        NetworkHelper.beforeDownloadEnds?()
+
         let statusCode = httpStatusCode
         
         if let urlError = error as? URLError {
@@ -111,7 +116,10 @@ private class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
 }
 
 enum NetworkHelper {
-    
+    /// Test seam: runs once a download has finished or failed, right before
+    /// the file is moved into place or the failure is reported.
+    static var beforeDownloadEnds: (() -> Void)?
+
     /// Downloads a file from URL directly to the specified destination path.
     ///
     /// Used for iOS Documents saves where we can write directly to the final location.
@@ -176,8 +184,8 @@ enum NetworkHelper {
         onCancelHandlerReady: @escaping (@escaping () -> Void) -> Void,
         completion: @escaping (Result<(URL, Int64), FileSaverError>) -> Void
     ) {
-        // Unique per download so concurrent saves of the same name don't clobber
-        // each other (the delegate removes an existing destination before moving).
+        // Unique per download, so concurrent saves of the same name don't
+        // replace each other's file.
         let tmpDir = FileManager.default.temporaryDirectory
         let tmpURL = tmpDir.appendingPathComponent("\(UUID().uuidString)-\(fileName)")
 

@@ -7,6 +7,7 @@ import Network
 /// - `/sized`: `payload` with Content-Length
 /// - `/chunked`: `payload` in chunks of 64 KiB, without Content-Length
 /// - `/gzip`: `payload` gzip-encoded, with the Content-Length of the encoded body
+/// - `/truncated`: the first half of `payload`, with the Content-Length of all of it
 /// - anything else: 404
 final class TestHTTPServer {
     let payload: Data
@@ -78,6 +79,9 @@ final class TestHTTPServer {
         case "/gzip":
             body = Self.gzip(payload)
             headers = "Content-Encoding: gzip\r\nContent-Length: \(body.count)\r\n"
+        case "/truncated":
+            headers = "Content-Length: \(payload.count)\r\n"
+            body = payload.prefix(payload.count / 2)
         default:
             status = "404 Not Found"
             headers = "Content-Length: 0\r\n"
