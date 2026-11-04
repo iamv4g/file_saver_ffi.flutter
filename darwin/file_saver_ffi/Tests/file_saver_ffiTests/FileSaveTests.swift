@@ -104,6 +104,74 @@ final class FileSaveTests: XCTestCase {
         )
     }
 
+    // MARK: - Downloads
+
+    /// Downloads `path` of `server` into `directory` as `download.bin`.
+    private func download(_ path: String, from server: TestHTTPServer) throws -> Result<URL, FileSaverError> {
+        let done = expectation(description: "download")
+        var result: Result<URL, FileSaverError>?
+        SaveEngine().saveNetworkAs(
+            urlString: server.url(path),
+            headers: nil,
+            timeoutSeconds: 10,
+            directoryURL: directory,
+            fileName: "download.bin",
+            conflictResolution: .autoRename,
+            onProgress: nil,
+            onSuccess: { result = .success(URL(string: $0)!) },
+            onError: { result = .failure($0) },
+            onCancelled: { XCTFail("Cancelled") },
+            onCancelHandlerReady: { _ in },
+            onComplete: { done.fulfill() },
+            cancellationToken: nil
+        )
+        wait(for: [done], timeout: 10)
+        return try XCTUnwrap(result)
+    }
+
+    /// Makes another save of `download.bin` (with `autoRename`) run when a
+    /// download ends, and returns where it saved.
+    private func saveTheSameNameWhenADownloadEnds() -> () -> URL? {
+        var saved: URL?
+        NetworkHelper.beforeDownloadEnds = { [directory] in
+            try? SaveEngine().saveBytesAs(
+                fileData: Data("other".utf8),
+                directoryURL: directory!,
+                fileName: "download.bin",
+                conflictResolution: .autoRename,
+                onProgress: nil,
+                onSuccess: { saved = URL(string: $0) },
+                cancellationToken: nil
+            )
+        }
+        addTeardownBlock { NetworkHelper.beforeDownloadEnds = nil }
+        return { saved }
+    }
+
+    func testASaveOfTheSameNameWhileADownloadIsMovedIntoPlaceKeepsBothFiles() throws {
+        let server = try TestHTTPServer(payload: Data("downloaded".utf8))
+        defer { server.close() }
+        let other = saveTheSameNameWhenADownloadEnds()
+
+        let downloaded = try download("/sized", from: server).get()
+
+        XCTAssertEqual(try Data(contentsOf: downloaded), server.payload)
+        XCTAssertEqual(try String(contentsOf: XCTUnwrap(other())), "other")
+        XCTAssertEqual(try entries(), ["download (1).bin", "download.bin"])
+    }
+
+    func testASaveOfTheSameNameWhileADownloadFailsIsKept() throws {
+        let server = try TestHTTPServer(payload: Data("downloaded".utf8))
+        defer { server.close() }
+        let other = saveTheSameNameWhenADownloadEnds()
+
+        let result = try download("/truncated", from: server)
+
+        guard case .failure(.networkError) = result else { return XCTFail("\(result)") }
+        XCTAssertEqual(try String(contentsOf: XCTUnwrap(other())), "other")
+        XCTAssertEqual(try entries(), ["download (1).bin"])
+    }
+
     // MARK: - saveAs
 
     /// A directory URL without a security scope (startAccessing… returns false),

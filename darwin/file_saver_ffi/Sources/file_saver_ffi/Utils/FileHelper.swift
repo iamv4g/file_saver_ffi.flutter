@@ -74,6 +74,23 @@ enum FileHelper {
         close(fd)
     }
 
+    /// Moves `source` onto `destination`, replacing the file there in one step
+    /// (`rename(2)`), so `destination` exists throughout. Across volumes,
+    /// where that isn't possible, `source` is copied into `destination`.
+    static func moveReplacing(_ source: URL, onto destination: URL) throws {
+        if rename(source.path, destination.path) == 0 { return }
+        let renameError = errno
+        guard renameError == EXDEV else { throw posixError(renameError, url: destination) }
+
+        let input = try FileHandle(forReadingFrom: source)
+        defer { try? input.close() }
+        let output = try openForWriting(destination)
+        defer { try? output.close() }
+        while let chunk = try input.read(upToCount: Constants.chunkSize), !chunk.isEmpty {
+            try output.write(contentsOf: chunk)
+        }
+    }
+
     /// Opens `url` for writing, creating it if needed and truncating it.
     static func openForWriting(_ url: URL) throws -> FileHandle {
         let fd = open(url.path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0o644)
