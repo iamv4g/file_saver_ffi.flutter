@@ -285,6 +285,43 @@ jobs:
           flutter pub get
           dart run tool/check_jni_keeps.dart example/build/app/outputs/flutter-apk/app-release.apk
 
+  # TEMPORARY (removed before merge): tool/jnigen.dart on Windows.
+  jnigen-windows:
+    name: jnigen on Windows (temporary)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Generate the example's Gradle project
+        working-directory: example
+        run: |
+          flutter pub get
+          flutter build apk --config-only
+      - run: flutter pub get
+      - name: The script of main (./gradlew)
+        id: old
+        continue-on-error: true
+        shell: bash
+        run: |
+          git show origin/main:tool/jnigen.dart > tool/jnigen_main.dart || git show HEAD~1:tool/jnigen.dart > tool/jnigen_main.dart
+          dart run tool/jnigen_main.dart
+      - name: The new script (gradlew.bat)
+        shell: bash
+        run: |
+          rm -f tool/jnigen_main.dart
+          dart run tool/jnigen.dart
+          git diff --exit-code -- lib/src/platforms/android/bindings.g.dart
+      - name: Outcome of the script of main
+        shell: bash
+        run: echo "main's script: ${{ steps.old.outcome }}"
+
   # The only check the main branch ruleset requires. Skipped jobs don't fail
   # it, so a pull request isn't blocked waiting for jobs it didn't need. A
   # skipped matrix job reports under its unexpanded name, so the ruleset
