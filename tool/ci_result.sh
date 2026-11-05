@@ -21,6 +21,7 @@ failed=$(jq -r '
   # The jobs that run only when the change needs them, and whether it does.
   | {
       "android-unit-test": ($scope.android == "true"),
+      "android-consumer": ($scope.android == "true"),
       "darwin-unit-test": ($scope.darwin == "true"),
       "web-test": ($scope.web == "true"),
       "build": (($scope.build // "[]") != "[]")

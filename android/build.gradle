@@ -1,19 +1,10 @@
-// The Android Gradle Plugin builds the native code with the Android NDK.
+// Built by the app that uses the plugin, with that app's Android Gradle Plugin
+// (8 or 9). The plugin doesn't apply the Kotlin Gradle Plugin: AGP 9's
+// built-in Kotlin compiles the Kotlin sources, or Flutter applies KGP when
+// built-in Kotlin is off. tool/check_consumer_app.sh builds both setups.
 
 group = "com.iamv4g.file_saver_ffi"
 version = "1.0"
-
-buildscript {
-    repositories {
-        google()
-        mavenCentral()
-    }
-
-    dependencies {
-        // The Android Gradle Plugin knows how to build native code with the NDK.
-        classpath("com.android.tools.build:gradle:8.11.1")
-    }
-}
 
 rootProject.allprojects {
     repositories {
@@ -30,12 +21,6 @@ android {
     // Bumping the plugin compileSdk version requires all clients of this plugin
     // to bump the version in their app.
     compileSdk = 36
-
-    // Use the NDK version
-    // declared in /android/app/build.gradle file of the Flutter project.
-    // Replace it with a version number if this plugin requires a specific NDK version.
-    // (e.g. ndkVersion "23.1.7779620")
-    ndkVersion = android.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

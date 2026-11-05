@@ -52,7 +52,7 @@ First, follow the [package installation instructions](https://pub.dev/packages/f
 <details>
 <summary><b>Android Configuration</b></summary>
 
-**Supported:** API 24+ (Android 7.0+)
+**Supported:** API 24+ (Android 7.0+). Apps on Android Gradle Plugin 8 or 9 build it, with AGP 9's built-in Kotlin on or off. With built-in Kotlin off (and on AGP 8), Flutter compiles the plugin's Kotlin with the Kotlin Gradle Plugin the app declares in `android/settings.gradle(.kts)`, as `flutter create` sets it up.
 
 For **Standard Save Locations** (Downloads, Pictures, etc.), no configuration is needed. The plugin automatically:
 - Declares `WRITE_EXTERNAL_STORAGE` permission (merged via manifest merger, only applies to API ≤ 28)
