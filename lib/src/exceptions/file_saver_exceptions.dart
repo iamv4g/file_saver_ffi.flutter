@@ -168,16 +168,6 @@ final class NativePlatformException extends FileSaverException {
     super.message, [
     super.code = FileSaverErrorCode.platform,
   ]);
-
-  /// Creates a platform exception from native error details.
-  factory NativePlatformException.fromNative({
-    required String message,
-    String? code,
-    String? details,
-  }) {
-    final fullMessage = details != null ? '$message: $details' : message;
-    return NativePlatformException(fullMessage, code);
-  }
 }
 
 /// Open file operation failed.

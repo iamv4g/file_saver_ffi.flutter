@@ -25,12 +25,18 @@ abstract class FileSaverPlatform {
 
   /// The current platform implementation.
   ///
-  /// Set automatically before [runApp] via each platform's [registerWith] method,
-  /// which is invoked by Flutter's generated plugin registrant.
-  static FileSaverPlatform get instance {
-    assert(_instance != null, 'FileSaverPlatform.instance is not set.');
-    return _instance!;
-  }
+  /// Flutter's generated plugin registrant sets it before `main` runs, through
+  /// each platform's `registerWith`. Tests, where the registrant doesn't run,
+  /// set it themselves.
+  ///
+  /// Throws [StateError] if it isn't set.
+  static FileSaverPlatform get instance =>
+      _instance ??
+      (throw StateError(
+        'No file_saver_ffi platform is registered. Flutter registers it '
+        'when the app starts. In a test, set FileSaverPlatform.instance '
+        '(package:file_saver_ffi/platform_interface.dart) to a fake.',
+      ));
 
   /// Used by each platform's [registerWith] to register itself.
   static set instance(FileSaverPlatform value) {

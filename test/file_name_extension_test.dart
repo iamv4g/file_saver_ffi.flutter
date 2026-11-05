@@ -1,5 +1,5 @@
 import 'package:file_saver_ffi/file_saver_ffi.dart';
-import 'package:file_saver_ffi/src/platform_interface/file_saver_platform.dart';
+import 'package:file_saver_ffi/platform_interface.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 

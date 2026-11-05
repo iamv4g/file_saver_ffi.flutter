@@ -19,10 +19,15 @@ export 'src/models/file_type.dart';
 export 'src/models/locations/save_location.dart';
 export 'src/models/save_input.dart';
 export 'src/models/save_progress.dart';
+// The platform classes, for Flutter's plugin registrant, which imports this
+// library and calls their `registerWith`. Use [FileSaver] instead, and
+// `package:file_saver_ffi/platform_interface.dart` for a fake in tests.
 export 'src/platforms/io_platforms.dart'
-    if (dart.library.js_interop) 'src/platforms/io_stub.dart';
+    if (dart.library.js_interop) 'src/platforms/io_stub.dart'
+    show FileSaverAndroid, FileSaverDarwin, FileSaverLinux, FileSaverWindows;
 export 'src/platforms/web/file_saver_web.dart'
-    if (dart.library.io) 'src/platforms/web_stub.dart';
+    if (dart.library.io) 'src/platforms/web_stub.dart'
+    show FileSaverWeb, WebPickedDirectoryLocation;
 
 class FileSaver {
   FileSaver._();

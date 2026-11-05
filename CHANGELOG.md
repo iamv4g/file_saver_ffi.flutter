@@ -8,6 +8,7 @@
 - **Web:** `persistDirectory`, `restoreDirectory` and `releaseDirectory` work on web too. The token refers to the directory handle, which `dir_picker` keeps in IndexedDB. The browser may not let the page write to a restored directory yet. `WebPickedDirectoryLocation.hasAccess()` checks it, and `requestAccess()`, called from a button, asks the user again.
 - **Web:** `WebPickedDirectoryLocation` is now exported, so web code can check the result of `pickDirectory` and use its `directoryHandle`. On other platforms the type exists for `is` checks, but `pickDirectory` never returns one.
 - `FileSaver.persistDirectory`, `restoreDirectory` and `releaseDirectory` keep access to a picked directory across app restarts, through `dir_picker`. `persistDirectory` returns a token to store; `restoreDirectory` gives the directory back on a later launch, or `null` when access is gone; `releaseDirectory` gives the access up. On iOS and macOS the token is bookmark data, so a stored `PickedDirectoryLocation` now survives a relaunch there too (before, only Android kept access, with `shouldPersist`). Persist the restored location again and store the new token, since a bookmark goes stale when the directory is moved.
+- `package:file_saver_ffi/platform_interface.dart` exports `FileSaverPlatform`, so an app's tests can set `FileSaverPlatform.instance` to a fake. Extend `FileSaverPlatform` and override the methods the test uses.
 
 ### Changed
 
@@ -30,10 +31,16 @@
 - **Linux:** the plugin no longer depends on `xdg_directories`; it runs `xdg-user-dir` itself.
 - The streams of `save` and `saveAs` are single-subscription on every platform: a second listen throws a `StateError`. Before, each listener ran the save again (on Android, iOS, macOS, Windows, Linux and most web saves), so `stream.first` followed by another listen, or a widget that listened again, saved a second file named `x (1)`. Call `save` again for another save, or use `asBroadcast()` to share one save between listeners.
 - **Web:** `saveBytes` and `saveFile` now throw invalid input (empty bytes or name) and the unsupported `saveFile` as an `InvalidInputException` when they are called, as the other web saves and the other platforms do. Before, it came as a raw error on the stream, after `SaveProgressStarted`.
+- `FileSaverPlatform.instance` throws a `StateError` that says how to set it when no platform is registered, as in a test that sets none. Before, it failed an `assert` in debug builds and threw a bare null check error in release builds.
+- `package:file_saver_ffi/file_saver_ffi.dart` now exports only the platform classes Flutter's plugin registrant needs (`FileSaverAndroid`, `FileSaverDarwin`, `FileSaverLinux`, `FileSaverWindows`, `FileSaverWeb`) and `WebPickedDirectoryLocation`. The Linux `ProcessRunner` typedef is no longer exported. Use `FileSaver` rather than the platform classes.
 
 ### Deprecated
 
 - `pickDirectory(shouldPersist:)` (Android only). Call `persistDirectory` on the picked location instead: it works on every platform and returns a token for `restoreDirectory` and `releaseDirectory`, while `shouldPersist` takes a permission it gives no token to release. It still works, and is removed in 1.0.0, where `pickDirectory` stops persisting on Android. `dir_picker` deprecates the `AndroidOptions` behind it the same way.
+
+### Removed
+
+- `NativePlatformException.fromNative`, which the plugin never used. Use `NativePlatformException(message, code)`.
 
 ### Fixed
 
