@@ -8,6 +8,7 @@ import 'dart:typed_data';
 import 'package:file_saver_ffi/file_saver_ffi.dart';
 import 'package:file_saver_ffi/platform_interface.dart';
 import 'package:file_saver_ffi/src/platforms/shared/desktop_file_saver.dart';
+import 'package:file_saver_ffi/src/platforms/shared/path_location_writer.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
@@ -16,7 +17,7 @@ import '../../helpers/test_http_server.dart';
 /// Resolves every [SaveLocation] to a temporary directory so the shared
 /// Windows/Linux logic can run on any host.
 class _TestDesktopFileSaver extends DesktopFileSaver<LinuxSaveLocation> {
-  _TestDesktopFileSaver(this.baseDir);
+  _TestDesktopFileSaver(this.baseDir, {super.pathLocationWriter});
 
   final String baseDir;
 
@@ -251,6 +252,35 @@ void main() {
       expect(await File.fromUri(uri).readAsBytes(), bytes);
       expect(events.whereType<SaveProgressUpdate>().last.progress, 1.0);
     });
+
+    test(
+      'downloads with the client of the PathLocationWriter it is given',
+      () async {
+        final clients = <HttpClient>[];
+        final withClient = _TestDesktopFileSaver(
+          tmp.path,
+          pathLocationWriter: PathLocationWriter(
+            createHttpClient: () {
+              final client = HttpClient();
+              clients.add(client);
+              return client;
+            },
+          ),
+        );
+
+        final events = await withClient
+            .saveNetwork(
+              url: server.url('/file'),
+              fileName: 'download',
+              fileType: fileType,
+              timeout: const Duration(seconds: 9),
+            )
+            .toList();
+
+        expect(events.last, isA<SaveProgressComplete>());
+        expect(clients.single.connectionTimeout, const Duration(seconds: 9));
+      },
+    );
 
     test('sends custom headers', () async {
       final events = await download(

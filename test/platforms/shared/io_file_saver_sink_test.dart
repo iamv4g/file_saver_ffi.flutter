@@ -10,7 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 /// The `dart:io` write session behind `openWrite` on Windows, Linux and
-/// `PathLocation`, driven through [PathLocationWriter.openWrite].
+/// `PathLocation`, driven through [const PathLocationWriter().openWrite].
 void main() {
   late Directory tmp;
   late String target;
@@ -26,7 +26,7 @@ void main() {
 
   Future<FileSaverSink> open({
     ConflictResolution conflictResolution = ConflictResolution.overwrite,
-  }) async => (await PathLocationWriter.openWrite(
+  }) async => (await const PathLocationWriter().openWrite(
     dirPath: tmp.path,
     baseName: 'log',
     ext: 'txt',

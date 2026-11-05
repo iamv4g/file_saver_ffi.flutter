@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 
 import '../../exceptions/file_saver_exceptions.dart';
@@ -40,14 +40,22 @@ typedef SourceCopier =
 /// progress counts bytes in the file and the source is paused while a chunk
 /// is written. Cancelling the subscription stops the save, and a cancelled or
 /// failed save deletes what it wrote and keeps a file it would overwrite.
-abstract final class PathLocationWriter {
-  PathLocationWriter._();
+///
+/// [createHttpClient] creates the client of each download; a test can pass
+/// one to see the client a download used.
+final class PathLocationWriter {
+  const PathLocationWriter({
+    @visibleForTesting this.createHttpClient = HttpClient.new,
+  });
+
+  /// Creates the client of each download.
+  final HttpClient Function() createHttpClient;
 
   static final _conflictResolver = ConflictResolver(const IOFileEntity());
 
   // MARK: PathLocation
 
-  static Stream<SaveProgress> saveBytes({
+  Stream<SaveProgress> saveBytes({
     required Uint8List fileBytes,
     required String dirPath,
     String? subDir,
@@ -65,7 +73,7 @@ abstract final class PathLocationWriter {
   /// Saves the file at [filePath], a path or `file://` URI. With
   /// [copySource], the source is copied by it instead, for a source `dart:io`
   /// can't read.
-  static Stream<SaveProgress> saveFile({
+  Stream<SaveProgress> saveFile({
     required String filePath,
     required String dirPath,
     String? subDir,
@@ -82,7 +90,7 @@ abstract final class PathLocationWriter {
     copySource: copySource,
   );
 
-  static Stream<SaveProgress> saveNetwork({
+  Stream<SaveProgress> saveNetwork({
     required String url,
     required Map<String, String>? headers,
     required Duration timeout,
@@ -99,7 +107,7 @@ abstract final class PathLocationWriter {
     conflictResolution: conflictResolution,
   );
 
-  static Future<FileSaverSink?> openWrite({
+  Future<FileSaverSink?> openWrite({
     required String dirPath,
     String? subDir,
     required String baseName,
@@ -130,7 +138,7 @@ abstract final class PathLocationWriter {
   /// [SaveProgressComplete] or [SaveProgressError]. Once the subscription is
   /// cancelled nothing more is emitted, and the cancel completes when the
   /// partial file has been deleted.
-  static Stream<SaveProgress> save({
+  Stream<SaveProgress> save({
     required SaveInput input,
     required Future<String> Function() directory,
     required String baseName,
@@ -238,7 +246,7 @@ abstract final class PathLocationWriter {
       : filePath;
 
   /// Opens the bytes to save and their length, if known.
-  static Future<({Stream<List<int>> data, int? length})> _open(
+  Future<({Stream<List<int>> data, int? length})> _open(
     SaveInput input,
     _Cancellation cancellation,
   ) async {
@@ -273,13 +281,13 @@ abstract final class PathLocationWriter {
   ///
   /// [timeout] limits connecting, waiting for the response headers, and each
   /// wait for more of the body. Every failure is a [NetworkException].
-  static Future<({Stream<List<int>> data, int? length})> _request(
+  Future<({Stream<List<int>> data, int? length})> _request(
     String url,
     Map<String, String>? headers,
     Duration timeout,
     _Cancellation cancellation,
   ) async {
-    final client = HttpClient()..connectionTimeout = timeout;
+    final client = createHttpClient()..connectionTimeout = timeout;
     cancellation.onCancel = () => client.close(force: true);
     final HttpClientResponse response;
     try {
