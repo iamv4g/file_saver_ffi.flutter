@@ -17,8 +17,10 @@ import '../models/save_progress.dart';
 /// Platform implementations:
 /// - iOS/macOS: Uses FFI to call Swift code (shared darwin source)
 /// - Android: Uses JNI to call Kotlin code
-/// - Windows: Dart FFI via path_provider_windows (SHGetKnownFolderPath) + dart:io
-/// - Linux: Dart FFI via xdg-user-dir + dart:io
+/// - Windows: dart:io, with Known Folders from path_provider_windows and
+///   ShellExecuteExW (dart:ffi) to open files
+/// - Linux: dart:io, with XDG user directories from the `xdg-user-dir`
+///   subprocess and `xdg-open` to open files
 /// - Web: Uses browser APIs via dart:web + dart:js_interop
 abstract class FileSaverPlatform {
   static FileSaverPlatform? _instance;
@@ -279,8 +281,9 @@ abstract class FileSaverPlatform {
   /// **Platforms:** Android · iOS · macOS · Windows · Linux
   /// **Web:** throws [UnsupportedError] — files are already browser-downloaded.
   ///
-  /// [uri] should be a [Uri] returned from a save operation (for example: [saveAsync],
-  /// [SaveProgressComplete.uri], or a write-session result like [FileSaverSink.result]).
+  /// [uri] should be a [Uri] returned from a save operation (for example
+  /// [SaveProgressComplete.uri], or a write-session result like
+  /// [FileSaverSink.result]).
   ///
   /// [mimeType] is optional. On Android, it is queried from ContentResolver for `content://`
   /// URIs if not provided.
@@ -341,7 +344,7 @@ abstract class FileSaverPlatform {
     }
   }
 
-  /// Validates input for [saveBytes] and [saveBytesAsync].
+  /// Validates input for [saveBytes].
   @protected
   void validateBytesInput(Uint8List bytes, String fileName) {
     if (bytes.isEmpty) {
@@ -352,7 +355,7 @@ abstract class FileSaverPlatform {
     }
   }
 
-  /// Validates input for [saveFile] and [saveFileAsync].
+  /// Validates input for [saveFile].
   @protected
   void validateFilePathInput(String filePath, String fileName) {
     if (filePath.isEmpty) {
@@ -363,7 +366,7 @@ abstract class FileSaverPlatform {
     }
   }
 
-  /// Validates input for [saveNetwork] and [saveNetworkAsync].
+  /// Validates input for [saveNetwork].
   @protected
   void validateNetworkInput(String url, String fileName) {
     if (url.isEmpty) {

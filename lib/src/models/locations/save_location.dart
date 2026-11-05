@@ -206,7 +206,7 @@ class PickedDirectoryLocation implements SaveLocation {
   /// - **iOS**: File URL from Document Picker (e.g., `file://...`)
   /// - **macOS**: File URL from Open Panel (e.g., `file://...`)
   /// - **Linux**: File URL from file chooser (e.g., `file://...`)
-  /// - **Windows**: File system path (e.g., `C:\Users\...`)
+  /// - **Windows**: File URL from the folder picker (e.g., `file:///C:/Users/...`)
   /// - **Web**: Placeholder URI — browsers do not expose filesystem paths.
   ///   Use [WebPickedDirectoryLocation] to access the [FileSystemDirectoryHandle].
   final Uri uri;

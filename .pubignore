@@ -1,0 +1,46 @@
+# pub uses this file instead of .gitignore, so it repeats .gitignore and adds
+# the files that stay in the repository but don't ship to pub.dev.
+
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+.vscode/
+
+# Flutter/Dart/Pub related
+# Libraries should not include pubspec.lock, per https://dart.dev/guides/libraries/private-files#pubspeclock.
+/pubspec.lock
+**/doc/api/
+.dart_tool/
+.flutter-plugins-dependencies
+/build/
+/coverage/
+
+# FVM Version Cache
+.fvm/
+.fvmrc
+
+# Not part of the package
+CLAUDE.md
+# README loads it from GitHub; only screenshots/thumbnail.jpg (pubspec
+# screenshots) is shown by pub.dev.
+/screenshots/cover.png

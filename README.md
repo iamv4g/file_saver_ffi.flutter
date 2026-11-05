@@ -16,7 +16,7 @@ device storage, or a user-chosen directory — with real-time progress tracking.
 ## Features
 
 - 🖼️ **Gallery Saving** – Save images and videos to iOS Photos or Android Gallery with custom albums
-- ⚡ **Native Performance** – Powered by FFI (iOS/macOS/Windows/Linux) and JNI (Android) for near-zero latency
+- ⚡ **Native Performance** – Swift through FFI on iOS/macOS, Kotlin through JNI on Android, and `dart:io` on Windows/Linux, with no method channel in between
 - 🌐 **Web Support** – Browser download via anchor element or File System Access API (FSA) for Chrome/Edge
 - 📁 **Universal Storage** – Save any file type (PDF, ZIP, DOCX, etc.) to device storage
 - 💾 **Original Quality** – Files saved bit-for-bit without compression or metadata loss
@@ -109,7 +109,7 @@ Create `android/app/src/main/res/xml/file_saver_ffi_file_paths.xml`:
 </details>
 
 <details>
-<summary><b>IOS Configuration</b></summary>
+<summary><b>iOS Configuration</b></summary>
 
 **Supported:** iOS 13.4+ (Swift Package Manager and CocoaPods)
 
