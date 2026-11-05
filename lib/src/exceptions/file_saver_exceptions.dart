@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 /// The [FileSaverException.code] values.
 ///
 /// Kotlin (`utils/Constants.kt`) and Swift (`Utils/Constants.swift`) report
@@ -55,6 +57,7 @@ abstract final class FileSaverErrorCode {
 /// Base exception for all file saver errors.
 ///
 /// Uses sealed class for exhaustive exception handling.
+@immutable
 sealed class FileSaverException implements Exception {
   const FileSaverException(this.message, [this.code]);
 
@@ -109,6 +112,18 @@ sealed class FileSaverException implements Exception {
 
   /// Machine-readable error code.
   final String? code;
+
+  /// Two exceptions of the same type with the same [message] and [code] are
+  /// equal, so a test can compare the `SaveProgressError` it expects.
+  @override
+  bool operator ==(Object other) =>
+      other is FileSaverException &&
+      other.runtimeType == runtimeType &&
+      message == other.message &&
+      code == other.code;
+
+  @override
+  int get hashCode => Object.hash(runtimeType, message, code);
 
   @override
   String toString() {
@@ -257,6 +272,15 @@ final class NetworkException extends FileSaverException {
 
   /// HTTP status code, if available.
   final int? statusCode;
+
+  @override
+  bool operator ==(Object other) =>
+      super == other &&
+      other is NetworkException &&
+      statusCode == other.statusCode;
+
+  @override
+  int get hashCode => Object.hash(super.hashCode, statusCode);
 
   @override
   String toString() =>

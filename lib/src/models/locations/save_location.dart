@@ -1,6 +1,8 @@
 /// @docImport '../../exceptions/file_saver_exceptions.dart';
 library;
 
+import 'package:flutter/foundation.dart';
+
 /// Base sealed class for all save locations.
 ///
 /// This class provides a type-safe way to specify where files should be saved
@@ -194,6 +196,7 @@ enum LinuxSaveLocation implements SaveLocation {
 ///   saveLocation: location,
 /// );
 /// ```
+@immutable
 class PickedDirectoryLocation implements SaveLocation {
   const PickedDirectoryLocation({required this.uri});
 
@@ -207,6 +210,21 @@ class PickedDirectoryLocation implements SaveLocation {
   /// - **Web**: Placeholder URI — browsers do not expose filesystem paths.
   ///   Use [WebPickedDirectoryLocation] to access the [FileSystemDirectoryHandle].
   final Uri uri;
+
+  /// Two locations of the same type and [uri] are equal. A subtype that
+  /// holds more than the [uri], such as [WebPickedDirectoryLocation],
+  /// compares that too.
+  @override
+  bool operator ==(Object other) =>
+      other is PickedDirectoryLocation &&
+      other.runtimeType == runtimeType &&
+      uri == other.uri;
+
+  @override
+  int get hashCode => Object.hash(runtimeType, uri);
+
+  @override
+  String toString() => '$runtimeType($uri)';
 }
 
 /// Save to a specific filesystem directory path.
@@ -235,9 +253,23 @@ class PickedDirectoryLocation implements SaveLocation {
 /// - **Android**: `SaveInput.file` takes a `content://` URI too. The
 ///   `ContentResolver` reads it; the app needs read access to it, which a
 ///   file picker grants.
+@immutable
 class PathLocation implements SaveLocation {
   const PathLocation(this.path);
 
   /// The filesystem directory path to save the file into.
   final String path;
+
+  /// Compares the paths as written: `/a/b` and `/a/b/` are not equal.
+  @override
+  bool operator ==(Object other) =>
+      other is PathLocation &&
+      other.runtimeType == runtimeType &&
+      path == other.path;
+
+  @override
+  int get hashCode => Object.hash(runtimeType, path);
+
+  @override
+  String toString() => '$runtimeType($path)';
 }

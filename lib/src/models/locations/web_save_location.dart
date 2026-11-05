@@ -32,6 +32,18 @@ final class WebPickedDirectoryLocation extends PickedDirectoryLocation {
   /// The [FileSystemDirectoryHandle] obtained from `window.showDirectoryPicker()`.
   final FileSystemDirectoryHandle directoryHandle;
 
+  /// Two locations are equal when they hold the same handle object. Two
+  /// picks of the same directory give different handles, which compare
+  /// unequal: only `FileSystemHandle.isSameEntry` can tell, and it's
+  /// asynchronous.
+  @override
+  bool operator ==(Object other) =>
+      other is WebPickedDirectoryLocation &&
+      directoryHandle == other.directoryHandle;
+
+  @override
+  int get hashCode => directoryHandle.hashCode;
+
   /// Whether the page can write to the directory now, without asking the
   /// user.
   ///
