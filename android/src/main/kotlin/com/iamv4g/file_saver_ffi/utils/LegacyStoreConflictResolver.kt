@@ -80,19 +80,5 @@ object LegacyStoreConflictResolver {
         directory: File,
         baseFileName: String,
         extension: String,
-    ): File {
-        var index = 1
-        while (true) {
-            val candidate =
-                File(
-                    directory,
-                    FileHelper.buildFileName("$baseFileName ($index)", extension),
-                )
-
-            if (!candidate.exists()) {
-                return candidate
-            }
-            index++
-        }
-    }
+    ): File = File(directory, FileHelper.numberedName(baseFileName, extension) { File(directory, it).exists() })
 }

@@ -26,7 +26,9 @@ import java.util.concurrent.atomic.AtomicInteger
  * standing in for the provider behind a directory the user picked.
  *
  * Like `ExternalStorageProvider`, it gives a new document a unique name
- * (`name (1).ext`) when the requested one is taken. It counts directory
+ * (`name (1).ext`) when the requested one is taken, up to `name (32).ext`,
+ * and then fails with `FileNotFoundException("Failed to create unique file")`,
+ * as `android.os.FileUtils.buildUniqueFile` does. It counts directory
  * listings, which are IPC calls on a device.
  */
 class FakeDocumentsProvider : DocumentsProvider() {
@@ -108,7 +110,9 @@ class FakeDocumentsProvider : DocumentsProvider() {
         val taken = docs.values.filter { it.parentId == parentDocumentId }.map { it.name }.toSet()
         val dot = displayName.lastIndexOf('.')
         val (base, ext) = if (dot > 0) displayName.substring(0, dot) to displayName.substring(dot) else displayName to ""
-        val name = generateSequence(0) { it + 1 }.map { if (it == 0) displayName else "$base ($it)$ext" }.first { it !in taken }
+        val name =
+            (0..32).map { if (it == 0) displayName else "$base ($it)$ext" }.firstOrNull { it !in taken }
+                ?: throw FileNotFoundException("Failed to create unique file")
         val doc = Doc("doc${nextId++}", name, mimeType, parentDocumentId)
         docs[doc.id] = doc
         return doc.id

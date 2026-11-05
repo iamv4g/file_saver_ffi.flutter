@@ -66,7 +66,7 @@ sealed class SaveEntryFactory {
      *
      * For OVERWRITE, the replaced file is removed only here, after the new
      * content exists. If it cannot be removed, the new file is kept under its
-     * auto-renamed name instead of failing, so no data is lost.
+     * numbered name instead of failing, so no data is lost.
      *
      * Implementations must only throw before they modify the replaced file.
      *
