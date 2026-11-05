@@ -228,6 +228,14 @@ jobs:
       - build
     runs-on: ubuntu-latest
     steps:
-      - name: Fail if a job failed or was cancelled
-        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
-        run: exit 1
+      - uses: actions/checkout@v5
+        with:
+          sparse-checkout: tool/ci_result.sh
+          sparse-checkout-cone-mode: false
+      # Fails unless every job succeeded, or was skipped because the change
+      # doesn't need it. A job no runner picked up shows as `abandoned` here,
+      # not `cancelled`, so nothing but success counts.
+      - name: Check that every job the change needs succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: bash tool/ci_result.sh <<<"$NEEDS"
