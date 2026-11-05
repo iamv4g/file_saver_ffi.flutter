@@ -113,8 +113,7 @@ String _getMimeType(String ext) {
     'xlsx' =>
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'ppt' => 'application/vnd.ms-powerpoint',
-    'pptx' =>
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'pptx' => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     'txt' => 'text/plain',
     'json' => 'application/json',
     'xml' => 'application/xml',

@@ -68,9 +68,8 @@ class InfoCard extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               '$urlLabel: $url',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: Colors.grey),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
