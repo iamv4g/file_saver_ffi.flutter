@@ -320,7 +320,8 @@ jobs:
           git diff --exit-code -- lib/src/platforms/android/bindings.g.dart
       - name: Outcome of the script of main
         shell: bash
-        run: echo "main's script: ${{ steps.old.outcome }}"
+        run: |
+          echo "main's script: ${{ steps.old.outcome }}"
 
   # The only check the main branch ruleset requires. Skipped jobs don't fail
   # it, so a pull request isn't blocked waiting for jobs it didn't need. A
