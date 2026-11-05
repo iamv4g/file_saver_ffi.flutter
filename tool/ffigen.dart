@@ -6,6 +6,8 @@ import 'package:ffigen/ffigen.dart';
 ///
 /// Run with:
 ///   dart run tool/ffigen.dart
+///
+/// CI runs it and fails if `bindings.g.dart` changes.
 void main() {
   final packageRoot = Platform.script.resolve('../');
   final headerUri = packageRoot.resolve(
@@ -15,12 +17,6 @@ void main() {
     output: Output(
       dartFile: packageRoot.resolve('lib/src/platforms/darwin/bindings.g.dart'),
       style: DynamicLibraryBindings(wrapperName: 'FileSaverFFI'),
-      // preamble: '''
-      //           // ignore_for_file: always_specify_types
-      //           // ignore_for_file: camel_case_types
-      //           // ignore_for_file: non_constant_identifier_names
-
-      //           ''',
       commentType: CommentType(CommentStyle.any, CommentLength.full),
     ),
     headers: Headers(
@@ -28,24 +24,8 @@ void main() {
       include: (uri) => uri == headerUri,
     ),
     functions: Functions(
-      include: Declarations.includeSet({
-        'file_saver_init_dart_api_dl',
-        'file_saver_save_bytes',
-        'file_saver_save_file',
-        'file_saver_save_network',
-        'file_saver_save_bytes_as',
-        'file_saver_save_file_as',
-        'file_saver_save_network_as',
-        'file_saver_cancel',
-        'file_saver_open_file',
-        'file_saver_can_open_file',
-        'file_saver_open_write',
-        'file_saver_open_write_as',
-        'file_saver_write_chunk',
-        'file_saver_flush_write',
-        'file_saver_close_write',
-        'file_saver_cancel_write',
-      }),
+      // Every function the header declares: each one is a Swift `@_cdecl`.
+      include: (_) => true,
       rename: (decl) {
         final stripped = decl.originalName.replaceFirst('file_saver_', '');
         return stripped.replaceAllMapped(

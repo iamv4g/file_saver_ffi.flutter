@@ -8,6 +8,8 @@ import 'package:jnigen/jnigen.dart';
 ///
 /// Run with:
 ///   dart run tool/jnigen.dart
+///
+/// CI runs it and fails if `bindings.g.dart` changes.
 Future<void> main(List<String> args) async {
   final packageRoot = Platform.script.resolve('../');
 
@@ -19,7 +21,7 @@ Future<void> main(List<String> args) async {
   );
 
   final result = await Process.run(
-    './gradlew',
+    Platform.isWindows ? 'gradlew.bat' : './gradlew',
     [':file_saver_ffi:compileDebugKotlin'],
     workingDirectory: packageRoot.resolve('example/android/').toFilePath(),
     runInShell: true,
@@ -51,11 +53,12 @@ Future<void> main(List<String> args) async {
           'android/src/main/kotlin/com/iamv4g/file_saver_ffi',
         ),
       ],
-      // Output of compileDebugKotlin with AGP 9's built-in Kotlin support.
       classPath: [
-        packageRoot.resolve(
-          'example/build/file_saver_ffi/intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes',
-        ),
+        kotlinClassesDirectory(
+          Directory.fromUri(
+            packageRoot.resolve('example/build/file_saver_ffi'),
+          ),
+        ).uri,
       ],
       classes: [
         'com.iamv4g.file_saver_ffi.FileSaver',
@@ -65,4 +68,39 @@ Future<void> main(List<String> args) async {
   );
 
   print('JNI bindings generated successfully.');
+}
+
+/// Where `compileDebugKotlin` puts the plugin's classes, in [buildDirectory],
+/// the plugin module's build directory.
+///
+/// AGP 9's built-in Kotlin, which the example turns on, and the Kotlin Gradle
+/// Plugin use different directories. When both hold the classes, from builds
+/// with either, it picks the one compiled last. Throws a [StateError] when
+/// neither does.
+Directory kotlinClassesDirectory(Directory buildDirectory) {
+  const outputs = [
+    // AGP 9 with android.builtInKotlin=true.
+    'intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes',
+    // The Kotlin Gradle Plugin.
+    'tmp/kotlin-classes/debug',
+  ];
+  const fileSaverClass = 'com/iamv4g/file_saver_ffi/FileSaver.class';
+
+  final compiled = [
+    for (final output in outputs)
+      if (File('${buildDirectory.path}/$output/$fileSaverClass') case final file
+          when file.existsSync())
+        (directory: Directory('${buildDirectory.path}/$output'), file: file),
+  ];
+  if (compiled.isEmpty) {
+    throw StateError(
+      'No compiled $fileSaverClass in ${buildDirectory.path}. Looked in:\n'
+      '${outputs.map((output) => '  $output').join('\n')}\n'
+      'Has the Android Gradle Plugin moved its Kotlin output?',
+    );
+  }
+  compiled.sort(
+    (a, b) => b.file.lastModifiedSync().compareTo(a.file.lastModifiedSync()),
+  );
+  return compiled.first.directory;
 }
