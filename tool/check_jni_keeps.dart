@@ -19,9 +19,8 @@ void main(List<String> args) {
     exit(64);
   }
 
-  final bindings = File.fromUri(
-    Platform.script.resolve('../$bindingsPath'),
-  ).readAsStringSync();
+  final bindings = File.fromUri(Platform.script.resolve('../$bindingsPath'))
+      .readAsStringSync();
   final expected = jniLookups(bindings);
   if (expected.isEmpty) {
     stderr.writeln('Found no JNI lookups in the bindings; did they move?');

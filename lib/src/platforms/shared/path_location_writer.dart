@@ -26,12 +26,11 @@ const int _chunkSize = 1024 * 1024;
 /// `done` completes when the copy has ended, or fails with a
 /// [FileSaverException]. After `cancel` it completes once the copy no longer
 /// writes to `path`.
-typedef SourceCopier =
-    ({Future<void> done, void Function() cancel}) Function(
-      String source,
-      String path,
-      void Function(SaveProgressUpdate update) onProgress,
-    );
+typedef SourceCopier = ({Future<void> done, void Function() cancel}) Function(
+  String source,
+  String path,
+  void Function(SaveProgressUpdate update) onProgress,
+);
 
 /// Saves with `dart:io` into a directory: [PathLocation] on every IO platform,
 /// and every save on Windows and Linux.
@@ -157,9 +156,8 @@ final class PathLocationWriter {
 
       Future<void> run() async {
         try {
-          if (input case SaveFileInput(
-            :final filePath,
-          ) when copySource == null) {
+          if (input case SaveFileInput(:final filePath)
+              when copySource == null) {
             final path = _sourcePath(filePath);
             if (!await File(path).exists()) {
               throw SourceFileNotFoundException(path);
@@ -181,9 +179,8 @@ final class PathLocationWriter {
           // the resolver claimed.
           final session = await IOWriteSession.open(resolved);
           try {
-            if (input case SaveFileInput(
-              :final filePath,
-            ) when copySource != null) {
+            if (input case SaveFileInput(:final filePath)
+                when copySource != null) {
               await _copy(copySource, filePath, session, cancellation, emit);
             } else {
               final source = await _open(input, cancellation);

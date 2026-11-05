@@ -127,12 +127,12 @@ void main() {
         'iCloud file download failed',
       ];
       final sources = [
-        ...Directory(
-          'android/src/main/kotlin',
-        ).listSync(recursive: true).where((f) => f.path.endsWith('.kt')),
-        ...Directory(
-          _swiftSources,
-        ).listSync(recursive: true).where((f) => f.path.endsWith('.swift')),
+        ...Directory('android/src/main/kotlin')
+            .listSync(recursive: true)
+            .where((f) => f.path.endsWith('.kt')),
+        ...Directory(_swiftSources)
+            .listSync(recursive: true)
+            .where((f) => f.path.endsWith('.swift')),
       ].cast<File>();
       expect(sources, isNotEmpty);
       for (final file in sources) {
