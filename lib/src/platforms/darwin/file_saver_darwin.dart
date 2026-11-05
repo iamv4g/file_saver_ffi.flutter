@@ -20,6 +20,7 @@ import '../shared/path_location_writer.dart';
 import '../shared/single_subscription.dart';
 import 'bindings.g.dart';
 import 'darwin_file_saver_sink.dart';
+import 'darwin_reply.dart';
 
 /// FileSaver implementation for Apple platforms (iOS and macOS).
 ///
@@ -325,49 +326,23 @@ class FileSaverDarwin extends FileSaverPlatform {
     }
 
     final saveLocationIndex = _saveLocationToIndex(saveLocation);
-    final receivePort = ReceivePort();
-    final completer = Completer<int>();
-    receivePort.listen((message) {
-      receivePort.close();
-      final msg = message as List;
-      switch (msg[0] as int) {
-        case 3:
-          if (!completer.isCompleted) {
-            completer.complete(int.parse(msg[1] as String));
-          }
-        case 2:
-          if (!completer.isCompleted) {
-            completer.completeError(
-              FileSaverException.fromErrorResult(
-                msg[1] as String,
-                msg[2] as String,
-              ),
-            );
-          }
-      }
+    return _openSession(totalSize, (port) {
+      using((arena) {
+        final fileNameCStr = fileName.toNativeUtf8(allocator: arena);
+        final extCStr = fileType.ext.toNativeUtf8(allocator: arena);
+        final mimeCStr = fileType.mimeType.toNativeUtf8(allocator: arena);
+        final subDirCStr = subDir?.toNativeUtf8(allocator: arena);
+        _fileSaver.openWrite(
+          fileNameCStr.cast(),
+          extCStr.cast(),
+          mimeCStr.cast(),
+          saveLocationIndex,
+          subDirCStr?.cast() ?? nullptr,
+          conflictResolution.index,
+          port.nativePort,
+        );
+      });
     });
-    using((arena) {
-      final fileNameCStr = fileName.toNativeUtf8(allocator: arena);
-      final extCStr = fileType.ext.toNativeUtf8(allocator: arena);
-      final mimeCStr = fileType.mimeType.toNativeUtf8(allocator: arena);
-      final subDirCStr = subDir?.toNativeUtf8(allocator: arena);
-      _fileSaver.openWrite(
-        fileNameCStr.cast(),
-        extCStr.cast(),
-        mimeCStr.cast(),
-        saveLocationIndex,
-        subDirCStr?.cast() ?? nullptr,
-        conflictResolution.index,
-        receivePort.sendPort.nativePort,
-      );
-    });
-    final sessionId = await completer.future;
-    if (sessionId == 0) return null;
-    return DarwinFileSaverSink(
-      fileSaver: _fileSaver,
-      sessionId: sessionId,
-      totalSize: totalSize,
-    );
   }
 
   @override
@@ -378,42 +353,42 @@ class FileSaverDarwin extends FileSaverPlatform {
     int? totalSize,
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
   }) async {
-    final receivePort = ReceivePort();
-    final completer = Completer<int>();
-    receivePort.listen((message) {
-      receivePort.close();
-      final msg = message as List;
-      switch (msg[0] as int) {
-        case 3:
-          if (!completer.isCompleted) {
-            completer.complete(int.parse(msg[1] as String));
-          }
-        case 2:
-          if (!completer.isCompleted) {
-            completer.completeError(
-              FileSaverException.fromErrorResult(
-                msg[1] as String,
-                msg[2] as String,
-              ),
-            );
-          }
-      }
+    return _openSession(totalSize, (port) {
+      using((arena) {
+        final dirUriCStr = saveLocation.uri.toString().toNativeUtf8(
+          allocator: arena,
+        );
+        final fileNameCStr = fileName.toNativeUtf8(allocator: arena);
+        final extCStr = fileType.ext.toNativeUtf8(allocator: arena);
+        _fileSaver.openWriteAs(
+          dirUriCStr.cast(),
+          fileNameCStr.cast(),
+          extCStr.cast(),
+          conflictResolution.index,
+          port.nativePort,
+        );
+      });
     });
-    using((arena) {
-      final dirUriCStr = saveLocation.uri.toString().toNativeUtf8(
-        allocator: arena,
-      );
-      final fileNameCStr = fileName.toNativeUtf8(allocator: arena);
-      final extCStr = fileType.ext.toNativeUtf8(allocator: arena);
-      _fileSaver.openWriteAs(
-        dirUriCStr.cast(),
-        fileNameCStr.cast(),
-        extCStr.cast(),
-        conflictResolution.index,
-        receivePort.sendPort.nativePort,
-      );
-    });
-    final sessionId = await completer.future;
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Private Methods
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /// Opens a write session with [open], which starts the Swift opener with
+  /// the port for its reply (`[3, sessionId]`). Session id 0 means `skip`
+  /// found an existing file and opened nothing.
+  Future<FileSaverSink?> _openSession(
+    int? totalSize,
+    void Function(SendPort port) open,
+  ) async {
+    final reply = await callForDarwinReply(open);
+    final sessionId = reply.length > 1 && reply[0] == 3
+        ? int.tryParse('${reply[1]}')
+        : null;
+    if (sessionId == null) {
+      throw NativePlatformException('Invalid reply from Swift: $reply');
+    }
     if (sessionId == 0) return null;
     return DarwinFileSaverSink(
       fileSaver: _fileSaver,
@@ -421,10 +396,6 @@ class FileSaverDarwin extends FileSaverPlatform {
       totalSize: totalSize,
     );
   }
-
-  // ─────────────────────────────────────────────────────────────────────────
-  // Private Methods
-  // ─────────────────────────────────────────────────────────────────────────
 
   /// How long cancelling a save waits for Swift to report that it stopped.
   static const _cancelTimeout = Duration(seconds: 2);
