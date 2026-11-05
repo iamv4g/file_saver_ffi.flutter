@@ -11,6 +11,10 @@ class ConflictResolver {
 
   final FileEntity _entity;
 
+  /// How many numbered names [ConflictResolution.autoRename] tries before it
+  /// gives up, as on iOS and macOS (`Constants.maxRenameAttempts`).
+  static const maxRenameAttempts = 1000;
+
   /// Resolves the path/filename based on conflict mode.
   ///
   /// Returns the resolved path, or `null` if [ConflictResolution.skip].
@@ -34,7 +38,8 @@ class ConflictResolver {
     };
   }
 
-  /// Claims `name (1).ext`, `name (2).ext`, ... up to `name (1000).ext`.
+  /// Claims `name (1).ext`, `name (2).ext`, ... up to `name (1000).ext`
+  /// ([maxRenameAttempts]), and throws [FileIOException] if all are taken.
   ///
   /// Works for both full paths (Desktop) and bare filenames (Web). The
   /// extension is what follows the last dot of the file name, unless the name
@@ -46,13 +51,13 @@ class ConflictResolver {
     final base = hasExt ? path.substring(0, dotIndex) : path;
     final ext = hasExt ? path.substring(dotIndex) : '';
 
-    for (int i = 1; i <= 1000; i++) {
+    for (var i = 1; i <= maxRenameAttempts; i++) {
       final candidate = '$base ($i)$ext';
       if (await _entity.claim(candidate)) return candidate;
     }
 
     throw const FileIOException(
-      'Could not find available filename after 1000 attempts',
+      'Could not find available filename after $maxRenameAttempts attempts',
     );
   }
 }
