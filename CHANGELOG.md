@@ -10,6 +10,7 @@
 - `FileSaver.persistDirectory`, `restoreDirectory` and `releaseDirectory` keep access to a picked directory across app restarts, through `dir_picker`. `persistDirectory` returns a token to store; `restoreDirectory` gives the directory back on a later launch, or `null` when access is gone; `releaseDirectory` gives the access up. On iOS and macOS the token is bookmark data, so a stored `PickedDirectoryLocation` now survives a relaunch there too (before, only Android kept access, with `shouldPersist`). Persist the restored location again and store the new token, since a bookmark goes stale when the directory is moved.
 - `package:file_saver_ffi/platform_interface.dart` exports `FileSaverPlatform`, so an app's tests can set `FileSaverPlatform.instance` to a fake. Extend `FileSaverPlatform` and override the methods the test uses.
 - The save inputs (`SaveInput`), the locations `PathLocation` and `PickedDirectoryLocation`, the `SaveProgress` events and the `FileSaverException`s are values: two with the same type and content are `==`, with the same `hashCode`, so a test can check a save stream with `emitsInOrder([...])` or a fake platform can compare the input it got. A `SaveBytesInput` compares its bytes one by one; a `WebPickedDirectoryLocation` is equal only to one with the same handle object. `toString` names the content: the size of a `SaveBytesInput`, and the header names of a `SaveNetworkInput` but not their values, which may hold credentials.
+- **iOS/macOS:** the plugin ships a privacy manifest (`PrivacyInfo.xcprivacy`), with CocoaPods and with Swift Package Manager. It declares the one required reason API the plugin calls, `ProcessInfo.systemUptime` (system boot time, reason `35F9.1`), the clock that throttles progress events, and that the plugin collects no data and doesn't track. App Store Connect expects a manifest from every SDK that calls such an API.
 
 ### Changed
 
@@ -89,6 +90,7 @@
 - **Web:** cancelling a save into a picked directory now completes once the partial file is deleted, and a save that fails deletes it before the error is reported. An `overwrite` keeps the original in both cases.
 - **Linux:** a `LinuxSaveLocation` whose XDG directory isn't configured, or is set to `$HOME` (which disables it), now saves to its usual folder: `~/Downloads`, `~/Pictures`, `~/Videos`, `~/Music` or `~/Documents`. Before, `xdg-user-dir` printed `$HOME` for it and files landed in the home directory, and without `xdg-user-dir` every location fell back to `~/Downloads`. Empty or relative output from `xdg-user-dir` is ignored too, instead of saving relative to the working directory, and without `HOME` and an XDG directory the save fails with `NativePlatformException`.
 - **Linux:** each location is looked up once, with `xdg-user-dir` running in the background. Before, every save ran it synchronously and blocked the UI isolate.
+- **iOS/macOS:** the CocoaPods pod has the package version, read from `pubspec.yaml`, instead of `0.0.1`.
 
 ## 0.11.0
 
