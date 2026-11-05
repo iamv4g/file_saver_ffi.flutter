@@ -81,9 +81,8 @@ void main() {
 
   testWidgets('openFile of a file URI without a FileProvider throws '
       'OpenFailedException that explains the setup', (_) async {
-    final error = await FileSaver.openFile(
-      Uri.file('/system/etc/hosts'),
-    ).then<Object?>((_) => null, onError: (Object e) => e);
+    final error = await FileSaver.openFile(Uri.file('/system/etc/hosts'))
+        .then<Object?>((_) => null, onError: (Object e) => e);
 
     expect(error, isA<OpenFailedException>());
     expect((error! as OpenFailedException).message, contains('FileProvider'));
