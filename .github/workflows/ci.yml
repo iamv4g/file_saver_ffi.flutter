@@ -237,6 +237,24 @@ jobs:
             *)   flutter build ${{ matrix.target }} --debug ;;
           esac
 
+      - name: Check the app bundles the plugin's privacy manifest
+        if: matrix.target == 'ios' || matrix.target == 'macos'
+        shell: bash
+        run: |
+          case "${{ matrix.target }}" in
+            ios) app=example/build/ios/iphoneos/Runner.app ;;
+            macos) app=example/build/macos/Build/Products/Debug/file_saver_ffi_example.app ;;
+          esac
+          bash tool/check_privacy_manifest.sh "$app"
+
+      - name: Check the pod has the package version
+        if: matrix.ios-deps == 'cocoapods'
+        run: |
+          pod=$(pod ipc spec darwin/file_saver_ffi.podspec | jq -r .version)
+          package=$(sed -n 's/^version: *//p' pubspec.yaml)
+          echo "pod $pod, package $package"
+          [ "$pod" = "$package" ]
+
       - name: Check R8 kept every JNI lookup
         if: matrix.target == 'apk'
         run: |

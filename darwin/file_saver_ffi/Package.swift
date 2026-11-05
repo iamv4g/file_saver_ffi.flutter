@@ -27,7 +27,9 @@ let package = Package(
             dependencies: ["FileSaverDartApi"],
             path: "Sources/file_saver_ffi",
             // Only used by ffigen (tool/ffigen.dart); the functions are defined via `@_cdecl`.
-            exclude: ["FFI/file_saver_ffi.h"]
+            exclude: ["FFI/file_saver_ffi.h"],
+            // The privacy manifest (PrivacyInfo.xcprivacy). The podspec ships it too.
+            resources: [.process("Resources")]
         ),
         // Unit tests, run on macOS with `swift test`. Apps never build this target.
         .testTarget(
