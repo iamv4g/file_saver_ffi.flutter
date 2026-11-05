@@ -36,6 +36,8 @@ Future<void> main(List<String> args) async {
   print('Generating JNI bindings...');
   await generateJniBindings(
     Config(
+      // jnigen's own suppressions miss this one, which flutter_lints reports.
+      preamble: '// ignore_for_file: prefer_initializing_formals',
       outputConfig: OutputConfig(
         dartConfig: DartCodeOutputConfig(
           path: packageRoot.resolve(

@@ -7,7 +7,21 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+  language:
+    strict-casts: true
+    strict-inference: true
+    strict-raw-types: true
 include: package:flutter_lints/flutter.yaml
-
-# Additional information about this file can be found at
-# https://dart.dev/guides/language/analysis-options
+# On top of flutter_lints. Left out: `close_sinks`, which can't see a sink
+# ended by `cancel()`, and `only_throw_errors`, since tests throw whatever
+# object a fake is given.
+linter:
+  rules:
+    - avoid_dynamic_calls
+    - avoid_void_async
+    - cancel_subscriptions
+    # A Future that is meant to run on its own is wrapped in `unawaited`.
+    - discarded_futures
+    - prefer_final_locals
+    - unawaited_futures
+    - unnecessary_await_in_return

@@ -410,7 +410,7 @@ class FileSaverAndroid extends FileSaverPlatform {
               return;
           }
           // Defer release out of [callback]'s own stack.
-          Future.microtask(callback.release);
+          unawaited(Future.microtask(callback.release));
         },
         onEvent$async: true,
       ),
@@ -447,10 +447,12 @@ class FileSaverAndroid extends FileSaverPlatform {
         if (ended.isCompleted) return;
         ended.complete();
         // Defer release out of [callback]'s own stack.
-        Future.microtask(() {
-          if (!controller.isClosed) controller.closeSync();
-          callback.release();
-        });
+        unawaited(
+          Future.microtask(() {
+            if (!controller.isClosed) controller.closeSync();
+            callback.release();
+          }),
+        );
       }
 
       callback = bindings.ProgressCallback.implement(
@@ -524,7 +526,7 @@ class FileSaverAndroid extends FileSaverPlatform {
               return;
           }
           // Defer release out of [callback]'s own stack.
-          Future.microtask(callback.release);
+          unawaited(Future.microtask(callback.release));
         },
         onEvent$async: true,
       ),
