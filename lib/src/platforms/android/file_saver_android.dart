@@ -17,6 +17,7 @@ import '../shared/native_event_parser.dart';
 import '../shared/path_location_writer.dart';
 import '../shared/single_subscription.dart';
 import 'android_file_saver_sink.dart';
+import 'jni_reply.dart';
 import 'bindings.g.dart' as bindings;
 
 class FileSaverAndroid extends FileSaverPlatform {
@@ -277,7 +278,7 @@ class FileSaverAndroid extends FileSaverPlatform {
 
   @override
   Future<bool> canOpenFile(Uri uri) async {
-    final result = await _callForResult(
+    final (_, result) = await callForJniReply(
       (arena, callback) => _fileSaver.canOpenFile(
         uri.toString().toJString()..releasedBy(arena),
         callback,
@@ -296,7 +297,7 @@ class FileSaverAndroid extends FileSaverPlatform {
 
     // Native side checks that the file exists and is readable, and reports
     // FILE_NOT_FOUND / OPEN_FAILED / INVALID_INPUT error codes.
-    await _callForResult(
+    await callForJniReply(
       (arena, callback) => _fileSaver.openFile(
         uri.toString().toJString()..releasedBy(arena),
         mimeType?.toJString()?..releasedBy(arena),
@@ -327,7 +328,7 @@ class FileSaverAndroid extends FileSaverPlatform {
 
     final saveLocationIndex = _saveLocationToIndex(saveLocation);
     // Session id 0 means SKIP found an existing file and opened nothing.
-    final result = await _callForResult(
+    final (_, result) = await callForJniReply(
       (arena, callback) => _fileSaver.openWriteSession(
         fileName.toJString()..releasedBy(arena),
         fileType.ext.toJString()..releasedBy(arena),
@@ -356,7 +357,7 @@ class FileSaverAndroid extends FileSaverPlatform {
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
   }) async {
     // Session id 0 means SKIP found an existing file and opened nothing.
-    final result = await _callForResult(
+    final (_, result) = await callForJniReply(
       (arena, callback) => _fileSaver.openWriteSessionAs(
         saveLocation.uri.toString().toJString()..releasedBy(arena),
         fileName.toJString()..releasedBy(arena),
@@ -378,51 +379,6 @@ class FileSaverAndroid extends FileSaverPlatform {
   // ─────────────────────────────────────────────────────────────────────────
   // Private Methods
   // ─────────────────────────────────────────────────────────────────────────
-
-  /// Runs a native call that reports one result through a
-  /// [bindings.ProgressCallback], and returns the data of its success event
-  /// (3) or throws the [FileSaverException] of its error event (2).
-  ///
-  /// The JNI arguments [call] registers on the arena are released once the
-  /// call has returned, and the callback after its result arrived.
-  Future<String?> _callForResult(
-    void Function(Arena arena, bindings.ProgressCallback callback) call,
-  ) {
-    final completer = Completer<String?>();
-    late final bindings.ProgressCallback callback;
-    callback = bindings.ProgressCallback.implement(
-      bindings.$ProgressCallback(
-        onEvent: (eventType, progress, data, message) {
-          final dataStr = data?.toDartString(releaseOriginal: true);
-          final messageStr = message?.toDartString(releaseOriginal: true);
-          if (completer.isCompleted) return;
-          switch (eventType) {
-            case 3:
-              completer.complete(dataStr);
-            case 2:
-              completer.completeError(
-                FileSaverException.fromErrorResult(
-                  dataStr ?? FileSaverErrorCode.platform,
-                  messageStr ?? '',
-                ),
-              );
-            default:
-              return;
-          }
-          // Defer release out of [callback]'s own stack.
-          unawaited(Future.microtask(callback.release));
-        },
-        onEvent$async: true,
-      ),
-    );
-    try {
-      using((arena) => call(arena, callback));
-    } catch (_) {
-      callback.release();
-      rethrow;
-    }
-    return completer.future;
-  }
 
   /// How long cancelling a save waits for Kotlin to report that it stopped.
   static const _cancelTimeout = Duration(seconds: 2);
