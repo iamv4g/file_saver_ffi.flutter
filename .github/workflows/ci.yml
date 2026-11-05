@@ -132,6 +132,34 @@ jobs:
           name: android-unit-test-report
           path: example/build/file_saver_ffi/reports/tests/testDebugUnitTest
 
+  # Apps made by `flutter create` (AGP 9, built-in Kotlin off) and apps still
+  # on AGP 8 build the plugin's Kotlin differently from the example app, which
+  # turns built-in Kotlin on.
+  android-consumer:
+    name: Build an app that uses the plugin (${{ matrix.name }})
+    needs: [changes, analyze]
+    if: needs.changes.outputs.android == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: flutter create
+            args: ''
+          - name: AGP 8
+            args: 8.11.1 8.14.3 2.3.20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - run: bash tool/check_consumer_app.sh ${{ matrix.args }}
+
   web-test:
     name: Web tests (Chrome)
     needs: [changes, analyze]
@@ -227,6 +255,7 @@ jobs:
       - analyze
       - test
       - android-unit-test
+      - android-consumer
       - darwin-unit-test
       - web-test
       - build

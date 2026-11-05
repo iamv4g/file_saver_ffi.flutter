@@ -39,6 +39,12 @@ void main() {
           runs: outputs['android'] == 'true',
         ),
       },
+      'android-consumer': {
+        'result': result(
+          'android-consumer',
+          runs: outputs['android'] == 'true',
+        ),
+      },
       'darwin-unit-test': {
         'result': result('darwin-unit-test', runs: outputs['darwin'] == 'true'),
       },
