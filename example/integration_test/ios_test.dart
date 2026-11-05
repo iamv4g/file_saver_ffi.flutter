@@ -10,6 +10,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:file_saver_ffi/file_saver_ffi.dart';
@@ -184,6 +185,35 @@ void main() {
     await sink.close();
     expect(await File.fromUri(await sink.result).readAsBytes(), bytes);
   }, timeout: const Timeout(Duration(minutes: 2)));
+
+  testWidgets('a session left open by an isolate that exits is cancelled, '
+      'and its file deleted', (_) async {
+    final subDir = _subDir;
+    final path =
+        '${(await getApplicationDocumentsDirectory()).path}/$subDir/abandoned.txt';
+
+    final written = await Isolate.run(() async {
+      // Plugins aren't registered in a spawned isolate.
+      FileSaverDarwin.registerWith();
+      final sink = (await FileSaver.openWrite(
+        fileName: 'abandoned',
+        fileType: _text,
+        saveLocation: IosSaveLocation.documents,
+        subDir: subDir,
+      ))!;
+      sink.add('partial'.codeUnits);
+      await sink.flush();
+      return File(path).existsSync();
+      // The isolate exits without closing or cancelling the sink.
+    });
+    expect(written, isTrue, reason: 'the session writes to $path');
+
+    final deadline = DateTime.now().add(const Duration(seconds: 10));
+    while (File(path).existsSync() && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    expect(File(path).existsSync(), isFalse);
+  });
 
   testWidgets('cancelling a download completes once the partial file is '
       'deleted', (_) async {

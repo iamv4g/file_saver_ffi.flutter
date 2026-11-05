@@ -111,7 +111,8 @@ final class OperationTests: XCTestCase {
             })
         openSession(reporter: reporter, make)
         wait(for: [replied], timeout: 5)
-        let message = port.messages[0]
+        // The reply to this open, after those of earlier ones.
+        let message = port.messages[port.messages.count - 1]
         guard case .int(let code) = message[0] else { return (-1, nil) }
         return (code, message.count > 1 ? message[1] : nil)
     }
@@ -132,6 +133,58 @@ final class OperationTests: XCTestCase {
         }
         XCTAssertGreaterThan(sessionId, 0)
         fileSaverCancelWrite(sessionId)
+    }
+
+    /// Opens a session writing to a new temporary file, and returns its id,
+    /// the session and the file.
+    private func openTemporarySession() throws -> (id: UInt64, session: WriteSession, file: URL) {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("OperationTests-\(UUID().uuidString).txt")
+        FileManager.default.createFile(atPath: fileURL.path, contents: nil)
+        let session = WriteSession(
+            fileHandle: try FileHandle(forWritingTo: fileURL),
+            fileURL: fileURL,
+            securityScopedURL: nil,
+            commit: { "" }
+        )
+        let reply = open { session }
+        guard reply.code == 3, case .string(let id) = reply.data, let sessionId = UInt64(id) else {
+            throw XCTSkip("open replied \(reply)")
+        }
+        return (sessionId, session, fileURL)
+    }
+
+    func testFinalizingASessionDeletesItsFileAndPostsNothing() throws {
+        let finalized = try openTemporarySession()
+        let kept = try openTemporarySession()
+        defer {
+            fileSaverCancelWrite(kept.id)
+            kept.session.serialQueue.sync {}
+        }
+        try finalized.session.fileHandle.write(contentsOf: Data("partial".utf8))
+        let messagesBefore = port.messages.count
+
+        fileSaverFinalizeWrite(UnsafeMutableRawPointer(bitPattern: UInt(finalized.id)))
+        finalized.session.serialQueue.sync {}  // runs after the cancel it queued
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: finalized.file.path))
+        XCTAssertNil(getWriteSession(finalized.id))
+        // The other session is untouched.
+        XCTAssertNotNil(getWriteSession(kept.id))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: kept.file.path))
+        // The callback runs without a Dart isolate, so it must not post.
+        XCTAssertEqual(port.messages.count, messagesBefore)
+    }
+
+    func testFinalizingAnEndedSessionDoesNothing() throws {
+        let ended = try openTemporarySession()
+        fileSaverCancelWrite(ended.id)
+        ended.session.serialQueue.sync {}
+
+        fileSaverFinalizeWrite(UnsafeMutableRawPointer(bitPattern: UInt(ended.id)))
+        fileSaverFinalizeWrite(nil)
+
+        XCTAssertNil(getWriteSession(ended.id))
     }
 
     func testASkippedSessionReportsIdZero() {

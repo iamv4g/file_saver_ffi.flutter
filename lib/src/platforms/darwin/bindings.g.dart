@@ -724,4 +724,35 @@ class FileSaverFFI {
         'file_saver_cancel_write',
       );
   late final _cancelWrite = _cancelWritePtr.asFunction<void Function(int)>();
+
+  /// Cancels a write session like file_saver_cancel_write, as the
+  /// NativeFinalizer of its Dart sink.
+  ///
+  /// The Dart VM calls it when the sink becomes unreachable without being
+  /// closed or cancelled, including when the isolate that opened the session
+  /// exits or its engine shuts down, where a Dart Finalizer doesn't run. It may
+  /// run on any thread and without a current isolate, so it must not call the
+  /// Dart API (it posts nothing). For a session that has already ended, it
+  /// does nothing: session ids are never reused.
+  ///
+  /// @param sessionId  Session ID from file_saver_open_write[_as], as a pointer
+  void finalizeWrite(ffi.Pointer<ffi.Void> sessionId) {
+    return _finalizeWrite(sessionId);
+  }
+
+  late final _finalizeWritePtr =
+      _lookup<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>(
+        'file_saver_finalize_write',
+      );
+  late final _finalizeWrite = _finalizeWritePtr
+      .asFunction<void Function(ffi.Pointer<ffi.Void>)>();
+
+  late final addresses = _SymbolAddresses(this);
+}
+
+class _SymbolAddresses {
+  final FileSaverFFI _library;
+  _SymbolAddresses(this._library);
+  ffi.Pointer<ffi.NativeFunction<ffi.Void Function(ffi.Pointer<ffi.Void>)>>
+  get finalizeWrite => _library._finalizeWritePtr;
 }

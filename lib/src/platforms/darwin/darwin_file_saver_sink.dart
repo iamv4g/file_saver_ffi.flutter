@@ -10,12 +10,28 @@ import 'darwin_reply.dart';
 
 /// Darwin (iOS / macOS) implementation of [FileSaverSink], over an FFI write
 /// session in `FileSaverFFI.swift`.
-class DarwinFileSaverSink extends SessionFileSaverSink {
+///
+/// Its native finalizer cancels the session when the sink is left unclosed
+/// and becomes unreachable, also when its isolate exits or its engine shuts
+/// down. The Dart `Finalizer` of [SessionFileSaverSink] doesn't run then, and
+/// Swift would keep the partial file, its handle and, for `openWriteAs`, the
+/// security scope of the directory for as long as the process lives.
+class DarwinFileSaverSink extends SessionFileSaverSink implements Finalizable {
   DarwinFileSaverSink({
     required FileSaverFFI fileSaver,
     required int sessionId,
     int? totalSize,
-  }) : super(_DarwinWriteSession(fileSaver, sessionId), totalSize);
+  }) : super(_DarwinWriteSession(fileSaver, sessionId), totalSize) {
+    // Not detached by close or cancel: once the session has ended, the
+    // callback finds no session with that id and does nothing.
+    (_finalizer ??= NativeFinalizer(
+      fileSaver.addresses.finalizeWrite,
+    )).attach(this, Pointer.fromAddress(sessionId));
+  }
+
+  /// Calls `file_saver_finalize_write` with the session id. One per isolate,
+  /// created with the first sink.
+  static NativeFinalizer? _finalizer;
 }
 
 /// The FFI calls of one write session.
