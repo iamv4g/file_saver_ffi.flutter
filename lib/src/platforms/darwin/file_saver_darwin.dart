@@ -56,7 +56,7 @@ class FileSaverDarwin extends FileSaverPlatform {
     validateBytesInput(fileBytes, fileName);
 
     if (saveLocation is PathLocation) {
-      return PathLocationWriter.saveBytes(
+      return const PathLocationWriter().saveBytes(
         fileBytes: fileBytes,
         dirPath: saveLocation.path,
         subDir: subDir,
@@ -94,7 +94,7 @@ class FileSaverDarwin extends FileSaverPlatform {
     validateFilePathInput(filePath, fileName);
 
     if (saveLocation is PathLocation) {
-      return PathLocationWriter.saveFile(
+      return const PathLocationWriter().saveFile(
         filePath: filePath,
         dirPath: saveLocation.path,
         subDir: subDir,
@@ -133,7 +133,7 @@ class FileSaverDarwin extends FileSaverPlatform {
     validateNetworkInput(url, fileName);
 
     if (saveLocation is PathLocation) {
-      return PathLocationWriter.saveNetwork(
+      return const PathLocationWriter().saveNetwork(
         url: url,
         headers: headers,
         timeout: timeout,
@@ -314,7 +314,7 @@ class FileSaverDarwin extends FileSaverPlatform {
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
   }) async {
     if (saveLocation is PathLocation) {
-      return PathLocationWriter.openWrite(
+      return const PathLocationWriter().openWrite(
         dirPath: saveLocation.path,
         subDir: subDir,
         baseName: fileName,

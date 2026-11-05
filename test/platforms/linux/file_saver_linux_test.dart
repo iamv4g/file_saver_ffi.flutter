@@ -21,11 +21,17 @@ void main() {
   /// Thrown instead of running `xdg-user-dir` when set.
   Object? runError;
 
+  /// The arguments `xdg-open` was run with, and what it returns.
+  late List<List<String>> openCalls;
+  late ProcessResult openResult;
+
   setUp(() async {
     home = await Directory.systemTemp.createTemp('file_saver_linux_test');
     xdgOutput = {};
     xdgCalls = [];
     runError = null;
+    openCalls = [];
+    openResult = ProcessResult(0, 0, '', '');
   });
 
   tearDown(() => home.delete(recursive: true));
@@ -33,6 +39,10 @@ void main() {
   FileSaverLinux saver({Map<String, String>? environment}) => FileSaverLinux(
     environment: environment ?? {'HOME': home.path},
     runProcess: (executable, arguments) async {
+      if (executable == 'xdg-open') {
+        openCalls.add(arguments);
+        return openResult;
+      }
       expect(executable, 'xdg-user-dir');
       xdgCalls.add(arguments.single);
       if (runError case final error?) throw error;
@@ -191,5 +201,37 @@ void main() {
 
     expect(p.equals(uri.toFilePath(), inHome('Downloads/a.bin')), isTrue);
     expect(File(inHome('Downloads/a.bin')).readAsBytesSync(), [1, 2, 3]);
+  });
+
+  group('openFile', () {
+    late File file;
+
+    setUp(() async {
+      // A space and a quote would split or break a shell command.
+      file = await File(inHome("my 'file'.txt")).create();
+    });
+
+    test('runs xdg-open with the path as one argument', () async {
+      await saver().openFile(file.uri);
+
+      expect(openCalls, [
+        [file.path],
+      ]);
+    });
+
+    test('a failing xdg-open throws OpenFailedException', () async {
+      openResult = ProcessResult(0, 3, '', 'no application');
+
+      await expectLater(
+        saver().openFile(file.uri),
+        throwsA(
+          isA<OpenFailedException>().having(
+            (e) => e.message,
+            'message',
+            contains('exitCode=3'),
+          ),
+        ),
+      );
+    });
   });
 }

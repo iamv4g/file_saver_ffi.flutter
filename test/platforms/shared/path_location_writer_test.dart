@@ -28,7 +28,7 @@ void main() {
     String? subDir,
     ConflictResolution conflictResolution = ConflictResolution.autoRename,
   }) {
-    return PathLocationWriter.saveBytes(
+    return const PathLocationWriter().saveBytes(
       fileBytes: bytes,
       dirPath: tmp.path,
       subDir: subDir,
@@ -107,13 +107,15 @@ void main() {
     test('concurrent autoRename saves of one name get a file each', () async {
       final results = await Future.wait([
         for (var i = 0; i < 20; i++)
-          PathLocationWriter.saveBytes(
-            fileBytes: Uint8List.fromList([i]),
-            dirPath: tmp.path,
-            baseName: 'same',
-            ext: 'bin',
-            conflictResolution: ConflictResolution.autoRename,
-          ).last,
+          const PathLocationWriter()
+              .saveBytes(
+                fileBytes: Uint8List.fromList([i]),
+                dirPath: tmp.path,
+                baseName: 'same',
+                ext: 'bin',
+                conflictResolution: ConflictResolution.autoRename,
+              )
+              .last,
       ]);
 
       final paths = {
@@ -129,7 +131,7 @@ void main() {
 
     test('a name with a separator throws synchronously', () {
       expect(
-        () => PathLocationWriter.saveBytes(
+        () => const PathLocationWriter().saveBytes(
           fileBytes: bytes,
           dirPath: tmp.path,
           baseName: '../escape',
@@ -148,7 +150,7 @@ void main() {
           reason: subDir,
         );
         expect(
-          PathLocationWriter.openWrite(
+          const PathLocationWriter().openWrite(
             dirPath: tmp.path,
             subDir: subDir,
             baseName: 'data',
@@ -166,15 +168,17 @@ void main() {
       final server = await TestHttpServer.start(bytes);
       addTearDown(server.close);
 
-      final events = await PathLocationWriter.saveNetwork(
-        url: server.url('/404'),
-        headers: null,
-        timeout: const Duration(seconds: 5),
-        dirPath: tmp.path,
-        baseName: 'download',
-        ext: 'bin',
-        conflictResolution: ConflictResolution.autoRename,
-      ).toList();
+      final events = await const PathLocationWriter()
+          .saveNetwork(
+            url: server.url('/404'),
+            headers: null,
+            timeout: const Duration(seconds: 5),
+            dirPath: tmp.path,
+            baseName: 'download',
+            ext: 'bin',
+            conflictResolution: ConflictResolution.autoRename,
+          )
+          .toList();
 
       expect(events.last, isA<SaveProgressError>());
       expect(tmp.listSync(), isEmpty);
@@ -186,14 +190,16 @@ void main() {
       final source = File(p.join(tmp.path, 'source.bin'));
       await source.writeAsBytes(bytes);
 
-      final events = await PathLocationWriter.saveFile(
-        filePath: source.path,
-        dirPath: tmp.path,
-        subDir: 'out',
-        baseName: 'copy',
-        ext: 'bin',
-        conflictResolution: ConflictResolution.autoRename,
-      ).toList();
+      final events = await const PathLocationWriter()
+          .saveFile(
+            filePath: source.path,
+            dirPath: tmp.path,
+            subDir: 'out',
+            baseName: 'copy',
+            ext: 'bin',
+            conflictResolution: ConflictResolution.autoRename,
+          )
+          .toList();
 
       final uri = (events.last as SaveProgressComplete).uri;
       expect(await File.fromUri(uri).readAsBytes(), bytes);
@@ -203,14 +209,16 @@ void main() {
       final source = File(p.join(tmp.path, 'a#1 50%.bin'));
       await source.writeAsBytes(bytes);
 
-      final events = await PathLocationWriter.saveFile(
-        filePath: source.uri.toString(),
-        dirPath: tmp.path,
-        subDir: 'out',
-        baseName: 'copy',
-        ext: 'bin',
-        conflictResolution: ConflictResolution.autoRename,
-      ).toList();
+      final events = await const PathLocationWriter()
+          .saveFile(
+            filePath: source.uri.toString(),
+            dirPath: tmp.path,
+            subDir: 'out',
+            baseName: 'copy',
+            ext: 'bin',
+            conflictResolution: ConflictResolution.autoRename,
+          )
+          .toList();
 
       final uri = (events.last as SaveProgressComplete).uri;
       expect(await File.fromUri(uri).readAsBytes(), bytes);
@@ -223,15 +231,16 @@ void main() {
 
       final firstUpdate = Completer<void>();
       final events = <SaveProgress>[];
-      final subscription =
-          PathLocationWriter.saveFile(
+      final subscription = const PathLocationWriter()
+          .saveFile(
             filePath: source.path,
             dirPath: tmp.path,
             subDir: 'out',
             baseName: 'copy',
             ext: 'bin',
             conflictResolution: ConflictResolution.autoRename,
-          ).listen((event) {
+          )
+          .listen((event) {
             events.add(event);
             if (event is SaveProgressUpdate && !firstUpdate.isCompleted) {
               firstUpdate.complete();
@@ -248,13 +257,15 @@ void main() {
     });
 
     test('missing source emits SourceFileNotFoundException', () async {
-      final events = await PathLocationWriter.saveFile(
-        filePath: p.join(tmp.path, 'missing.bin'),
-        dirPath: tmp.path,
-        baseName: 'copy',
-        ext: 'bin',
-        conflictResolution: ConflictResolution.autoRename,
-      ).toList();
+      final events = await const PathLocationWriter()
+          .saveFile(
+            filePath: p.join(tmp.path, 'missing.bin'),
+            dirPath: tmp.path,
+            baseName: 'copy',
+            ext: 'bin',
+            conflictResolution: ConflictResolution.autoRename,
+          )
+          .toList();
 
       expect(
         (events.last as SaveProgressError).exception,
@@ -267,7 +278,7 @@ void main() {
     Stream<SaveProgress> saveFile(
       _FakeCopier copier, {
       ConflictResolution conflictResolution = ConflictResolution.autoRename,
-    }) => PathLocationWriter.saveFile(
+    }) => const PathLocationWriter().saveFile(
       filePath: 'content://media/external/file/7',
       dirPath: tmp.path,
       subDir: 'out',
@@ -424,8 +435,9 @@ void main() {
       Map<String, String>? headers,
       Duration timeout = const Duration(seconds: 5),
       ConflictResolution conflictResolution = ConflictResolution.autoRename,
+      PathLocationWriter writer = const PathLocationWriter(),
     }) {
-      return PathLocationWriter.saveNetwork(
+      return writer.saveNetwork(
         url: server.url(path),
         headers: headers,
         timeout: timeout,
@@ -508,15 +520,17 @@ void main() {
       final port = closed.port;
       await closed.close();
 
-      final events = await PathLocationWriter.saveNetwork(
-        url: 'http://127.0.0.1:$port/file',
-        headers: null,
-        timeout: const Duration(seconds: 5),
-        dirPath: tmp.path,
-        baseName: 'download',
-        ext: 'bin',
-        conflictResolution: ConflictResolution.autoRename,
-      ).toList();
+      final events = await const PathLocationWriter()
+          .saveNetwork(
+            url: 'http://127.0.0.1:$port/file',
+            headers: null,
+            timeout: const Duration(seconds: 5),
+            dirPath: tmp.path,
+            baseName: 'download',
+            ext: 'bin',
+            conflictResolution: ConflictResolution.autoRename,
+          )
+          .toList();
 
       expect(
         (events.last as SaveProgressError).exception,
@@ -568,6 +582,63 @@ void main() {
       });
     }
 
+    group('the client of a download', () {
+      late List<HttpClient> clients;
+      late PathLocationWriter writer;
+
+      setUp(() {
+        clients = [];
+        writer = PathLocationWriter(
+          createHttpClient: () {
+            final client = HttpClient();
+            clients.add(client);
+            return client;
+          },
+        );
+      });
+
+      /// A closed client refuses new requests.
+      Matcher isClosed() => predicate<HttpClient>((client) {
+        try {
+          client.getUrl(Uri.parse(server.url('/file'))).ignore();
+          return false;
+        } on StateError {
+          return true;
+        }
+      }, 'closed');
+
+      test('is its own, with the timeout to connect, and is closed once the '
+          'body is read', () async {
+        final events = await download(
+          '/file',
+          timeout: const Duration(seconds: 7),
+          writer: writer,
+        ).toList();
+
+        expect(events.last, isA<SaveProgressComplete>());
+        expect(clients, hasLength(1));
+        expect(clients.single.connectionTimeout, const Duration(seconds: 7));
+        expect(clients.single, isClosed());
+      });
+
+      test('is closed after an HTTP error', () async {
+        final events = await download('/404', writer: writer).toList();
+
+        expect(events.last, isA<SaveProgressError>());
+        expect(clients.single, isClosed());
+      });
+
+      test('is closed when the download is cancelled', () async {
+        final subscription = await listenUntilProgress(
+          download('/slow', writer: writer),
+        );
+
+        await subscription.cancel();
+
+        expect(clients.single, isClosed());
+      });
+    });
+
     test('forwards headers', () async {
       final events = await download(
         '/auth',
@@ -587,7 +658,7 @@ void main() {
 
   group('openWrite', () {
     test('writes chunks and returns the file URI on close', () async {
-      final sink = await PathLocationWriter.openWrite(
+      final sink = await const PathLocationWriter().openWrite(
         dirPath: tmp.path,
         baseName: 'stream',
         ext: 'bin',
@@ -608,7 +679,7 @@ void main() {
 
     test('returns null for skip when the file exists', () async {
       await File(p.join(tmp.path, 'stream.bin')).writeAsString('old');
-      final sink = await PathLocationWriter.openWrite(
+      final sink = await const PathLocationWriter().openWrite(
         dirPath: tmp.path,
         baseName: 'stream',
         ext: 'bin',

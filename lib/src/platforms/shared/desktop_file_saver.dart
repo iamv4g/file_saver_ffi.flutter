@@ -28,6 +28,14 @@ import 'path_location_writer.dart';
 /// [InvalidInputException].
 abstract class DesktopFileSaver<L extends SaveLocation>
     extends FileSaverPlatform {
+  DesktopFileSaver({
+    @visibleForTesting
+    PathLocationWriter pathLocationWriter = const PathLocationWriter(),
+  }) : _paths = pathLocationWriter;
+
+  /// Writes every save.
+  final PathLocationWriter _paths;
+
   final _conflictResolver = ConflictResolver(const IOFileEntity());
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -107,7 +115,7 @@ abstract class DesktopFileSaver<L extends SaveLocation>
   ) {
     if (saveLocation is PathLocation) {
       return switch (input) {
-        SaveBytesInput(:final fileBytes) => PathLocationWriter.saveBytes(
+        SaveBytesInput(:final fileBytes) => _paths.saveBytes(
           fileBytes: fileBytes,
           dirPath: saveLocation.path,
           subDir: subDir,
@@ -115,7 +123,7 @@ abstract class DesktopFileSaver<L extends SaveLocation>
           ext: fileType.ext,
           conflictResolution: conflictResolution,
         ),
-        SaveFileInput(:final filePath) => PathLocationWriter.saveFile(
+        SaveFileInput(:final filePath) => _paths.saveFile(
           filePath: filePath,
           dirPath: saveLocation.path,
           subDir: subDir,
@@ -124,7 +132,7 @@ abstract class DesktopFileSaver<L extends SaveLocation>
           conflictResolution: conflictResolution,
         ),
         SaveNetworkInput(:final url, :final headers, :final timeout) =>
-          PathLocationWriter.saveNetwork(
+          _paths.saveNetwork(
             url: url,
             headers: headers,
             timeout: timeout,
@@ -139,7 +147,7 @@ abstract class DesktopFileSaver<L extends SaveLocation>
 
     final location = checkSaveLocation<L>(saveLocation);
     checkSubDir(subDir);
-    return PathLocationWriter.save(
+    return _paths.save(
       input: input,
       directory: () => resolveDirectory(location, subDir),
       baseName: fileName,
@@ -179,7 +187,7 @@ abstract class DesktopFileSaver<L extends SaveLocation>
   }) {
     validateSaveAsInput(input: input, fileName: fileName, fileType: fileType);
     final dirPath = saveLocation.uri.toFilePath();
-    return PathLocationWriter.save(
+    return _paths.save(
       input: input,
       directory: () async => dirPath,
       baseName: fileName,
@@ -205,7 +213,7 @@ abstract class DesktopFileSaver<L extends SaveLocation>
       throw const InvalidInputException('File name cannot be empty');
     }
     if (saveLocation is PathLocation) {
-      return PathLocationWriter.openWrite(
+      return _paths.openWrite(
         dirPath: saveLocation.path,
         subDir: subDir,
         baseName: fileName,

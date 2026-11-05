@@ -27,6 +27,7 @@ class FileSaverLinux extends DesktopFileSaver<LinuxSaveLocation> {
   FileSaverLinux({
     @visibleForTesting ProcessRunner? runProcess,
     @visibleForTesting Map<String, String>? environment,
+    @visibleForTesting super.pathLocationWriter,
   }) : _runProcess = runProcess ?? Process.run,
        _environment = environment ?? Platform.environment;
 
@@ -64,7 +65,7 @@ class FileSaverLinux extends DesktopFileSaver<LinuxSaveLocation> {
   /// shell), so the path reaches `xdg-open` as a single argument.
   @override
   Future<void> launchFile(String path) async {
-    final result = await Process.run('xdg-open', [path]);
+    final result = await _runProcess('xdg-open', [path]);
     if (result.exitCode != 0) {
       throw OpenFailedException(
         'exitCode=${result.exitCode} stdout=${result.stdout} stderr=${result.stderr}',

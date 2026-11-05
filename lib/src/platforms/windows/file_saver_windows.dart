@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider_windows/path_provider_windows.dart';
 
@@ -24,6 +25,8 @@ const String _kDocuments = '{FDD39AD0-238F-46AF-ADB4-6C85480369C7}';
 /// platform-specific. Directory resolution uses [PathProviderWindows]
 /// (SHGetKnownFolderPath via dart:ffi); files are opened with ShellExecuteExW.
 class FileSaverWindows extends DesktopFileSaver<WindowsSaveLocation> {
+  FileSaverWindows({@visibleForTesting super.pathLocationWriter});
+
   /// Registers this class as the default instance of [FileSaverPlatform].
   static void registerWith() {
     FileSaverPlatform.instance = FileSaverWindows();
