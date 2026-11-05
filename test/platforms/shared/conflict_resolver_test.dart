@@ -135,7 +135,25 @@ void main() {
     });
     expect(
       resolver.resolve('a.txt', ConflictResolution.autoRename),
-      throwsA(isA<FileIOException>()),
+      throwsA(
+        isA<FileIOException>().having(
+          (e) => e.message,
+          'message',
+          'File I/O error: Could not find available filename after 1000 '
+              'attempts',
+        ),
+      ),
+    );
+  });
+
+  test('autoRename still tries the 1000th name', () async {
+    final resolver = resolverWith({
+      'a.txt',
+      for (var i = 1; i < 1000; i++) 'a ($i).txt',
+    });
+    expect(
+      await resolver.resolve('a.txt', ConflictResolution.autoRename),
+      'a (1000).txt',
     );
   });
 }
