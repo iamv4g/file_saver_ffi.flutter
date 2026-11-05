@@ -11,10 +11,14 @@ on:
   # Lets publish.yml run the full CI before releasing a tag.
   workflow_call:
 
-# Cancel superseded runs on PRs only. Every commit on main gets a full run.
+# A new push cancels the run it supersedes, on a PR and on main alike: PRs are
+# squash-merged, so the newest commit on main contains every commit before it,
+# and the release runs CI again on the tagged commit. A manual run is never
+# cancelled, and neither is the release (publish.yml calls this workflow with
+# the tag as `github.ref`, so it has a group of its own).
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
 
 permissions:
   contents: read
