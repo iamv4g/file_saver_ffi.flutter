@@ -124,6 +124,20 @@ class SafSaveTest : FileSaverTestBase() {
     }
 
     @Test
+    fun `overwrite replaces the document however many numbered copies exist`() {
+        // The system provider numbers a taken name only up to `name (32)`.
+        documents.addExisting("note.txt")
+        (1..32).forEach { documents.addExisting("note ($it).txt") }
+
+        val event = saveAs("note", ConflictResolution.OVERWRITE, byteArrayOf(5, 6))
+
+        assertEquals("Events: $event", 3, event.type)
+        assertEquals(documents.names().toString(), 33, documents.names().size)
+        assertEquals(1, documents.names().count { it == "note.txt" })
+        assertArrayEquals(byteArrayOf(5, 6), documents.contentOf("note.txt"))
+    }
+
+    @Test
     fun `cancelling right after the document is created deletes it`() {
         val opening = CountDownLatch(1)
         val release = CountDownLatch(1)

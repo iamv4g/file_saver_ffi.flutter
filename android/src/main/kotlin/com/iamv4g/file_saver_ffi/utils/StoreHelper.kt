@@ -188,10 +188,11 @@ object StoreHelper {
      *
      * - Android 10+: clears IS_PENDING so the file becomes visible. For
      *   OVERWRITE it then deletes the replaced row and renames the new row
-     *   (auto-renamed to e.g. `photo (1).jpg` on insert) back to [displayName].
+     *   (inserted under a numbered name such as `photo (1).jpg`) back to
+     *   [displayName].
      *   If the old row cannot be deleted (for example a row the app does not
      *   own throws `RecoverableSecurityException`), the new file keeps its
-     *   auto-renamed name.
+     *   numbered name.
      * - Android ≤ 9: for OVERWRITE, renames the temporary file over the original,
      *   then asks the media scanner to index the file so it shows up in gallery
      *   and music apps (MediaStore is not updated by plain file writes there).
@@ -241,7 +242,7 @@ object StoreHelper {
                     val rename = ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, displayName) }
                     resolver.update(entry.uri, rename, null, null)
                 } catch (_: Exception) {
-                    // The content is saved; only the name stays auto-renamed.
+                    // The content is saved; only the name stays numbered.
                 }
             }
             entry.uri

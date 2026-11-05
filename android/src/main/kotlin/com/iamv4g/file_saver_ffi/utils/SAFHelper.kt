@@ -66,15 +66,18 @@ object SAFHelper {
                 when (conflictResolution) {
                     ConflictResolution.AUTO_RENAME -> {
                         // Generate unique name: photo.jpg → photo (1).jpg
-                        val uniqueName = generateUniqueName(children.keys, baseFileName, fileType.ext)
+                        val uniqueName = FileHelper.numberedName(baseFileName, fileType.ext, children::containsKey)
                         return@withContext createNewFile(context, docDir, uniqueName, mimeType)
                     }
 
                     ConflictResolution.OVERWRITE -> {
-                        // Write a new document next to the existing one (the
-                        // provider gives it a unique name). commitFile deletes
-                        // the existing document only after the write succeeds.
-                        return@withContext createNewFile(context, docDir, fileName, mimeType, replaces = existingUri)
+                        // Write a new document next to the existing one, under
+                        // a numbered name. commitFile deletes the existing
+                        // document only after the write succeeds. The name
+                        // isn't left to the provider: the system's gives up
+                        // after `name (32)`.
+                        val tempName = FileHelper.numberedName(baseFileName, fileType.ext, children::containsKey)
+                        return@withContext createNewFile(context, docDir, tempName, mimeType, replaces = existingUri)
                     }
 
                     ConflictResolution.SKIP -> {
@@ -96,7 +99,7 @@ object SAFHelper {
      * Makes a fully written [entry] the saved file and returns its final URI.
      *
      * For OVERWRITE, deletes the replaced document and renames the new one
-     * (created with a provider-chosen unique name) to [displayName]. If the old
+     * (created with a numbered name) to [displayName]. If the old
      * document cannot be deleted or the new one cannot be renamed, the new file
      * keeps its unique name, so no data is lost.
      *
@@ -176,17 +179,4 @@ object SAFHelper {
         } ?: throw IOException("Cannot list directory: ${docDir.uri}")
         return children
     }
-
-    /**
-     * Returns the first of `base (1).ext`, `base (2).ext`, … not in [takenNames].
-     * There always is one, because [takenNames] is finite.
-     */
-    private fun generateUniqueName(
-        takenNames: Set<String>,
-        baseFileName: String,
-        extension: String,
-    ): String =
-        generateSequence(1) { it + 1 }
-            .map { FileHelper.buildFileName("$baseFileName ($it)", extension) }
-            .first { it !in takenNames }
 }

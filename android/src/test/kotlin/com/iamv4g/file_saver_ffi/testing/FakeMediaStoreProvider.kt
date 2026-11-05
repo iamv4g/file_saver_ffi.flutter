@@ -25,7 +25,11 @@ import java.nio.file.Files
  *   collection doesn't allow (an image in `Movies/`), like MediaProvider's
  *   "Primary directory … not allowed" check.
  * - `insert` auto-renames a duplicate `DISPLAY_NAME` in the same
- *   `RELATIVE_PATH` to `name (1).ext`.
+ *   `RELATIVE_PATH` to `name (1).ext`, up to `name (31).ext`, and then
+ *   throws `IllegalStateException("Failed to build unique file: …")`, as
+ *   MediaProvider's `FileUtils.buildUniqueNameIterator` does. (Android 10
+ *   numbers the name on insert; Android 11 and later when `IS_PENDING` is
+ *   cleared.)
  * - `insert` stores `RELATIVE_PATH` with a trailing slash (`Pictures/album/`),
  *   as MediaProvider does, so queries must match that form.
  * - `query` supports `col=?` selections joined with `AND`.
@@ -175,6 +179,24 @@ class FakeMediaStoreProvider : ContentProvider() {
         return ParcelFileDescriptor.open(row.file, ParcelFileDescriptor.parseMode(if (readOnly) "r" else mode))
     }
 
+    /** Adds a row named [displayName] in [relativePath], as if another save had made it. */
+    @Synchronized
+    fun addExisting(
+        displayName: String,
+        relativePath: String,
+        collection: String = "downloads",
+        mimeType: String = "text/plain",
+    ): Row {
+        val values =
+            ContentValues().apply {
+                put(MediaColumns.DISPLAY_NAME, displayName)
+                put(MediaColumns.RELATIVE_PATH, relativePath)
+                put(MediaColumns.MIME_TYPE, mimeType)
+            }
+        val id = nextId++
+        return Row(id, collection, values, File(storageDir, "$id").apply { createNewFile() }).also { rows[id] = it }
+    }
+
     /** The row with [displayName], or null. */
     @Synchronized
     fun rowNamed(displayName: String): Row? = rows.values.firstOrNull { it.displayName == displayName }
@@ -189,10 +211,14 @@ class FakeMediaStoreProvider : ContentProvider() {
         if (!taken(name)) return name
         val dot = name.lastIndexOf('.')
         val (base, ext) = if (dot > 0) name.substring(0, dot) to name.substring(dot) else name to ""
-        return generateSequence(1) { it + 1 }.map { "$base ($it)$ext" }.first { !taken(it) }
+        return (1 until MAX_UNIQUE_NAMES).map { "$base ($it)$ext" }.firstOrNull { !taken(it) }
+            ?: throw IllegalStateException("Failed to build unique file: $relativePath$name")
     }
 
     companion object {
+        /** MediaProvider tries `name`, `name (1)` … `name (31)`. */
+        const val MAX_UNIQUE_NAMES = 32
+
         /**
          * Top-level directories MediaProvider accepts per collection, as
          * measured on a Galaxy Note 9 (Android 10) and a Galaxy S22

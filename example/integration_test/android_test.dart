@@ -344,6 +344,29 @@ void main() {
     );
   });
 
+  testWidgets('autoRename and overwrite work past the 32 names MediaProvider '
+      'numbers', (_) async {
+    // MediaProvider numbers a taken name only up to `name (31)`: the 33rd
+    // save of a name failed with "Failed to build unique file".
+    Future<Uri> save(String content, ConflictResolution mode) =>
+        FileSaver.saveAsync(
+          input: SaveInput.bytes(Uint8List.fromList(content.codeUnits)),
+          fileName: 'limit',
+          fileType: _text,
+          saveLocation: AndroidSaveLocation.downloads,
+          subDir: _subDir,
+          conflictResolution: mode,
+        );
+    final uris = [
+      for (var i = 1; i <= 34; i++)
+        await save('$i', ConflictResolution.autoRename),
+    ];
+    expect(uris.toSet(), hasLength(34));
+
+    final overwritten = await save('new', ConflictResolution.overwrite);
+    expect(uris, isNot(contains(overwritten)));
+  }, timeout: const Timeout(Duration(minutes: 2)));
+
   testWidgets('openWrite with skip returns null for an existing file', (
     _,
   ) async {

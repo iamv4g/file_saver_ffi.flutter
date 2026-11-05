@@ -60,6 +60,20 @@ object FileHelper {
         }
 
     /**
+     * The first of `base (1).ext`, `base (2).ext`, … that [isTaken] rejects.
+     * There always is one when the taken names come from one listing, which
+     * is finite.
+     */
+    fun numberedName(
+        baseFileName: String,
+        extension: String,
+        isTaken: (String) -> Boolean,
+    ): String =
+        generateSequence(1) { it + 1 }
+            .map { buildFileName("$baseFileName ($it)", extension) }
+            .first { !isTaken(it) }
+
+    /**
      * Builds full file name with extension
      *
      * @param fileName File name without extension

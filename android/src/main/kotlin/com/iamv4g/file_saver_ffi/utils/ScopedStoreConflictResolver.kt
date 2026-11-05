@@ -56,17 +56,26 @@ object ScopedStoreConflictResolver {
                 findExistingFileUri(context, contentUri, dirPath, originalName)
                     ?: return@withContext Resolution.Create(originalName)
 
+            // The plugin picks the numbered name: MediaProvider numbers a
+            // taken name itself, but gives up after `name (31)`, and only
+            // once the whole file is written.
+            fun numberedName() =
+                FileHelper.numberedName(
+                    baseFileName,
+                    extension,
+                    takenNames(context, contentUri, dirPath)::contains,
+                )
+
             when (conflictResolution) {
-                // MediaStore automatically handles conflicts by appending numbers
                 // photo.jpg → photo (1).jpg → photo (2).jpg
                 ConflictResolution.AUTO_RENAME -> {
-                    Resolution.Create(originalName)
+                    Resolution.Create(numberedName())
                 }
 
-                // The new row is auto-renamed while the old one exists; the
-                // commit deletes the old row and renames the new one back.
+                // The new row gets a numbered name while the old one exists;
+                // the commit deletes the old row and renames the new one back.
                 ConflictResolution.OVERWRITE -> {
-                    Resolution.Create(originalName, replaces = existingUri)
+                    Resolution.Create(numberedName(), replaces = existingUri)
                 }
 
                 ConflictResolution.SKIP -> {
@@ -115,6 +124,26 @@ object ScopedStoreConflictResolver {
         }
 
         return null
+    }
+
+    /** The display names of the rows in [dirPath] of [contentUri], in one query. */
+    private fun takenNames(
+        context: Context,
+        contentUri: Uri,
+        dirPath: String,
+    ): Set<String> {
+        val names = HashSet<String>()
+        context.contentResolver
+            .query(
+                contentUri,
+                arrayOf(MediaStore.MediaColumns.DISPLAY_NAME),
+                "${MediaStore.MediaColumns.RELATIVE_PATH}=?",
+                arrayOf(normalizeRelativePath(dirPath)),
+                null,
+            )?.use { cursor ->
+                while (cursor.moveToNext()) cursor.getString(0)?.let(names::add)
+            }
+        return names
     }
 
     private fun normalizeRelativePath(dirPath: String): String = if (dirPath.endsWith("/")) dirPath else "$dirPath/"
