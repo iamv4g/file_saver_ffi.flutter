@@ -1,6 +1,6 @@
 name: file_saver_ffi
 description: "Save bytes, files and downloads to the gallery, device storage or a user-picked folder, with progress, cancellation and conflict handling. Native FFI and JNI on mobile."
-version: 0.11.0
+version: 0.12.0
 homepage: https://github.com/iamv4g/file_saver_ffi.flutter
 repository: https://github.com/iamv4g/file_saver_ffi.flutter
 issue_tracker: https://github.com/iamv4g/file_saver_ffi.flutter/issues
