@@ -332,7 +332,7 @@ abstract final class PathLocationWriter {
         onError: controller.addError,
         onDone: () {
           onDone();
-          controller.close();
+          unawaited(controller.close());
         },
       );
       controller
@@ -382,7 +382,7 @@ abstract final class PathLocationWriter {
 
     void fail(Object e, StackTrace st) {
       if (done.isCompleted) return;
-      subscription.cancel();
+      unawaited(subscription.cancel());
       done.completeError(e, st);
     }
 
@@ -397,7 +397,7 @@ abstract final class PathLocationWriter {
       cancelOnError: true,
     );
     cancellation.onCancel = () {
-      subscription.cancel();
+      unawaited(subscription.cancel());
       if (!done.isCompleted) done.complete();
     };
     return done.future.whenComplete(() => cancellation.onCancel = null);

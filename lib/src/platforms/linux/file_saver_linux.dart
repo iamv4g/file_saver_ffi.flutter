@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
@@ -48,8 +49,9 @@ class FileSaverLinux extends DesktopFileSaver<LinuxSaveLocation> {
     final location = saveLocation ?? LinuxSaveLocation.downloads;
     final basePath = await (_userDirectories[location] ??=
         _userDirectory(location).catchError((Object e, StackTrace st) {
-          // Looked up again by the next save.
-          _userDirectories.remove(location);
+          // Looked up again by the next save. The removed future is this
+          // one, which the caller awaits.
+          unawaited(_userDirectories.remove(location));
           Error.throwWithStackTrace(e, st);
         }));
 

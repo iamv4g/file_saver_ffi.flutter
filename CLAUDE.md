@@ -10,7 +10,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 flutter pub get                      # root package
-flutter analyze                      # lints: package:flutter_lints/flutter.yaml
+flutter analyze                      # flutter_lints plus strict modes and async lints (analysis_options.yaml); CI fails on any info
 dart format lib tool
 
 cd example && flutter run -d <device>   # manual testing on a target platform

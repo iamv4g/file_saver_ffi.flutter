@@ -80,7 +80,7 @@ class _AndroidWriteSession implements WriteSession {
               completer.complete((progress, data));
             }
           }
-          Future.microtask(() => callback?.release());
+          unawaited(Future.microtask(() => callback?.release()));
         },
         onEvent$async: true,
       ),

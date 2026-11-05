@@ -121,7 +121,7 @@ class SessionFileSaverSink implements FileSaverSink {
   }
 
   @override
-  Future addStream(Stream<List<int>> stream) async {
+  Future<void> addStream(Stream<List<int>> stream) async {
     _checkWritable('addStream');
     _isAddingStream = true;
     try {
@@ -160,7 +160,8 @@ class SessionFileSaverSink implements FileSaverSink {
     if (!_isClosed) {
       _isClosed = true;
       _finalizer.detach(this);
-      _finish();
+      // Completes [result], which is returned.
+      unawaited(_finish());
     }
     return result;
   }

@@ -69,9 +69,9 @@ jobs:
             | xargs dart format --output=none --set-exit-if-changed
 
       - name: Analyze package
-        run: flutter analyze --no-fatal-infos
+        run: flutter analyze
       - name: Analyze example
-        run: flutter analyze --no-fatal-infos
+        run: flutter analyze
         working-directory: example
 
       - name: Validate package for pub.dev
