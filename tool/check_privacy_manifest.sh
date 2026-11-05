@@ -17,7 +17,10 @@ fi
 app=$1
 source=$(cd "$(dirname "$0")/.." && pwd)/darwin/file_saver_ffi/Sources/file_saver_ffi/Resources/PrivacyInfo.xcprivacy
 
-found=$(find "$app" -path '*file_saver_ffi*.bundle/*' -name PrivacyInfo.xcprivacy)
+# By the bundle name only: the app's own name may contain file_saver_ffi, as
+# the example's file_saver_ffi_example.app does.
+found=$(find "$app" -name PrivacyInfo.xcprivacy \
+  \( -path '*/file_saver_ffi_privacy.bundle/*' -o -path '*/file_saver_ffi_file_saver_ffi.bundle/*' \))
 if [ -z "$found" ]; then
   echo "::error::$app has no file_saver_ffi bundle with a PrivacyInfo.xcprivacy."
   exit 1
