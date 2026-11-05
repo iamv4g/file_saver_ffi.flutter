@@ -338,4 +338,17 @@ void file_saver_close_write(
 /// @param sessionId  Session ID from file_saver_open_write[_as]
 void file_saver_cancel_write(uint64_t sessionId);
 
+/// Cancels a write session like file_saver_cancel_write, as the
+/// NativeFinalizer of its Dart sink.
+///
+/// The Dart VM calls it when the sink becomes unreachable without being
+/// closed or cancelled, including when the isolate that opened the session
+/// exits or its engine shuts down, where a Dart Finalizer doesn't run. It may
+/// run on any thread and without a current isolate, so it must not call the
+/// Dart API (it posts nothing). For a session that has already ended, it
+/// does nothing: session ids are never reused.
+///
+/// @param sessionId  Session ID from file_saver_open_write[_as], as a pointer
+void file_saver_finalize_write(void *sessionId);
+
 #endif

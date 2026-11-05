@@ -247,7 +247,7 @@ private func removeWriteSession(_ id: UInt64) -> WriteSession? {
     return writeSessionRegistry.removeValue(forKey: id)
 }
 
-private func getWriteSession(_ id: UInt64) -> WriteSession? {
+func getWriteSession(_ id: UInt64) -> WriteSession? {
     writeSessionLock.lock()
     defer { writeSessionLock.unlock() }
     return writeSessionRegistry[id]
@@ -761,4 +761,14 @@ public func fileSaverCloseWrite(_ sessionId: UInt64, _ nativePort: Int64) {
 @_cdecl("file_saver_cancel_write")
 public func fileSaverCancelWrite(_ sessionId: UInt64) {
     removeWriteSession(sessionId)?.cancel()
+}
+
+/// The `NativeFinalizer` of a Dart sink: cancels session `sessionId` (the
+/// token, an id cast to a pointer) when the sink became unreachable, or its
+/// isolate went away, without `close` or `cancel`. May run on any thread
+/// without a current isolate, so it must not post to Dart, and `cancel`
+/// doesn't. Does nothing for a session that has already ended.
+@_cdecl("file_saver_finalize_write")
+public func fileSaverFinalizeWrite(_ sessionId: UnsafeMutableRawPointer?) {
+    fileSaverCancelWrite(UInt64(UInt(bitPattern: sessionId)))
 }

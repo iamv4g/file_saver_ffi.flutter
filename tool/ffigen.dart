@@ -26,6 +26,9 @@ void main() {
     functions: Functions(
       // Every function the header declares: each one is a Swift `@_cdecl`.
       include: (_) => true,
+      // For the NativeFinalizer of DarwinFileSaverSink.
+      includeSymbolAddress: (decl) =>
+          decl.originalName == 'file_saver_finalize_write',
       rename: (decl) {
         final stripped = decl.originalName.replaceFirst('file_saver_', '');
         return stripped.replaceAllMapped(
