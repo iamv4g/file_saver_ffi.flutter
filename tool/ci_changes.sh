@@ -50,7 +50,7 @@ fi
 
 # Ubuntu always runs the Dart tests, on stable and on the minimum Flutter
 # version from pubspec.yaml `environment.flutter`.
-tests=('{"os":"ubuntu-latest","flutter":"stable"}' '{"os":"ubuntu-latest","flutter":"3.44.0"}')
+tests=('{"os":"ubuntu-latest","flutter":"stable"}' '{"os":"ubuntu-latest","flutter":"3.47.8"}')
 $desktop && tests+=('{"os":"macos-latest","flutter":"stable"}')
 { $desktop || $windows; } && tests+=('{"os":"windows-latest","flutter":"stable"}')
 

@@ -16,30 +16,18 @@ class PhotosHelper {
     ///   `false` if only add-only access is.
     /// - Throws: `FileSaverError.permissionDenied` if the user denies access.
     static func requestPermission(needAlbum: Bool) throws -> Bool {
-        if #available(iOS 14, *) {
-            let readWrite = authorize(.readWrite, request: needAlbum)
-            if readWrite == .authorized || readWrite == .limited {
-                return true
-            }
-            guard !needAlbum, authorize(.addOnly, request: true) == .authorized else {
-                throw FileSaverError.permissionDenied("Photo library access denied")
-            }
-            return false
-        } else {
-            var status = PHPhotoLibrary.authorizationStatus()
-            if status == .notDetermined {
-                status = waitForAuthorization { PHPhotoLibrary.requestAuthorization($0) }
-            }
-            guard status == .authorized else {
-                throw FileSaverError.permissionDenied("Photo library access denied")
-            }
+        let readWrite = authorize(.readWrite, request: needAlbum)
+        if readWrite == .authorized || readWrite == .limited {
             return true
         }
+        guard !needAlbum, authorize(.addOnly, request: true) == .authorized else {
+            throw FileSaverError.permissionDenied("Photo library access denied")
+        }
+        return false
     }
 
     /// Returns the status of `accessLevel`, first asking the user if it is
     /// undetermined and `request` is `true`.
-    @available(iOS 14, *)
     private static func authorize(_ accessLevel: PHAccessLevel, request: Bool) -> PHAuthorizationStatus {
         let status = PHPhotoLibrary.authorizationStatus(for: accessLevel)
         guard request, status == .notDetermined else { return status }

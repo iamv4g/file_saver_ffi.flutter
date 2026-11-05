@@ -6,8 +6,9 @@ import PackageDescription
 let package = Package(
     name: "file_saver_ffi",
     platforms: [
-        .iOS("13.4"),
-        .macOS("10.15.4"),
+        // The minimums of Flutter 3.47, the lowest Flutter the package supports.
+        .iOS("15.0"),
+        .macOS("12.0"),
     ],
     products: [
         .library(name: "file-saver-ffi", targets: ["file_saver_ffi"])

@@ -13,8 +13,10 @@ analyzer:
     strict-raw-types: true
 include: package:flutter_lints/flutter.yaml
 # On top of flutter_lints. Left out: `close_sinks`, which can't see a sink
-# ended by `cancel()`, and `only_throw_errors`, since tests throw whatever
-# object a fake is given.
+# ended by `cancel()`, `only_throw_errors`, since tests throw whatever object
+# a fake is given, and `unnecessary_await_in_return`, which the linter has
+# deprecated ("following this lint rule everywhere ... can lead to unexpected
+# errors"; the analyzer warns when it is enabled for Dart 3.13 code).
 linter:
   rules:
     - avoid_dynamic_calls
@@ -24,4 +26,3 @@ linter:
     - discarded_futures
     - prefer_final_locals
     - unawaited_futures
-    - unnecessary_await_in_return
