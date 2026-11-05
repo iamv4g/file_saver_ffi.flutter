@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/foundation.dart';
 
 /// Base sealed class for save input types.
@@ -8,6 +6,9 @@ import 'package:flutter/foundation.dart';
 /// - [SaveBytesInput]: Raw bytes in memory
 /// - [SaveFileInput]: File path on disk
 /// - [SaveNetworkInput]: URL to download from network
+///
+/// Inputs are values: two inputs with the same content are `==`.
+@immutable
 sealed class SaveInput {
   factory SaveInput.bytes(Uint8List fileBytes) => SaveBytesInput(fileBytes);
 
@@ -26,6 +27,18 @@ final class SaveBytesInput implements SaveInput {
 
   /// The file content as bytes.
   final Uint8List fileBytes;
+
+  /// Compares the bytes one by one.
+  @override
+  bool operator ==(Object other) =>
+      other is SaveBytesInput && listEquals(fileBytes, other.fileBytes);
+
+  /// Hashes only the length, so it stays cheap for large files.
+  @override
+  int get hashCode => Object.hash(SaveBytesInput, fileBytes.length);
+
+  @override
+  String toString() => 'SaveBytesInput(${fileBytes.length} bytes)';
 }
 
 /// Input from a file path on disk.
@@ -35,6 +48,16 @@ final class SaveFileInput implements SaveInput {
 
   /// The source file path (file:// URI or content:// URI on Android).
   final String filePath;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SaveFileInput && filePath == other.filePath;
+
+  @override
+  int get hashCode => Object.hash(SaveFileInput, filePath);
+
+  @override
+  String toString() => 'SaveFileInput($filePath)';
 }
 
 /// Input from a network URL.
@@ -60,4 +83,30 @@ final class SaveNetworkInput implements SaveInput {
   /// value is ignored. On Web with custom headers, this is applied as a
   /// connection timeout (time until the server responds).
   final Duration timeout;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SaveNetworkInput &&
+      url == other.url &&
+      mapEquals(headers, other.headers) &&
+      timeout == other.timeout;
+
+  @override
+  int get hashCode => Object.hash(
+    SaveNetworkInput,
+    url,
+    headers == null
+        ? null
+        : Object.hashAllUnordered(
+            headers!.entries.map((e) => Object.hash(e.key, e.value)),
+          ),
+    timeout,
+  );
+
+  /// Names the headers without their values, which may hold credentials.
+  @override
+  String toString() =>
+      'SaveNetworkInput($url, '
+      '${headers == null ? '' : 'headers: ${headers!.keys.toList()}, '}'
+      'timeout: $timeout)';
 }

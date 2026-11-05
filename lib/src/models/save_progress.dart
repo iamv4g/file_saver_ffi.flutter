@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import '../exceptions/file_saver_exceptions.dart';
 
 /// Base sealed class for save progress events.
@@ -27,6 +29,10 @@ import '../exceptions/file_saver_exceptions.dart';
 ///
 /// A save stream is single-subscription: listening to it again throws a
 /// [StateError] instead of running the save a second time.
+///
+/// Events are values: two events of the same type with the same fields are
+/// `==`, so a test can check a stream with `emitsInOrder([...])`.
+@immutable
 sealed class SaveProgress {
   const SaveProgress();
 }
@@ -37,6 +43,12 @@ sealed class SaveProgress {
 /// especially when saving from file or path which takes time to open.
 final class SaveProgressStarted extends SaveProgress {
   const SaveProgressStarted();
+
+  @override
+  bool operator ==(Object other) => other is SaveProgressStarted;
+
+  @override
+  int get hashCode => (SaveProgressStarted).hashCode;
 
   @override
   String toString() => 'SaveProgressStarted()';
@@ -81,6 +93,17 @@ final class SaveProgressUpdate extends SaveProgress {
   final int? totalBytes;
 
   @override
+  bool operator ==(Object other) =>
+      other is SaveProgressUpdate &&
+      progress == other.progress &&
+      bytesWritten == other.bytesWritten &&
+      totalBytes == other.totalBytes;
+
+  @override
+  int get hashCode =>
+      Object.hash(SaveProgressUpdate, progress, bytesWritten, totalBytes);
+
+  @override
   String toString() =>
       'SaveProgressUpdate($progress, $bytesWritten of ${totalBytes ?? '?'} bytes)';
 }
@@ -91,6 +114,13 @@ final class SaveProgressComplete extends SaveProgress {
 
   /// URI of the saved file
   final Uri uri;
+
+  @override
+  bool operator ==(Object other) =>
+      other is SaveProgressComplete && uri == other.uri;
+
+  @override
+  int get hashCode => Object.hash(SaveProgressComplete, uri);
 
   @override
   String toString() => 'SaveProgressComplete($uri)';
@@ -104,6 +134,13 @@ final class SaveProgressError extends SaveProgress {
   final FileSaverException exception;
 
   @override
+  bool operator ==(Object other) =>
+      other is SaveProgressError && exception == other.exception;
+
+  @override
+  int get hashCode => Object.hash(SaveProgressError, exception);
+
+  @override
   String toString() => 'SaveProgressError($exception)';
 }
 
@@ -114,6 +151,12 @@ final class SaveProgressError extends SaveProgress {
 /// nothing more.
 final class SaveProgressCancelled extends SaveProgress {
   const SaveProgressCancelled();
+
+  @override
+  bool operator ==(Object other) => other is SaveProgressCancelled;
+
+  @override
+  int get hashCode => (SaveProgressCancelled).hashCode;
 
   @override
   String toString() => 'SaveProgressCancelled()';
