@@ -317,6 +317,9 @@ jobs:
         shell: bash
         run: |
           rm -f tool/jnigen_main.dart
+          # The runner keeps the pub cache on C: and the checkout on D:, and
+          # Kotlin's incremental caches can't relate paths across drives.
+          echo 'kotlin.incremental=false' >> example/android/gradle.properties
           dart run tool/jnigen.dart
           git diff --exit-code -- lib/src/platforms/android/bindings.g.dart
       - name: Outcome of the script of main
