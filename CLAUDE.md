@@ -36,7 +36,8 @@ cd darwin/file_saver_ffi && swift test
 # `simctl privacy grant` beforehand doesn't stick: flutter test reinstalls.
 cd example && flutter test integration_test/ios_test.dart -d <device>
 
-# Regenerate Darwin FFI bindings after editing the C header
+# Regenerate Darwin FFI bindings after editing the C header (CI fails if the
+# committed bindings differ from what this generates)
 dart run tool/ffigen.dart
 
 # Check that R8 kept every class and member the JNI bindings look up (CI runs
@@ -46,7 +47,9 @@ dart run tool/check_jni_keeps.dart example/build/app/outputs/flutter-apk/app-rel
 
 # Regenerate Android JNI bindings after changing the public Kotlin API of
 # FileSaver or ProgressCallback. Compiles the plugin's Kotlin via
-# example/android/gradlew first, so the example must be buildable.
+# example/android/gradlew (gradlew.bat on Windows) first, so the example must
+# be buildable, with AGP 9 built-in Kotlin on or off. CI fails if the
+# committed bindings differ from what this generates.
 dart run tool/jnigen.dart
 ```
 
@@ -71,7 +74,7 @@ Never hand-edit `lib/src/platforms/{android,darwin}/bindings.g.dart`. `android/p
 ### Cross-language contracts (keep in sync manually)
 - Dart sends `ConflictResolution.index` and the platform `SaveLocation` enum `.index` across the bridge as plain ints. The Kotlin/Swift enums must keep the same order and values.
 - Progress event codes 0–4 and the error code strings map to the Dart exceptions in `lib/src/exceptions/file_saver_exceptions.dart`.
-- Adding a native function means changing the C header, Swift `@_cdecl`, the `Functions.include` set in `tool/ffigen.dart`, and then regenerating. On Android it means changing Kotlin, then running jnigen (only the classes listed in `tool/jnigen.dart` are exposed).
+- Adding a native function means changing the C header and Swift `@_cdecl`, then regenerating (`tool/ffigen.dart` binds every function the header declares). On Android it means changing Kotlin, then running jnigen (only the classes listed in `tool/jnigen.dart` are exposed).
 
 ### Web
 The download strategy depends on the API: `saveNetwork` without headers uses an `<a download>` anchor, with headers it uses `fetch` → Blob, and `saveAs`/`openWriteAs` use the File System Access API on Chromium with a fallback to a regular download. `WEB_LIMITATIONS.md` documents what users see from this, so update it when web behaviour changes.
