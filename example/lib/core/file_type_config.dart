@@ -60,8 +60,7 @@ class SaveDemoConfig extends MediaConfig {
 
   static final video = SaveDemoConfig(
     category: MediaCategory.video,
-    downloadUrl:
-        'https://raw.githubusercontent.com/chthomos/video-media-samples/refs/heads/master/big-buck-bunny-1080p-30sec.mp4',
+    downloadUrl: 'https://raw.githubusercontent.com/chthomos/video-media-samples/refs/heads/master/big-buck-bunny-1080p-30sec.mp4',
     fileNamePrefix: 'video',
     fileType: VideoType.mp4,
     saveLocation: switch (defaultTargetPlatform) {
@@ -76,8 +75,7 @@ class SaveDemoConfig extends MediaConfig {
 
   static final audio = SaveDemoConfig(
     category: MediaCategory.audio,
-    downloadUrl:
-        'https://cdn.jsdelivr.net/gh/captbaritone/webamp@43434d82cfe0e37286dbbe0666072dc3190a83bc/mp3/llama-2.91.mp3',
+    downloadUrl: 'https://cdn.jsdelivr.net/gh/captbaritone/webamp@43434d82cfe0e37286dbbe0666072dc3190a83bc/mp3/llama-2.91.mp3',
     fileNamePrefix: 'audio',
     fileType: AudioType.mp3,
     saveLocation: switch (defaultTargetPlatform) {
@@ -96,8 +94,7 @@ class SaveDemoConfig extends MediaConfig {
 
   static final document = SaveDemoConfig(
     category: MediaCategory.document,
-    downloadUrl:
-        'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    downloadUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
     fileNamePrefix: 'document',
     fileType: const CustomFileType(ext: 'pdf', mimeType: 'application/pdf'),
     saveLocation: switch (defaultTargetPlatform) {
@@ -189,8 +186,7 @@ class NetworkDemoConfig extends MediaConfig {
 
   static final document = NetworkDemoConfig(
     category: MediaCategory.document,
-    downloadUrl:
-        'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    downloadUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
     fileNamePrefix: 'document',
     fileType: const CustomFileType(ext: 'pdf', mimeType: 'application/pdf'),
     saveLocation: switch (defaultTargetPlatform) {

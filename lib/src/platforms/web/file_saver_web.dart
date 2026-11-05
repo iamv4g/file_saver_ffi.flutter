@@ -338,9 +338,8 @@ class FileSaverWeb extends FileSaverPlatform {
     if (saveLocation is WebPickedDirectoryLocation) {
       final handle = saveLocation.directoryHandle;
       final fileEntity = WebFileEntity(handle);
-      final resolved = await ConflictResolver(
-        fileEntity,
-      ).claim(fullName, conflictResolution);
+      final resolved = await ConflictResolver(fileEntity)
+          .claim(fullName, conflictResolution);
       if (resolved == null) return null;
 
       try {
@@ -468,9 +467,8 @@ class FileSaverWeb extends FileSaverPlatform {
     ConflictResolution conflictResolution,
   ) async {
     try {
-      return await ConflictResolver(
-        WebFileEntity(handle),
-      ).claim(fullName, conflictResolution);
+      return await ConflictResolver(WebFileEntity(handle))
+          .claim(fullName, conflictResolution);
     } on FileSaverException {
       rethrow;
     } catch (e) {

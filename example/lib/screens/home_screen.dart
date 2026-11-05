@@ -59,9 +59,8 @@ class _SaveApiButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return ElevatedButton(
       onPressed: () {
-        Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => screenWidget));
+        Navigator.of(context)
+            .push(MaterialPageRoute(builder: (_) => screenWidget));
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 14),

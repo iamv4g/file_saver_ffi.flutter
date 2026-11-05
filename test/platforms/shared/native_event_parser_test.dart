@@ -31,14 +31,12 @@ void main() {
     });
 
     test('2 with a status code -> NetworkException with it', () {
-      final event =
-          parseNativeEvent(
-                2,
-                data: 'NETWORK_ERROR',
-                message: 'HTTP 503',
-                statusCode: 503,
-              )
-              as SaveProgressError;
+      final event = parseNativeEvent(
+        2,
+        data: 'NETWORK_ERROR',
+        message: 'HTTP 503',
+        statusCode: 503,
+      ) as SaveProgressError;
       expect(
         event.exception,
         isA<NetworkException>().having((e) => e.statusCode, 'statusCode', 503),
@@ -86,22 +84,30 @@ void main() {
       expect(unknown.totalBytes, isNull);
       expect(unknown.progress, 0.0);
       expect(
-        (parseDarwinMessage([2, 'FILE_EXISTS', 'dup']) as SaveProgressError)
-            .exception,
+        (parseDarwinMessage([
+          2,
+          'FILE_EXISTS',
+          'dup',
+        ]) as SaveProgressError).exception,
         isA<FileExistsException>(),
       );
       expect(
-        (parseDarwinMessage([3, 'file:///tmp/a.png']) as SaveProgressComplete)
-            .uri,
+        (parseDarwinMessage([
+          3,
+          'file:///tmp/a.png',
+        ]) as SaveProgressComplete).uri,
         Uri.parse('file:///tmp/a.png'),
       );
       expect(parseDarwinMessage([4]), isA<SaveProgressCancelled>());
     });
 
     test('an error with a fourth element carries the status code', () {
-      final event =
-          parseDarwinMessage([2, 'NETWORK_ERROR', 'HTTP 404', 404])
-              as SaveProgressError;
+      final event = parseDarwinMessage([
+        2,
+        'NETWORK_ERROR',
+        'HTTP 404',
+        404,
+      ]) as SaveProgressError;
       expect(
         event.exception,
         isA<NetworkException>().having((e) => e.statusCode, 'statusCode', 404),

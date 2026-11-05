@@ -52,9 +52,9 @@ final class WebPickedDirectoryLocation extends PickedDirectoryLocation {
   /// still has access, or when the user chose "Allow on every visit" in
   /// Chrome. Otherwise call [requestAccess] from a button before saving: a
   /// save without access fails with [PermissionDeniedException].
-  Future<bool> hasAccess() => dp.WebPickedLocation(
-    directoryHandle,
-  ).hasAccess(mode: dp.WebPermissionMode.readwrite);
+  Future<bool> hasAccess() =>
+      dp.WebPickedLocation(directoryHandle)
+          .hasAccess(mode: dp.WebPermissionMode.readwrite);
 
   /// Asks the user for write access to the directory if the page doesn't
   /// have it yet, and returns whether it has it now. Returns `false` when
@@ -65,9 +65,8 @@ final class WebPickedDirectoryLocation extends PickedDirectoryLocation {
   /// throws [NativePlatformException].
   Future<bool> requestAccess() async {
     try {
-      return await dp.WebPickedLocation(
-        directoryHandle,
-      ).requestAccess(mode: dp.WebPermissionMode.readwrite);
+      return await dp.WebPickedLocation(directoryHandle)
+          .requestAccess(mode: dp.WebPermissionMode.readwrite);
     } on dp.DirPickerException catch (e) {
       throw NativePlatformException(
         'Request access failed: ${e.message ?? e.code}',

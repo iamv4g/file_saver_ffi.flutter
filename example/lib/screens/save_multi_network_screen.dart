@@ -268,9 +268,8 @@ class _DownloadItemTile extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       item.errorMessage!,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.labelSmall?.copyWith(color: Colors.red),
+                      style: Theme.of(context).textTheme.labelSmall
+                          ?.copyWith(color: Colors.red),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),

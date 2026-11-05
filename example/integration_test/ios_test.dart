@@ -404,9 +404,9 @@ void main() {
           conflictResolution: conflictResolution,
         ).toList();
 
-    final updates = (await save(
-      ConflictResolution.overwrite,
-    )).whereType<SaveProgressUpdate>().toList();
+    final updates = (await save(ConflictResolution.overwrite))
+        .whereType<SaveProgressUpdate>()
+        .toList();
     expect(updates.map((e) => e.totalBytes), everyElement(bytes.length));
     expect(updates.map((e) => e.bytesWritten), [
       1024 * 1024,

@@ -275,9 +275,8 @@ void main() {
         ], end: 'hang'),
       );
 
-      final events = await download(
-        timeout: const Duration(milliseconds: 100),
-      ).toList();
+      final events = await download(timeout: const Duration(milliseconds: 100))
+          .toList();
 
       expect(
         errorOf(events),
@@ -322,9 +321,8 @@ void main() {
       await writeFile('data.bin', [9]);
       stubFetch(body([]));
 
-      final events = await download(
-        conflictResolution: ConflictResolution.skip,
-      ).toList();
+      final events = await download(conflictResolution: ConflictResolution.skip)
+          .toList();
 
       expect(events.last, isA<SaveProgressComplete>());
       expect(fetchCalls(), 0);

@@ -100,17 +100,15 @@ void main() {
   group('claim', () {
     test('a new path is claimed as new', () async {
       final files = <String>{};
-      final resolved = await resolverWith(
-        files,
-      ).claim('/d/a.txt', ConflictResolution.fail);
+      final resolved = await resolverWith(files)
+          .claim('/d/a.txt', ConflictResolution.fail);
       expect(resolved, (path: '/d/a.txt', isNew: true));
       expect(files, {'/d/a.txt'});
     });
 
     test('overwrite of an existing file is not new', () async {
-      final resolved = await resolverWith({
-        '/d/a.txt',
-      }).claim('/d/a.txt', ConflictResolution.overwrite);
+      final resolved = await resolverWith({'/d/a.txt'})
+          .claim('/d/a.txt', ConflictResolution.overwrite);
       expect(resolved, (path: '/d/a.txt', isNew: false));
     });
 

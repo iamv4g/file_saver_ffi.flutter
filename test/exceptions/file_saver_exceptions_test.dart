@@ -28,21 +28,24 @@ void main() {
 
     test('the message fills the field of the exception, prefixed '
         'once', () {
-      final exists =
-          FileSaverException.fromErrorResult('FILE_EXISTS', 'a.txt')
-              as FileExistsException;
+      final exists = FileSaverException.fromErrorResult(
+        'FILE_EXISTS',
+        'a.txt',
+      ) as FileExistsException;
       expect(exists.fileName, 'a.txt');
       expect(exists.message, 'File already exists: a.txt');
 
-      final missing =
-          FileSaverException.fromErrorResult('FILE_NOT_FOUND', '/x.bin')
-              as SourceFileNotFoundException;
+      final missing = FileSaverException.fromErrorResult(
+        'FILE_NOT_FOUND',
+        '/x.bin',
+      ) as SourceFileNotFoundException;
       expect(missing.path, '/x.bin');
       expect(missing.message, 'Source file not found: /x.bin');
 
-      final format =
-          FileSaverException.fromErrorResult('UNSUPPORTED_FORMAT', 'heic')
-              as UnsupportedFormatException;
+      final format = FileSaverException.fromErrorResult(
+        'UNSUPPORTED_FORMAT',
+        'heic',
+      ) as UnsupportedFormatException;
       expect(format.format, 'heic');
 
       expect(
@@ -59,13 +62,11 @@ void main() {
     });
 
     test('NETWORK_ERROR keeps the status code', () {
-      final e =
-          FileSaverException.fromErrorResult(
-                'NETWORK_ERROR',
-                'HTTP 404',
-                statusCode: 404,
-              )
-              as NetworkException;
+      final e = FileSaverException.fromErrorResult(
+        'NETWORK_ERROR',
+        'HTTP 404',
+        statusCode: 404,
+      ) as NetworkException;
       expect(e.statusCode, 404);
       expect(e.message, 'Network error: HTTP 404');
     });

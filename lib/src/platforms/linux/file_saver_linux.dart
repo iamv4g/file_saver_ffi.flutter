@@ -10,8 +10,10 @@ import '../../platform_interface/file_saver_platform.dart';
 import '../shared/desktop_file_saver.dart';
 
 /// Runs an executable, as [Process.run] does.
-typedef ProcessRunner =
-    Future<ProcessResult> Function(String executable, List<String> arguments);
+typedef ProcessRunner = Future<ProcessResult> Function(
+  String executable,
+  List<String> arguments,
+);
 
 /// FileSaver implementation for Linux.
 ///
