@@ -1,4 +1,6 @@
-## Unreleased
+## 0.12.0
+
+This is the last release for Flutter older than 3.47.8, iOS older than 15.0 and macOS older than 12.0. 1.0.0 will require Flutter 3.47.8 (Dart 3.13.7), the first release with the fix for [GHSA-frr6-h895-5pxp](https://github.com/dart-lang/sdk/security/advisories/GHSA-frr6-h895-5pxp), in which `dart:io` trusted compromised eMudhra CA certificates on Android, Windows and Linux. That fix is in the Flutter SDK, not in this package, so upgrade Flutter whichever version of the package you use. Apps on an older Flutter keep getting 0.12.x.
 
 ### Added
 
