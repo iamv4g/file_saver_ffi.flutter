@@ -310,7 +310,8 @@ jobs:
         continue-on-error: true
         shell: bash
         run: |
-          git show origin/main:tool/jnigen.dart > tool/jnigen_main.dart || git show HEAD~1:tool/jnigen.dart > tool/jnigen_main.dart
+          git fetch --depth=1 origin main
+          git show FETCH_HEAD:tool/jnigen.dart > tool/jnigen_main.dart
           dart run tool/jnigen_main.dart
       - name: The new script (gradlew.bat)
         shell: bash
