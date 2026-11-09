@@ -2,11 +2,11 @@ package com.iamv4g.file_saver_ffi
 
 import android.content.Intent
 import android.net.Uri
+import com.iamv4g.file_saver_ffi.models.ErrorCode
 import com.iamv4g.file_saver_ffi.models.SaveLocation
 import com.iamv4g.file_saver_ffi.testing.Event
 import com.iamv4g.file_saver_ffi.testing.FileSaverTestBase
 import com.iamv4g.file_saver_ffi.testing.RecordingCallback
-import com.iamv4g.file_saver_ffi.utils.Constants
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -86,14 +86,14 @@ class FileOpenerTest : FileSaverTestBase() {
         val uri = savedUri()
         context.contentResolver.delete(Uri.parse(uri), null, null)
 
-        assertEquals(Event(2, 0.0, Constants.ERROR_FILE_NOT_FOUND, uri), open(uri))
+        assertEquals(Event(2, 0.0, ErrorCode.FILE_NOT_FOUND, uri), open(uri))
     }
 
     @Test
     fun `openFile of a missing file reports FILE_NOT_FOUND`() {
         val event = open("file:///no/such/file.txt")
 
-        assertEquals(Constants.ERROR_FILE_NOT_FOUND, event.data)
+        assertEquals(ErrorCode.FILE_NOT_FOUND, event.data)
         assertEquals("file:///no/such/file.txt", event.message)
     }
 
@@ -101,7 +101,7 @@ class FileOpenerTest : FileSaverTestBase() {
     fun `openFile of an unsupported scheme reports INVALID_INPUT`() {
         val event = open("https://example.com/a.txt")
 
-        assertEquals(Constants.ERROR_INVALID_INPUT, event.data)
+        assertEquals(ErrorCode.INVALID_INPUT, event.data)
         assertTrue(event.message!!.contains("https"))
     }
 
@@ -111,7 +111,7 @@ class FileOpenerTest : FileSaverTestBase() {
 
         val event = open(savedUri())
 
-        assertEquals(Constants.ERROR_OPEN_FAILED, event.data)
+        assertEquals(ErrorCode.OPEN_FAILED, event.data)
         assertTrue(event.message!!.contains("No app found"))
     }
 
@@ -123,7 +123,7 @@ class FileOpenerTest : FileSaverTestBase() {
 
         val event = open(Uri.fromFile(file).toString())
 
-        assertEquals(event.message, Constants.ERROR_OPEN_FAILED, event.data)
+        assertEquals(event.message, ErrorCode.OPEN_FAILED, event.data)
         assertTrue(event.message!!.contains("FileProvider"))
     }
 

@@ -1,9 +1,9 @@
 package com.iamv4g.file_saver_ffi
 
+import com.iamv4g.file_saver_ffi.models.ErrorCode
 import com.iamv4g.file_saver_ffi.models.SaveLocation
 import com.iamv4g.file_saver_ffi.testing.FileSaverTestBase
 import com.iamv4g.file_saver_ffi.testing.RecordingCallback
-import com.iamv4g.file_saver_ffi.utils.Constants
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -22,7 +22,7 @@ class WriteSessionTest : FileSaverTestBase() {
 
         val write = writeChunk(sessionId, byteArrayOf(1, 2, 3))
         assertEquals("Events: $write", 2, write.type)
-        assertEquals(Constants.ERROR_FILE_IO, write.data)
+        assertEquals(ErrorCode.FILE_IO_ERROR, write.data)
 
         val close = RecordingCallback()
         fileSaver.closeSession(sessionId, close)

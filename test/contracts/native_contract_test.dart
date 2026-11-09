@@ -1,6 +1,8 @@
-// Guards the cross-language contracts listed in CLAUDE.md: Dart sends enum
-// `.index` values over the bridge as plain ints, and native error code
-// strings are mapped back to Dart exceptions. These tests read the Kotlin and
+// Guards the cross-language contracts listed in CLAUDE.md that
+// tool/contracts.dart doesn't generate (test/tool/contracts_test.dart checks
+// what it does): native error codes map back to Dart exceptions, native code
+// sends no event type or error code but the generated ones, and native
+// messages hold only the detail Dart needs. These tests read the Kotlin and
 // Swift sources so drift is caught without building native code.
 @TestOn('vm')
 library;
@@ -10,80 +12,22 @@ import 'dart:io';
 import 'package:file_saver_ffi/file_saver_ffi.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-const _kotlinModels =
-    'android/src/main/kotlin/com/iamv4g/file_saver_ffi/models';
-const _kotlinConstants =
-    'android/src/main/kotlin/com/iamv4g/file_saver_ffi/utils/Constants.kt';
 const _swiftSources = 'darwin/file_saver_ffi/Sources/file_saver_ffi';
 
-String _read(String path) => File(path).readAsStringSync();
-
-/// `autoRename` -> `AUTO_RENAME`.
-String _upperSnake(String camel) =>
-    camel.replaceAllMapped(RegExp('[A-Z]'), (m) => '_${m[0]}').toUpperCase();
-
-/// Parses `case name = 0` lines into `{name: 0}`.
-Map<String, int> _swiftRawValues(String source) => {
-  for (final m in RegExp(r'case (\w+) = (\d+)').allMatches(source))
-    m[1]!: int.parse(m[2]!),
-};
-
-Map<String, int> _dartIndices(List<Enum> values) => {
-  for (final v in values) v.name: v.index,
-};
+/// The Kotlin and Swift sources, except the files tool/contracts.dart
+/// generates.
+List<File> _nativeSources() => [
+  ...Directory('android/src/main/kotlin')
+      .listSync(recursive: true)
+      .whereType<File>()
+      .where((f) => f.path.endsWith('.kt')),
+  ...Directory(_swiftSources)
+      .listSync(recursive: true)
+      .whereType<File>()
+      .where((f) => f.path.endsWith('.swift')),
+].where((f) => !f.path.contains('Contracts.g.')).toList();
 
 void main() {
-  group('ConflictResolution', () {
-    test('matches Kotlin values', () {
-      final source = _read('$_kotlinModels/ConflictResolution.kt');
-      final kotlin = {
-        for (final m in RegExp(r'([A-Z_]+)\((\d+)\)').allMatches(source))
-          m[1]!: int.parse(m[2]!),
-      };
-      expect(kotlin, {
-        for (final v in ConflictResolution.values) _upperSnake(v.name): v.index,
-      });
-    });
-
-    test('matches Swift raw values', () {
-      final source = _read('$_swiftSources/Models/ConflictResolution.swift');
-      expect(_swiftRawValues(source), _dartIndices(ConflictResolution.values));
-    });
-  });
-
-  group('SaveLocation', () {
-    test('AndroidSaveLocation matches Kotlin ordinals', () {
-      final source = _read('$_kotlinModels/SaveLocation.kt');
-      final body = source.substring(
-        source.indexOf('{') + 1,
-        source.indexOf('companion object'),
-      );
-      final kotlin = RegExp(
-        r'^\s*([A-Z_]+),',
-        multiLine: true,
-      ).allMatches(body).map((m) => m[1]).toList();
-      expect(
-        kotlin,
-        AndroidSaveLocation.values.map((v) => _upperSnake(v.name)).toList(),
-      );
-    });
-
-    test('IosSaveLocation and MacosSaveLocation match Swift raw values', () {
-      final source = _read('$_swiftSources/Models/SaveLocation.swift');
-      final split = source.indexOf('#elseif os(macOS)');
-      expect(split, isNot(-1), reason: 'expected iOS/macOS #if blocks');
-
-      expect(
-        _swiftRawValues(source.substring(0, split)),
-        _dartIndices(IosSaveLocation.values),
-      );
-      expect(
-        _swiftRawValues(source.substring(split)),
-        _dartIndices(MacosSaveLocation.values),
-      );
-    });
-  });
-
   group('error codes', () {
     void expectAllMapped(Iterable<String> codes) {
       expect(codes, isNotEmpty);
@@ -95,20 +39,6 @@ void main() {
         }
       }
     }
-
-    test('every Kotlin error code maps to a dedicated exception', () {
-      final source = _read(_kotlinConstants);
-      expectAllMapped(
-        RegExp(r'ERROR_\w+ = "(\w+)"').allMatches(source).map((m) => m[1]!),
-      );
-    });
-
-    test('every Swift error code maps to a dedicated exception', () {
-      final source = _read('$_swiftSources/Utils/Constants.swift');
-      expectAllMapped(
-        RegExp(r'error\w+ = "(\w+)"').allMatches(source).map((m) => m[1]!),
-      );
-    });
 
     test('every FileSaverErrorCode maps to a dedicated exception', () {
       expectAllMapped(FileSaverErrorCode.mapped);
@@ -126,14 +56,7 @@ void main() {
         'iCloud download failed',
         'iCloud file download failed',
       ];
-      final sources = [
-        ...Directory('android/src/main/kotlin')
-            .listSync(recursive: true)
-            .where((f) => f.path.endsWith('.kt')),
-        ...Directory(_swiftSources)
-            .listSync(recursive: true)
-            .where((f) => f.path.endsWith('.swift')),
-      ].cast<File>();
+      final sources = _nativeSources();
       expect(sources, isNotEmpty);
       for (final file in sources) {
         final source = file.readAsStringSync();
@@ -142,6 +65,39 @@ void main() {
             source.contains('"$prefix'),
             isFalse,
             reason: '${file.path} sends "$prefix…"',
+          );
+        }
+      }
+    });
+  });
+
+  // Kotlin and Swift take these from the files tool/contracts.dart generates
+  // (EventType, ErrorCode), whose test checks them against Dart.
+  group('native code uses the generated contracts', () {
+    test('for the event type of every event it sends', () {
+      final literal = RegExp(r'onEvent\(\s*\d|createInt\(\s*\d');
+      for (final file in _nativeSources()) {
+        expect(
+          literal.hasMatch(file.readAsStringSync()),
+          isFalse,
+          reason: '${file.path} sends an event type as a number',
+        );
+      }
+    });
+
+    test('for every error code', () {
+      final codes = {
+        ...FileSaverErrorCode.mapped,
+        FileSaverErrorCode.platform,
+        FileSaverErrorCode.incomplete,
+      };
+      for (final file in _nativeSources()) {
+        final source = file.readAsStringSync();
+        for (final code in codes) {
+          expect(
+            source.contains('"$code"'),
+            isFalse,
+            reason: '${file.path} has "$code" instead of ErrorCode',
           );
         }
       }

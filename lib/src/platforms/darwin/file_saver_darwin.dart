@@ -383,13 +383,14 @@ class FileSaverDarwin extends FileSaverPlatform {
     void Function(SendPort port) open,
   ) async {
     final reply = await callForDarwinReply(open);
-    final sessionId = reply.length > 1 && reply[0] == 3
+    final sessionId =
+        reply.length > 1 && reply[0] == NativeEventType.success.index
         ? int.tryParse('${reply[1]}')
         : null;
     if (sessionId == null) {
       throw NativePlatformException('Invalid reply from Swift: $reply');
     }
-    if (sessionId == 0) return null;
+    if (sessionId == NativeWriteSession.skippedId) return null;
     return DarwinFileSaverSink(
       fileSaver: _fileSaver,
       sessionId: sessionId,

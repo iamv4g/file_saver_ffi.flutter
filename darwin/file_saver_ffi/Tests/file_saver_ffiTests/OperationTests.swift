@@ -198,6 +198,6 @@ final class OperationTests: XCTestCase {
         let reply = open { throw FileSaverError.permissionDenied("no access") }
 
         XCTAssertEqual(reply.code, 2)
-        XCTAssertEqual(reply.data, .string(Constants.errorPermissionDenied))
+        XCTAssertEqual(reply.data, .string(ErrorCode.permissionDenied))
     }
 }

@@ -106,7 +106,7 @@ final class WriteSessionTests: XCTestCase {
         guard case .error(let code, _) = failed else {
             return XCTFail("expected an error, got \(String(describing: failed))")
         }
-        XCTAssertEqual(code, Constants.errorFileIO)
+        XCTAssertEqual(code, ErrorCode.fileIO)
 
         XCTAssertEqual(close(session), failed)
         XCTAssertEqual(commits, 0, "a truncated file must not be committed")
@@ -134,7 +134,7 @@ final class WriteSessionTests: XCTestCase {
 
         XCTAssertEqual(
             closed,
-            .error(code: Constants.errorFileIO, message: FileSaverError.fileIO("Cannot move the file into place").message)
+            .error(code: ErrorCode.fileIO, message: FileSaverError.fileIO("Cannot move the file into place").message)
         )
         XCTAssertFalse(FileManager.default.fileExists(atPath: session.fileURL.path))
     }

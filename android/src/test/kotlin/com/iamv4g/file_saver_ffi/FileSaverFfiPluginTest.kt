@@ -8,13 +8,13 @@ import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.core.app.ActivityCompat
 import com.iamv4g.file_saver_ffi.models.ConflictResolution
+import com.iamv4g.file_saver_ffi.models.ErrorCode
 import com.iamv4g.file_saver_ffi.models.SaveLocation
 import com.iamv4g.file_saver_ffi.testing.Event
 import com.iamv4g.file_saver_ffi.testing.FakeActivityBinding
 import com.iamv4g.file_saver_ffi.testing.FakeEngine
 import com.iamv4g.file_saver_ffi.testing.FileSaverTestBase
 import com.iamv4g.file_saver_ffi.testing.RecordingCallback
-import com.iamv4g.file_saver_ffi.utils.Constants
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -188,7 +188,7 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
         val event = startSave("photo").awaitSave()
 
         assertEquals(2, event.type)
-        assertEquals(Constants.ERROR_PERMISSION_DENIED, event.data)
+        assertEquals(ErrorCode.PERMISSION_DENIED, event.data)
         assertTrue(event.message!!.contains("no Activity"))
     }
 
@@ -242,7 +242,7 @@ class FileSaverFfiPluginTest : FileSaverTestBase() {
                 "image/png",
                 SaveLocation.PICTURES.ordinal,
                 "probe",
-                ConflictResolution.AUTO_RENAME.value,
+                ConflictResolution.AUTO_RENAME.ordinal,
                 it,
             )
         }

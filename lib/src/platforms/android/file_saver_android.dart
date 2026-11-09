@@ -329,7 +329,7 @@ class FileSaverAndroid extends FileSaverPlatform {
       ),
     );
     final sessionId = int.parse(result ?? '0');
-    if (sessionId == 0) return null;
+    if (sessionId == NativeWriteSession.skippedId) return null;
     return AndroidFileSaverSink(
       fileSaver: _fileSaver,
       sessionId: sessionId,
@@ -357,7 +357,7 @@ class FileSaverAndroid extends FileSaverPlatform {
       ),
     );
     final sessionId = int.parse(result ?? '0');
-    if (sessionId == 0) return null;
+    if (sessionId == NativeWriteSession.skippedId) return null;
     return AndroidFileSaverSink(
       fileSaver: _fileSaver,
       sessionId: sessionId,
@@ -454,13 +454,13 @@ class FileSaverAndroid extends FileSaverPlatform {
           final dataStr = data?.toDartString(releaseOriginal: true);
           final messageStr = message?.toDartString(releaseOriginal: true);
           if (done.isCompleted) return;
-          switch (eventType) {
-            case 1:
+          switch (NativeEventType.fromIndex(eventType)) {
+            case NativeEventType.progress:
               onProgress(_bytesUpdate(progress, dataStr));
               return;
-            case 3 || 4:
+            case NativeEventType.success || NativeEventType.cancelled:
               done.complete();
-            case 2:
+            case NativeEventType.error:
               done.completeError(
                 FileSaverException.fromErrorResult(
                   dataStr ?? FileSaverErrorCode.platform,
@@ -527,13 +527,17 @@ class FileSaverAndroid extends FileSaverPlatform {
     final messageStr = message?.toDartString(releaseOriginal: true);
     // Kotlin sends the bytes written as the progress, and the size, if known,
     // as data.
-    if (eventType == 1) return _bytesUpdate(progress, dataStr);
+    if (eventType == NativeEventType.progress.index) {
+      return _bytesUpdate(progress, dataStr);
+    }
     return parseNativeEvent(
       eventType,
       data: dataStr,
       message: messageStr,
       // Kotlin sends the HTTP status of a network error as the progress.
-      statusCode: eventType == 2 && progress > 0 ? progress.toInt() : null,
+      statusCode: eventType == NativeEventType.error.index && progress > 0
+          ? progress.toInt()
+          : null,
     );
   }
 }

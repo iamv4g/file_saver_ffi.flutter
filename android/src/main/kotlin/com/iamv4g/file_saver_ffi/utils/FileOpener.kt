@@ -11,6 +11,7 @@ import android.webkit.MimeTypeMap
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.iamv4g.file_saver_ffi.exception.FileOpenException
+import com.iamv4g.file_saver_ffi.models.ErrorCode
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileNotFoundException
@@ -60,9 +61,9 @@ internal object FileOpener {
      * @param mimeType Optional MIME type.
      *   - If null and uri is content://, queried from ContentResolver automatically.
      *   - If null and uri is file://, inferred from file extension when possible.
-     * @throws FileOpenException with [Constants.ERROR_INVALID_INPUT] for an
-     *   unsupported URI, [Constants.ERROR_FILE_NOT_FOUND] if the file doesn't
-     *   exist, or [Constants.ERROR_OPEN_FAILED] if it can't be read or opened
+     * @throws FileOpenException with [ErrorCode.INVALID_INPUT] for an
+     *   unsupported URI, [ErrorCode.FILE_NOT_FOUND] if the file doesn't
+     *   exist, or [ErrorCode.OPEN_FAILED] if it can't be read or opened
      */
     fun openFile(
         context: Context,
@@ -96,7 +97,7 @@ internal object FileOpener {
             context.startActivity(intent)
         } catch (e: ActivityNotFoundException) {
             throw FileOpenException(
-                Constants.ERROR_OPEN_FAILED,
+                ErrorCode.OPEN_FAILED,
                 "No app found to open this file (mimeType=$resolvedMime).",
                 e,
             )
@@ -106,10 +107,10 @@ internal object FileOpener {
     /**
      * Throws unless the file at [uri] exists and can be read.
      *
-     * @throws FileOpenException with [Constants.ERROR_INVALID_INPUT] for a
-     *   scheme other than content:// and file://, [Constants.ERROR_FILE_NOT_FOUND]
+     * @throws FileOpenException with [ErrorCode.INVALID_INPUT] for a
+     *   scheme other than content:// and file://, [ErrorCode.FILE_NOT_FOUND]
      *   (with the URI as message) if the file doesn't exist, or
-     *   [Constants.ERROR_OPEN_FAILED] if it can't be read
+     *   [ErrorCode.OPEN_FAILED] if it can't be read
      */
     private fun checkReadable(
         context: Context,
@@ -119,25 +120,25 @@ internal object FileOpener {
             when (uri.scheme) {
                 "content" ->
                     context.contentResolver.openFileDescriptor(uri, "r")?.close()
-                        ?: throw FileOpenException(Constants.ERROR_OPEN_FAILED, "File is not accessible: $uri")
+                        ?: throw FileOpenException(ErrorCode.OPEN_FAILED, "File is not accessible: $uri")
 
                 "file" -> {
-                    val file = File(uri.path ?: throw FileOpenException(Constants.ERROR_INVALID_INPUT, "Invalid file URI: $uri"))
-                    if (!file.exists()) throw FileOpenException(Constants.ERROR_FILE_NOT_FOUND, uri.toString())
+                    val file = File(uri.path ?: throw FileOpenException(ErrorCode.INVALID_INPUT, "Invalid file URI: $uri"))
+                    if (!file.exists()) throw FileOpenException(ErrorCode.FILE_NOT_FOUND, uri.toString())
                     FileInputStream(file).close()
                 }
 
-                else -> throw FileOpenException(Constants.ERROR_INVALID_INPUT, "Unsupported URI scheme: ${uri.scheme}")
+                else -> throw FileOpenException(ErrorCode.INVALID_INPUT, "Unsupported URI scheme: ${uri.scheme}")
             }
         } catch (e: FileOpenException) {
             throw e
         } catch (e: FileNotFoundException) {
             // ContentResolver reports a missing row or document this way; for a
             // file:// URI it means the existing file can't be read.
-            if (uri.scheme == "content") throw FileOpenException(Constants.ERROR_FILE_NOT_FOUND, uri.toString(), e)
-            throw FileOpenException(Constants.ERROR_OPEN_FAILED, "File is not accessible: $uri", e)
+            if (uri.scheme == "content") throw FileOpenException(ErrorCode.FILE_NOT_FOUND, uri.toString(), e)
+            throw FileOpenException(ErrorCode.OPEN_FAILED, "File is not accessible: $uri", e)
         } catch (e: Exception) {
-            throw FileOpenException(Constants.ERROR_OPEN_FAILED, "File is not accessible: $uri (${e.message})", e)
+            throw FileOpenException(ErrorCode.OPEN_FAILED, "File is not accessible: $uri (${e.message})", e)
         }
     }
 
@@ -163,7 +164,7 @@ internal object FileOpener {
 
         if (!hasProvider) {
             throw FileOpenException(
-                Constants.ERROR_OPEN_FAILED,
+                ErrorCode.OPEN_FAILED,
                 "This app must configure a FileProvider to open file:// URIs. " +
                     "See Android Configuration: $androidConfigDocUrl",
             )
@@ -173,7 +174,7 @@ internal object FileOpener {
             FileProvider.getUriForFile(context, authority, file)
         } catch (e: IllegalArgumentException) {
             throw FileOpenException(
-                Constants.ERROR_OPEN_FAILED,
+                ErrorCode.OPEN_FAILED,
                 "The FileProvider paths don't cover $path. " +
                     "Update your FileProvider paths XML to include this location. " +
                     "See Android Configuration: $androidConfigDocUrl",

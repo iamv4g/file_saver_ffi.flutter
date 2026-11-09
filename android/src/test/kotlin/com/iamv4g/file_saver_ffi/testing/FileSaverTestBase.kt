@@ -58,7 +58,7 @@ abstract class FileSaverTestBase {
         conflictResolution: ConflictResolution = ConflictResolution.AUTO_RENAME,
     ): RecordingCallback {
         val callback = RecordingCallback()
-        fileSaver.saveBytes(data, fileName, extension, mimeType, location.ordinal, subDir, conflictResolution.value, callback)
+        fileSaver.saveBytes(data, fileName, extension, mimeType, location.ordinal, subDir, conflictResolution.ordinal, callback)
         callback.awaitTerminal()
         return callback
     }
@@ -76,7 +76,7 @@ abstract class FileSaverTestBase {
         mimeType,
         location.ordinal,
         subDir,
-        ConflictResolution.AUTO_RENAME.value,
+        ConflictResolution.AUTO_RENAME.ordinal,
         callback,
     )
 }

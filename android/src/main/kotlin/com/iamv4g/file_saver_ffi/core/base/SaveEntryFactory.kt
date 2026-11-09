@@ -5,10 +5,10 @@ import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import com.iamv4g.file_saver_ffi.exception.FileExistsException
 import com.iamv4g.file_saver_ffi.models.ConflictResolution
+import com.iamv4g.file_saver_ffi.models.ErrorCode
 import com.iamv4g.file_saver_ffi.models.FileType
 import com.iamv4g.file_saver_ffi.models.SaveLocation
 import com.iamv4g.file_saver_ffi.models.SaveProgressEvent
-import com.iamv4g.file_saver_ffi.utils.Constants
 import com.iamv4g.file_saver_ffi.utils.FileHelper
 import com.iamv4g.file_saver_ffi.utils.SAFHelper
 import com.iamv4g.file_saver_ffi.utils.StoreHelper
@@ -129,12 +129,12 @@ sealed class SaveEntryFactory {
                 scope.sendError(ioErrorCode(e), "Failed to create MediaStore entry: ${e.message}")
                 null
             } catch (e: FileExistsException) {
-                scope.sendError(Constants.ERROR_FILE_EXISTS, e.fileName)
+                scope.sendError(ErrorCode.FILE_EXISTS, e.fileName)
                 null
             } catch (e: IllegalArgumentException) {
                 // A target the input can't be saved to: a file type the location
                 // rejects, a `..` in subDir, or a URI that isn't a directory tree.
-                scope.sendError(Constants.ERROR_INVALID_INPUT, e.message ?: "Invalid save target")
+                scope.sendError(ErrorCode.INVALID_INPUT, e.message ?: "Invalid save target")
                 null
             }
 
@@ -197,12 +197,12 @@ sealed class SaveEntryFactory {
                 scope.sendError(ioErrorCode(e), "Failed to create file: ${e.message}")
                 null
             } catch (e: FileExistsException) {
-                scope.sendError(Constants.ERROR_FILE_EXISTS, e.fileName)
+                scope.sendError(ErrorCode.FILE_EXISTS, e.fileName)
                 null
             } catch (e: IllegalArgumentException) {
                 // A target the input can't be saved to: a file type the location
                 // rejects, a `..` in subDir, or a URI that isn't a directory tree.
-                scope.sendError(Constants.ERROR_INVALID_INPUT, e.message ?: "Invalid save target")
+                scope.sendError(ErrorCode.INVALID_INPUT, e.message ?: "Invalid save target")
                 null
             }
 

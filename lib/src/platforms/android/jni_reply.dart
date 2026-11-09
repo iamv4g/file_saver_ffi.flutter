@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:jni/jni.dart';
 
 import '../../exceptions/file_saver_exceptions.dart';
+import '../shared/native_event_parser.dart';
 import 'bindings.g.dart' as bindings;
 
 /// Runs [call], a JNI call that reports one result through the
@@ -25,10 +26,10 @@ Future<(double progress, String? data)> callForJniReply(
         final dataStr = data?.toDartString(releaseOriginal: true);
         final messageStr = message?.toDartString(releaseOriginal: true);
         if (completer.isCompleted) return;
-        switch (eventType) {
-          case 1 || 3:
+        switch (NativeEventType.fromIndex(eventType)) {
+          case NativeEventType.progress || NativeEventType.success:
             completer.complete((progress, dataStr));
-          case 2:
+          case NativeEventType.error:
             completer.completeError(
               FileSaverException.fromErrorResult(
                 dataStr ?? FileSaverErrorCode.platform,

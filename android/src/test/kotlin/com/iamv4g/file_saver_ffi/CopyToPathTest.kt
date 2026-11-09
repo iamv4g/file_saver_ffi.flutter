@@ -1,5 +1,6 @@
 package com.iamv4g.file_saver_ffi
 
+import com.iamv4g.file_saver_ffi.models.ErrorCode
 import com.iamv4g.file_saver_ffi.models.SaveLocation
 import com.iamv4g.file_saver_ffi.testing.FakeMediaStoreProvider
 import com.iamv4g.file_saver_ffi.testing.FileSaverTestBase
@@ -107,7 +108,7 @@ class CopyToPathTest : FileSaverTestBase() {
 
         val event = callback.awaitTerminal()
         assertEquals(2, event.type)
-        assertEquals(Constants.ERROR_FILE_NOT_FOUND, event.data)
+        assertEquals(ErrorCode.FILE_NOT_FOUND, event.data)
         assertEquals(source, event.message)
         assertNoCrash()
     }
@@ -120,7 +121,7 @@ class CopyToPathTest : FileSaverTestBase() {
 
         val event = callback.awaitTerminal()
         assertEquals(2, event.type)
-        assertEquals(Constants.ERROR_INVALID_INPUT, event.data)
+        assertEquals(ErrorCode.INVALID_INPUT, event.data)
         assertNoCrash()
     }
 
@@ -135,7 +136,7 @@ class CopyToPathTest : FileSaverTestBase() {
 
         val event = callback.awaitTerminal()
         assertEquals(2, event.type)
-        assertEquals(Constants.ERROR_FILE_IO, event.data)
+        assertEquals(ErrorCode.FILE_IO_ERROR, event.data)
         assertFalse("The source was opened", opened.get())
         assertNoCrash()
     }

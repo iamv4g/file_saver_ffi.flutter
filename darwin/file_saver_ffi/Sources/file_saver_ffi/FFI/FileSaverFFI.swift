@@ -196,7 +196,7 @@ final class WriteSession {
                 reporter.sendError(code: fsError.code, message: fsError.message)
             } catch {
                 self.deleteFile()
-                reporter.sendError(code: Constants.errorFileIO, message: error.localizedDescription)
+                reporter.sendError(code: ErrorCode.fileIO, message: error.localizedDescription)
             }
         }
     }
@@ -631,7 +631,7 @@ public func fileSaverSaveNetworkAs(
 // MARK: - Streaming Write Session Functions
 
 /// Opens a write session with `open` on a background queue, and reports its
-/// id, "0" for a `skip` of an existing file, or the error.
+/// id, `WriteSessionReply.skippedId` for a `skip` of an existing file, or the error.
 func openSession(reporter: WriteSessionReporter, _ open: @escaping () throws -> WriteSession) {
     DispatchQueue.global(qos: .userInitiated).async {
         do {
@@ -640,11 +640,11 @@ func openSession(reporter: WriteSessionReporter, _ open: @escaping () throws -> 
             registerWriteSession(sessionId, session)
             reporter.sendSuccess(uri: String(sessionId))
         } catch FileSaverError.writeSessionSkipped {
-            reporter.sendSuccess(uri: "0")
+            reporter.sendSuccess(uri: String(WriteSessionReply.skippedId))
         } catch let fsError as FileSaverError {
             reporter.sendError(code: fsError.code, message: fsError.message)
         } catch {
-            reporter.sendError(code: Constants.errorPlatform, message: error.localizedDescription)
+            reporter.sendError(code: ErrorCode.platform, message: error.localizedDescription)
         }
     }
 }
@@ -732,7 +732,7 @@ public func fileSaverWriteChunk(
     let chunk = Data(bytesNoCopy: data, count: Int(dataLength), deallocator: .free)
 
     guard let session = getWriteSession(sessionId) else {
-        reporter.sendError(code: Constants.errorInvalidInput, message: "Session not found: \(sessionId)")
+        reporter.sendError(code: ErrorCode.invalidInput, message: "Session not found: \(sessionId)")
         return
     }
     session.write(chunk, reporter: reporter)
@@ -742,7 +742,7 @@ public func fileSaverWriteChunk(
 public func fileSaverFlushWrite(_ sessionId: UInt64, _ nativePort: Int64) {
     let reporter = ProgressReporter(port: nativePort)
     guard let session = getWriteSession(sessionId) else {
-        reporter.sendError(code: Constants.errorInvalidInput, message: "Session not found: \(sessionId)")
+        reporter.sendError(code: ErrorCode.invalidInput, message: "Session not found: \(sessionId)")
         return
     }
     session.flush(reporter: reporter)
@@ -752,7 +752,7 @@ public func fileSaverFlushWrite(_ sessionId: UInt64, _ nativePort: Int64) {
 public func fileSaverCloseWrite(_ sessionId: UInt64, _ nativePort: Int64) {
     let reporter = ProgressReporter(port: nativePort)
     guard let session = removeWriteSession(sessionId) else {
-        reporter.sendError(code: Constants.errorInvalidInput, message: "Session not found: \(sessionId)")
+        reporter.sendError(code: ErrorCode.invalidInput, message: "Session not found: \(sessionId)")
         return
     }
     session.close(reporter: reporter)

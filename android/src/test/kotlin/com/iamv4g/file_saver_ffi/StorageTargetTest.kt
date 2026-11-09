@@ -4,10 +4,10 @@ import android.Manifest
 import android.net.Uri
 import android.os.Environment
 import com.iamv4g.file_saver_ffi.models.ConflictResolution
+import com.iamv4g.file_saver_ffi.models.ErrorCode
 import com.iamv4g.file_saver_ffi.models.SaveLocation
 import com.iamv4g.file_saver_ffi.testing.FileSaverTestBase
 import com.iamv4g.file_saver_ffi.testing.RecordingCallback
-import com.iamv4g.file_saver_ffi.utils.Constants
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -45,7 +45,7 @@ class StorageTargetTest : FileSaverTestBase() {
     ) {
         val event = callback.awaitTerminal()
         assertEquals("Events: ${callback.events}", 2, event.type)
-        assertEquals(Constants.ERROR_INVALID_INPUT, event.data)
+        assertEquals(ErrorCode.INVALID_INPUT, event.data)
         assertTrue(event.message, event.message!!.contains(messageContains))
         assertTrue(mediaStore.rows.isEmpty())
     }
@@ -139,7 +139,7 @@ class StorageTargetTest : FileSaverTestBase() {
 
         val event = callback.awaitTerminal()
         assertEquals("Events: ${callback.events}", 2, event.type)
-        assertEquals(Constants.ERROR_FILE_IO, event.data)
+        assertEquals(ErrorCode.FILE_IO_ERROR, event.data)
         assertTrue(mediaStore.rows.isEmpty())
     }
 
@@ -164,7 +164,7 @@ class StorageTargetTest : FileSaverTestBase() {
 
         val event = callback.awaitTerminal()
         assertEquals("Events: ${callback.events}", 2, event.type)
-        assertEquals(Constants.ERROR_PERMISSION_DENIED, event.data)
+        assertEquals(ErrorCode.PERMISSION_DENIED, event.data)
         assertTrue(mediaStore.rows.isEmpty())
         assertNoCrash()
     }
@@ -183,7 +183,7 @@ class StorageTargetTest : FileSaverTestBase() {
 
         val event = callback.awaitTerminal()
         assertEquals("Events: ${callback.events}", 2, event.type)
-        assertEquals(Constants.ERROR_INVALID_INPUT, event.data)
+        assertEquals(ErrorCode.INVALID_INPUT, event.data)
         assertFalse(escaped.exists())
     }
 

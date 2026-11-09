@@ -37,6 +37,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  analyzer: ^14.6.0
   ffigen: ^20.1.1
   jnigen: ^0.17.0
 

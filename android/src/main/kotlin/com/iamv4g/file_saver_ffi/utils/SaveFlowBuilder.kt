@@ -1,5 +1,6 @@
 package com.iamv4g.file_saver_ffi.utils
 
+import com.iamv4g.file_saver_ffi.models.ErrorCode
 import com.iamv4g.file_saver_ffi.models.SaveProgressEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -41,14 +42,14 @@ inline fun saveFlow(crossinline block: suspend ProducerScope<SaveProgressEvent>.
         } catch (e: SecurityException) {
             send(
                 SaveProgressEvent.Error(
-                    Constants.ERROR_PERMISSION_DENIED,
+                    ErrorCode.PERMISSION_DENIED,
                     "Permission denied: ${e.message}",
                 ),
             )
         } catch (e: Exception) {
             send(
                 SaveProgressEvent.Error(
-                    Constants.ERROR_PLATFORM,
+                    ErrorCode.PLATFORM_ERROR,
                     "Unexpected error: ${e.message ?: "Unknown error"}",
                 ),
             )

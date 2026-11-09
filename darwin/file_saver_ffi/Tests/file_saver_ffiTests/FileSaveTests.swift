@@ -71,7 +71,7 @@ final class FileSaveTests: XCTestCase {
         try FileManager.default.setAttributes([.posixPermissions: 0o555], ofItemAtPath: directory.path)
 
         XCTAssertThrowsError(try resolve("a.txt", .autoRename)) { error in
-            XCTAssertEqual((error as? FileSaverError)?.code, Constants.errorPermissionDenied, "\(error)")
+            XCTAssertEqual((error as? FileSaverError)?.code, ErrorCode.permissionDenied, "\(error)")
         }
     }
 
@@ -86,21 +86,21 @@ final class FileSaveTests: XCTestCase {
                 conflictMode: ConflictResolution.autoRename.rawValue
             )
         ) { error in
-            XCTAssertEqual((error as? FileSaverError)?.code, Constants.errorPermissionDenied, "\(error)")
+            XCTAssertEqual((error as? FileSaverError)?.code, ErrorCode.permissionDenied, "\(error)")
         }
     }
 
     func testErrorsOfAFailedWriteAreTyped() {
         let url = directory.appendingPathComponent("a.txt")
 
-        XCTAssertEqual(FileHelper.ioError(POSIXError(.ENOSPC), url: url).code, Constants.errorStorageFull)
+        XCTAssertEqual(FileHelper.ioError(POSIXError(.ENOSPC), url: url).code, ErrorCode.storageFull)
         XCTAssertEqual(
             FileHelper.ioError(CocoaError(.fileWriteOutOfSpace), url: url).code,
-            Constants.errorStorageFull
+            ErrorCode.storageFull
         )
         XCTAssertEqual(
             FileHelper.ioError(CocoaError(.fileWriteNoPermission), url: url).code,
-            Constants.errorPermissionDenied
+            ErrorCode.permissionDenied
         )
     }
 
@@ -207,7 +207,7 @@ final class FileSaveTests: XCTestCase {
                 cancellationToken: nil
             )
         ) { error in
-            XCTAssertEqual((error as? FileSaverError)?.code, Constants.errorPermissionDenied, "\(error)")
+            XCTAssertEqual((error as? FileSaverError)?.code, ErrorCode.permissionDenied, "\(error)")
         }
     }
 
@@ -242,7 +242,7 @@ final class FileSaveTests: XCTestCase {
                 cancellationToken: nil
             )
         ) { error in
-            XCTAssertEqual((error as? FileSaverError)?.code, Constants.errorFileNotFound, "\(error)")
+            XCTAssertEqual((error as? FileSaverError)?.code, ErrorCode.fileNotFound, "\(error)")
         }
 
         XCTAssertEqual(try entries(), [])
@@ -255,7 +255,7 @@ final class FileSaveTests: XCTestCase {
     func testErrorsSendOnlyTheDetailDartNeeds() throws {
         touch("a.txt")
         XCTAssertThrowsError(try resolve("a.txt", .fail)) { error in
-            XCTAssertEqual((error as? FileSaverError)?.code, Constants.errorFileExists, "\(error)")
+            XCTAssertEqual((error as? FileSaverError)?.code, ErrorCode.fileExists, "\(error)")
             XCTAssertEqual((error as? FileSaverError)?.message, "a.txt")
         }
 

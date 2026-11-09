@@ -1,43 +1,17 @@
 import Foundation
 
-/// Represents save locations for files.
-///
-/// Platform-specific:
-/// - iOS: Photos Library and Documents directory
-/// - macOS: Downloads, Pictures, Movies, Music, and Documents directories
-enum SaveLocation: Int {
+// SaveLocation itself is generated, in Contracts.g.swift: from the Dart
+// IosSaveLocation on iOS (the Documents/ directory of the app container, and
+// the Photos Library), and from MacosSaveLocation on macOS.
+
+extension SaveLocation {
     #if os(iOS)
-    /// Documents/ directory in app container (default)
-    case documents = 0
-
-    /// Photos Library (requires Photos permission)
-    case photos = 1
-
-    /// Converts an integer index to SaveLocation enum.
+    /// The location Dart sent as `value`, or `.documents` for an unknown one.
     static func fromInt(_ value: Int) -> SaveLocation {
         return SaveLocation(rawValue: value) ?? .documents
     }
     #elseif os(macOS)
-    /// ~/Downloads directory
-    /// Sandbox: requires com.apple.security.files.downloads.read-write
-    case downloads = 0
-
-    /// ~/Pictures directory
-    /// Sandbox: requires com.apple.security.assets.pictures.read-write
-    case pictures = 1
-
-    /// ~/Movies directory
-    /// Sandbox: requires com.apple.security.assets.movies.read-write
-    case movies = 2
-
-    /// ~/Music directory
-    /// Sandbox: requires com.apple.security.assets.music.read-write
-    case music = 3
-
-    /// App Container Documents directory (no entitlement needed)
-    case documents = 4
-
-    /// Converts an integer index to SaveLocation enum.
+    /// The location Dart sent as `value`, or `.downloads` for an unknown one.
     static func fromInt(_ value: Int) -> SaveLocation {
         return SaveLocation(rawValue: value) ?? .downloads
     }

@@ -1,10 +1,13 @@
 import 'package:flutter/foundation.dart';
 
+// Kotlin and Swift use generated copies of these codes (ErrorCode): after
+// adding, removing or changing one, run `dart run tool/contracts.dart`. Every
+// `static const` String here is copied, and must be UPPER_SNAKE_CASE.
+
 /// The [FileSaverException.code] values.
 ///
-/// Kotlin (`utils/Constants.kt`) and Swift (`Utils/Constants.swift`) report
-/// errors with the same strings, and an error message that holds only the
-/// detail [FileSaverException.fromErrorResult] needs:
+/// Kotlin and Swift report errors with the same strings, and an error message
+/// that holds only the detail [FileSaverException.fromErrorResult] needs:
 ///
 /// | Code | Message from native code |
 /// |------|--------------------------|
