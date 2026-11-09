@@ -364,7 +364,7 @@ class FileSaver {
     ) -> ConflictResolution? {
         guard let resolution = ConflictResolution(rawValue: conflictMode) else {
             reporter.sendError(
-                code: Constants.errorPlatform,
+                code: ErrorCode.platform,
                 message: "Invalid conflict resolution mode: \(conflictMode)"
             )
             onComplete?()
@@ -380,7 +380,7 @@ class FileSaver {
     ) -> URL? {
         guard let url = URL(string: directoryUri) else {
             reporter.sendError(
-                code: Constants.errorInvalidInput,
+                code: ErrorCode.invalidInput,
                 message: "Invalid directory URI: \(directoryUri)"
             )
             onComplete?()
@@ -397,7 +397,7 @@ class FileSaver {
             reporter.sendError(fsError)
         default:
             reporter.sendError(
-                code: Constants.errorPlatform,
+                code: ErrorCode.platform,
                 message: "Unexpected error: \(error.localizedDescription)"
             )
         }

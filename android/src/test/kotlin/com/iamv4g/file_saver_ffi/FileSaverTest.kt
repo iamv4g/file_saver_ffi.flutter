@@ -4,6 +4,7 @@ import android.Manifest
 import android.net.Uri
 import android.os.Environment
 import com.iamv4g.file_saver_ffi.models.ConflictResolution
+import com.iamv4g.file_saver_ffi.models.ErrorCode
 import com.iamv4g.file_saver_ffi.models.SaveLocation
 import com.iamv4g.file_saver_ffi.testing.FakeMediaStoreProvider
 import com.iamv4g.file_saver_ffi.testing.FileSaverTestBase
@@ -42,7 +43,7 @@ class FileSaverTest : FileSaverTestBase() {
 
         val event = callback.awaitTerminal()
         assertEquals(2, event.type)
-        assertEquals(Constants.ERROR_INVALID_INPUT, event.data)
+        assertEquals(ErrorCode.INVALID_INPUT, event.data)
         assertTrue(event.message!!.contains("image/png"))
         assertTrue(mediaStore.rows.isEmpty())
         assertNoCrash()
@@ -57,13 +58,13 @@ class FileSaverTest : FileSaverTestBase() {
             "photo",
             "png",
             "image/png",
-            ConflictResolution.AUTO_RENAME.value,
+            ConflictResolution.AUTO_RENAME.ordinal,
             callback,
         )
 
         val event = callback.awaitTerminal()
         assertEquals(2, event.type)
-        assertEquals(Constants.ERROR_INVALID_INPUT, event.data)
+        assertEquals(ErrorCode.INVALID_INPUT, event.data)
         assertNoCrash()
     }
 
@@ -114,7 +115,7 @@ class FileSaverTest : FileSaverTestBase() {
         val callback = RecordingCallback()
         val data = ByteArray(3 * Constants.CHUNK_SIZE) { it.toByte() }
 
-        fileSaver.saveBytes(data, "photo", "png", "image/png", SaveLocation.PICTURES.ordinal, null, ConflictResolution.AUTO_RENAME.value, callback)
+        fileSaver.saveBytes(data, "photo", "png", "image/png", SaveLocation.PICTURES.ordinal, null, ConflictResolution.AUTO_RENAME.ordinal, callback)
 
         val event = callback.awaitTerminal()
         assertEquals(3, event.type)
@@ -139,7 +140,7 @@ class FileSaverTest : FileSaverTestBase() {
         val callback = RecordingCallback()
 
         val operationId =
-            fileSaver.saveBytes(byteArrayOf(1), "photo", "png", "image/png", SaveLocation.PICTURES.ordinal, null, ConflictResolution.AUTO_RENAME.value, callback)
+            fileSaver.saveBytes(byteArrayOf(1), "photo", "png", "image/png", SaveLocation.PICTURES.ordinal, null, ConflictResolution.AUTO_RENAME.ordinal, callback)
         assertTrue(opening.await(5, TimeUnit.SECONDS))
         assertEquals(1, mediaStore.rows.size)
         fileSaver.cancelOperation(operationId)
@@ -163,7 +164,7 @@ class FileSaverTest : FileSaverTestBase() {
         // The Dart side going away mid-save can make the JNI callback throw.
         val callback = RecordingCallback { if (it.type == 0) throw IllegalStateException("isolate gone") }
 
-        fileSaver.saveBytes(byteArrayOf(1, 2, 3), "photo", "png", "image/png", SaveLocation.PICTURES.ordinal, null, ConflictResolution.AUTO_RENAME.value, callback)
+        fileSaver.saveBytes(byteArrayOf(1, 2, 3), "photo", "png", "image/png", SaveLocation.PICTURES.ordinal, null, ConflictResolution.AUTO_RENAME.ordinal, callback)
 
         Thread.sleep(500)
         assertNoCrash()
@@ -180,13 +181,13 @@ class FileSaverTest : FileSaverTestBase() {
             "photo",
             "png",
             "image/png",
-            ConflictResolution.AUTO_RENAME.value,
+            ConflictResolution.AUTO_RENAME.ordinal,
             callback,
         )
 
         val event = callback.awaitTerminal()
         assertEquals(2, event.type)
-        assertEquals(Constants.ERROR_PLATFORM, event.data)
+        assertEquals(ErrorCode.PLATFORM_ERROR, event.data)
         assertTrue(event.message!!.contains("not initialized"))
     }
 
@@ -220,7 +221,7 @@ class FileSaverTest : FileSaverTestBase() {
         val callback = RecordingCallback()
 
         val operationId =
-            fileSaver.saveBytes(byteArrayOf(1), "photo", "png", "image/png", SaveLocation.PICTURES.ordinal, null, ConflictResolution.AUTO_RENAME.value, callback)
+            fileSaver.saveBytes(byteArrayOf(1), "photo", "png", "image/png", SaveLocation.PICTURES.ordinal, null, ConflictResolution.AUTO_RENAME.ordinal, callback)
         Thread.sleep(200)
         fileSaver.cancelOperation(operationId)
 

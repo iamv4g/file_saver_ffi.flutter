@@ -40,6 +40,12 @@ cd example && flutter test integration_test/ios_test.dart -d <device>
 # committed bindings differ from what this generates)
 dart run tool/ffigen.dart
 
+# Regenerate the Kotlin and Swift copies of the cross-language contracts
+# (Contracts.g.kt, Contracts.g.swift) after changing one of the Dart
+# declarations listed in tool/contracts.dart (test/tool/contracts_test.dart
+# fails if they differ)
+dart run tool/contracts.dart
+
 # Check that R8 kept every class and member the JNI bindings look up (CI runs
 # this on the release APK of every Android change)
 (cd example && flutter build apk --release)
@@ -68,12 +74,13 @@ Never hand-edit `lib/src/platforms/{android,darwin}/bindings.g.dart`. `android/p
 
 ### Native bridges
 - **Darwin**: Dart calls the C ABI declared in `darwin/file_saver_ffi/Sources/file_saver_ffi/FFI/file_saver_ffi.h`, which is implemented in Swift (`FFI/FileSaverFFI.swift`). Progress goes back through a Dart `NativePort`, posted by the small C target `Sources/FileSaverDartApi` (`Dart_PostCObject` resolved from `NativeApi.initializeApiDLData`). Messages are arrays: `[0]` started, `[1, bytesWritten, totalBytes]` progress (`totalBytes` is null if unknown), `[2, code, msg]` error, `[3, uri]` success, `[4]` cancelled. Both bridges send cancelled (4) only after a cancel, once the save has stopped and removed what it wrote, and the Dart `onCancel` waits for it. `ProgressReporter` throttles progress to steps of 1% of the size or 100 ms, and sends the count it held back before success. The library loads via `DynamicLibrary.process()`. A `DarwinFileSaverSink` also has a `NativeFinalizer` (`file_saver_finalize_write`), which cancels its session when the sink's isolate goes away without closing it; it runs without an isolate, so it must never post to Dart. The native functions copy their string arguments before returning, and take ownership of byte buffers (Dart allocates them with `malloc`, Swift frees them). Both SwiftPM (`Package.swift`) and CocoaPods (`file_saver_ffi.podspec`) are supported, so keep both working. Both ship the privacy manifest `Sources/file_saver_ffi/Resources/PrivacyInfo.xcprivacy` (CI checks that built apps bundle it with `tool/check_privacy_manifest.sh`); when the Swift code starts calling another [required reason API](https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api), declare it there.
-- **Android**: `FileSaverAndroid` calls the jnigen-generated wrapper around `com.iamv4g.file_saver_ffi.FileSaver` (Kotlin, coroutines). Progress arrives through a Dart-implemented `ProgressCallback` interface with the same event codes 0–4; a progress event (1) carries the bytes written as `progress` and the file size, if known, as `data`, throttled by `ProgressThrottle` like the Darwin `ProgressReporter`. `FileSaverFfiPlugin` exists only to give `FileSaver` its application context and Activity (for permission prompts). The Dart-side `FileSaver` is created lazily because the JVM isn't ready during plugin registration.
+- **Android**: `FileSaverAndroid` calls the jnigen-generated wrapper around `com.iamv4g.file_saver_ffi.FileSaver` (Kotlin, coroutines). Progress arrives through a Dart-implemented `ProgressCallback` interface with the same event types; a progress event (1) carries the bytes written as `progress` and the file size, if known, as `data`, throttled by `ProgressThrottle` like the Darwin `ProgressReporter`. `FileSaverFfiPlugin` exists only to give `FileSaver` its application context and Activity (for permission prompts). The Dart-side `FileSaver` is created lazily because the JVM isn't ready during plugin registration.
 - Android saves every file type with one `EntrySaver`, into the entry of a `SaveEntryFactory` (MediaStore or SAF). Darwin saves every file type with one `SaveEngine` (`Core/`), and `PhotosHelper.createAsset` adds images and videos to the Photos Library. Each side has conflict resolvers per storage backend (MediaStore scoped/legacy and SAF on Android; Photos and FileManager on Darwin).
 
-### Cross-language contracts (keep in sync manually)
-- Dart sends `ConflictResolution.index` and the platform `SaveLocation` enum `.index` across the bridge as plain ints. The Kotlin/Swift enums must keep the same order and values.
-- Progress event codes 0–4 and the error code strings map to the Dart exceptions in `lib/src/exceptions/file_saver_exceptions.dart`.
+### Cross-language contracts
+Dart declares them; `tool/contracts.dart` generates their Kotlin (`models/Contracts.g.kt`) and Swift (`Models/Contracts.g.swift`) copies, which are never hand-edited. Each Dart declaration has a comment saying so.
+- Dart sends `ConflictResolution.index` and the platform `SaveLocation` enum `.index` across the bridge as plain ints. Kotlin and Swift get enums of the same order (`fromInt` in `ConflictResolution.kt`/`.swift` and `SaveLocation.kt`/`.swift` adds the fallback for an unknown index, and the macOS `directoryURL`).
+- Native code sends events as `NativeEventType` indices (`EventType` in Kotlin and Swift) and errors with the `FileSaverErrorCode` strings (`ErrorCode`), which map to the Dart exceptions in `lib/src/exceptions/file_saver_exceptions.dart`. `test/contracts/native_contract_test.dart` fails if native code writes one of them as a literal.
 - Adding a native function means changing the C header and Swift `@_cdecl`, then regenerating (`tool/ffigen.dart` binds every function the header declares). On Android it means changing Kotlin, then running jnigen (only the classes listed in `tool/jnigen.dart` are exposed).
 
 ### Web

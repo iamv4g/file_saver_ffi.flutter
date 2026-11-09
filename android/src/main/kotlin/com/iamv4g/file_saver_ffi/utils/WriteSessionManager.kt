@@ -7,9 +7,13 @@ import com.iamv4g.file_saver_ffi.core.base.SaveEntry
 import com.iamv4g.file_saver_ffi.core.base.SaveEntryFactory
 import com.iamv4g.file_saver_ffi.exception.FileExistsException
 import com.iamv4g.file_saver_ffi.models.ConflictResolution
+import com.iamv4g.file_saver_ffi.models.ErrorCode
+import com.iamv4g.file_saver_ffi.models.EventType
 import com.iamv4g.file_saver_ffi.models.FileType
 import com.iamv4g.file_saver_ffi.models.ProgressCallback
 import com.iamv4g.file_saver_ffi.models.SaveLocation
+import com.iamv4g.file_saver_ffi.models.WriteSessionReply
+import com.iamv4g.file_saver_ffi.models.fromInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
@@ -126,8 +130,8 @@ internal class WriteSessionManager(
     /**
      * Resolves the target through [entryFactory] and registers a session for it.
      *
-     * SKIP with an existing file reports `callback(3, 0.0, "0", existingUri)`
-     * (session id 0 means "no session"), and nothing is written.
+     * SKIP with an existing file reports `callback(EventType.SUCCESS, 0.0, WriteSessionReply.SKIPPED_ID, existingUri)`
+     * (no session), and nothing is written.
      */
     private suspend fun startSession(
         context: Context,
@@ -137,14 +141,14 @@ internal class WriteSessionManager(
     ) {
         when (val entry = entryFactory.createEntryDirect(context, conflictResolution)) {
             is SaveEntry.Existing -> {
-                callback.onEvent(3, 0.0, "0", entry.uri.toString())
+                callback.onEvent(EventType.SUCCESS, 0.0, WriteSessionReply.SKIPPED_ID.toString(), entry.uri.toString())
             }
 
             is SaveEntry.Created -> {
                 val sessionId = sessionIdCounter.incrementAndGet()
                 val sessionScope = CoroutineScope(scope.coroutineContext + Dispatchers.IO.limitedParallelism(1))
                 writeSessions[sessionId] = WriteSession(entry, entryFactory, sessionScope)
-                callback.onEvent(3, 0.0, sessionId.toString(), null)
+                callback.onEvent(EventType.SUCCESS, 0.0, sessionId.toString(), null)
             }
         }
     }
@@ -162,14 +166,14 @@ internal class WriteSessionManager(
     ) {
         val session =
             writeSessions[sessionId]
-                ?: return callback.onEvent(2, 0.0, Constants.ERROR_INVALID_INPUT, "Session not found: $sessionId")
+                ?: return callback.onEvent(EventType.ERROR, 0.0, ErrorCode.INVALID_INPUT, "Session not found: $sessionId")
 
         session.sessionScope.launch {
-            session.failure?.let { return@launch callback.onEvent(2, 0.0, it.code, it.message) }
+            session.failure?.let { return@launch callback.onEvent(EventType.ERROR, 0.0, it.code, it.message) }
             try {
                 session.entry.outputStream.write(data)
                 session.bytesWritten += data.size
-                callback.onEvent(1, session.bytesWritten.toDouble(), null, null)
+                callback.onEvent(EventType.PROGRESS, session.bytesWritten.toDouble(), null, null)
             } catch (e: Exception) {
                 session.failure = failureOf(e)
                 reportError(callback, e)
@@ -189,13 +193,13 @@ internal class WriteSessionManager(
     ) {
         val session =
             writeSessions[sessionId]
-                ?: return callback.onEvent(2, 0.0, Constants.ERROR_INVALID_INPUT, "Session not found: $sessionId")
+                ?: return callback.onEvent(EventType.ERROR, 0.0, ErrorCode.INVALID_INPUT, "Session not found: $sessionId")
 
         session.sessionScope.launch {
-            session.failure?.let { return@launch callback.onEvent(2, 0.0, it.code, it.message) }
+            session.failure?.let { return@launch callback.onEvent(EventType.ERROR, 0.0, it.code, it.message) }
             try {
                 session.entry.outputStream.flush()
-                callback.onEvent(1, session.bytesWritten.toDouble(), null, null)
+                callback.onEvent(EventType.PROGRESS, session.bytesWritten.toDouble(), null, null)
             } catch (e: Exception) {
                 session.failure = failureOf(e)
                 reportError(callback, e)
@@ -218,7 +222,7 @@ internal class WriteSessionManager(
     ) {
         val session =
             writeSessions.remove(sessionId)
-                ?: return callback.onEvent(2, 0.0, Constants.ERROR_INVALID_INPUT, "Session not found: $sessionId")
+                ?: return callback.onEvent(EventType.ERROR, 0.0, ErrorCode.INVALID_INPUT, "Session not found: $sessionId")
 
         session.sessionScope.launch {
             // Only the new entry is removed; a file being overwritten stays intact.
@@ -228,7 +232,7 @@ internal class WriteSessionManager(
                 } catch (_: Exception) {
                 }
                 session.entryFactory.deleteEntry(context, session.entry.uri)
-                return@launch callback.onEvent(2, 0.0, failure.code, failure.message)
+                return@launch callback.onEvent(EventType.ERROR, 0.0, failure.code, failure.message)
             }
             try {
                 session.entry.outputStream.close()
@@ -236,7 +240,7 @@ internal class WriteSessionManager(
                 // replaced file may be gone, a cancellation must not make the
                 // catch below delete the new one as well.
                 val uri = withContext(NonCancellable) { session.entryFactory.commitEntry(context, session.entry) }
-                callback.onEvent(3, 1.0, uri.toString(), null)
+                callback.onEvent(EventType.SUCCESS, 1.0, uri.toString(), null)
             } catch (e: Exception) {
                 session.entryFactory.deleteEntry(context, session.entry.uri)
                 reportError(callback, e)
@@ -300,7 +304,7 @@ internal class WriteSessionManager(
         e: Exception,
     ) {
         val failure = failureOf(e)
-        callback.onEvent(2, 0.0, failure.code, failure.message)
+        callback.onEvent(EventType.ERROR, 0.0, failure.code, failure.message)
     }
 
     /** The error code and message for [e]. Rethrows [CancellationException]. */
@@ -308,12 +312,12 @@ internal class WriteSessionManager(
         val code =
             when (e) {
                 is CancellationException -> throw e
-                is FileExistsException -> Constants.ERROR_FILE_EXISTS
+                is FileExistsException -> ErrorCode.FILE_EXISTS
                 is IOException -> ioErrorCode(e)
-                is SecurityException -> Constants.ERROR_PERMISSION_DENIED
+                is SecurityException -> ErrorCode.PERMISSION_DENIED
                 // A non-tree SAF URI, or a MIME type the MediaStore collection rejects.
-                is IllegalArgumentException -> Constants.ERROR_INVALID_INPUT
-                else -> Constants.ERROR_PLATFORM
+                is IllegalArgumentException -> ErrorCode.INVALID_INPUT
+                else -> ErrorCode.PLATFORM_ERROR
             }
         return Failure(code, e.message)
     }

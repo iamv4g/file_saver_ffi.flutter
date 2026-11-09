@@ -2,6 +2,10 @@
 /// @docImport 'save_progress.dart';
 library;
 
+// Dart sends a ConflictResolution as its index. Kotlin and Swift use
+// generated copies of this enum: after changing it, run
+// `dart run tool/contracts.dart`.
+
 /// Strategy for handling file name conflicts when saving files.
 ///
 /// Defines how to handle the case when a file with the same name

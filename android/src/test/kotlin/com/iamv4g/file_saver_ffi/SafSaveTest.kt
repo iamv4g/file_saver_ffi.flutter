@@ -2,10 +2,10 @@ package com.iamv4g.file_saver_ffi
 
 import android.content.Intent
 import com.iamv4g.file_saver_ffi.models.ConflictResolution
+import com.iamv4g.file_saver_ffi.models.ErrorCode
 import com.iamv4g.file_saver_ffi.testing.FakeDocumentsProvider
 import com.iamv4g.file_saver_ffi.testing.FileSaverTestBase
 import com.iamv4g.file_saver_ffi.testing.RecordingCallback
-import com.iamv4g.file_saver_ffi.utils.Constants
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -108,7 +108,7 @@ class SafSaveTest : FileSaverTestBase() {
         val event = saveAs("note", ConflictResolution.FAIL, byteArrayOf(1))
 
         assertEquals(2, event.type)
-        assertEquals(Constants.ERROR_FILE_EXISTS, event.data)
+        assertEquals(ErrorCode.FILE_EXISTS, event.data)
         assertEquals(listOf("note.txt"), documents.names())
     }
 
@@ -150,7 +150,7 @@ class SafSaveTest : FileSaverTestBase() {
         val callback = RecordingCallback()
 
         val operationId =
-            fileSaver.saveBytesAs(byteArrayOf(1), documents.treeUri.toString(), "note", "txt", "text/plain", ConflictResolution.AUTO_RENAME.value, callback)
+            fileSaver.saveBytesAs(byteArrayOf(1), documents.treeUri.toString(), "note", "txt", "text/plain", ConflictResolution.AUTO_RENAME.ordinal, callback)
         assertTrue(opening.await(5, TimeUnit.SECONDS))
         assertEquals(listOf("note.txt"), documents.names())
         fileSaver.cancelOperation(operationId)
@@ -169,6 +169,6 @@ class SafSaveTest : FileSaverTestBase() {
         mimeType: String = "text/plain",
     ) = RecordingCallback()
         .also {
-            fileSaver.saveBytesAs(data, documents.treeUri.toString(), name, ext, mimeType, conflictResolution.value, it)
+            fileSaver.saveBytesAs(data, documents.treeUri.toString(), name, ext, mimeType, conflictResolution.ordinal, it)
         }.awaitTerminal()
 }

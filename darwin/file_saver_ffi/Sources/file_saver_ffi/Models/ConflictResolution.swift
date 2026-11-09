@@ -1,11 +1,9 @@
 import Foundation
 
-enum ConflictResolution: Int {
-    case autoRename = 0
-    case overwrite = 1
-    case fail = 2
-    case skip = 3
+// ConflictResolution itself is generated, in Contracts.g.swift.
 
+extension ConflictResolution {
+    /// The value Dart sent as `value`, or `.autoRename` for an unknown one.
     static func fromInt(_ value: Int) -> ConflictResolution {
         return ConflictResolution(rawValue: value) ?? .autoRename
     }

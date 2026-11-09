@@ -61,7 +61,7 @@ final class ProgressReporter {
 
     /// Send "started" event
     func sendStarted() {
-        send { [createInt(0)] }
+        send { [createInt(EventType.started)] }
     }
 
     /// Sends the bytes written so far and the size, nil if unknown. Throttled.
@@ -74,7 +74,7 @@ final class ProgressReporter {
 
     /// Send error event
     func sendError(code: String, message: String) {
-        send(closing: true) { [createInt(2), createString(code), createString(message)] }
+        send(closing: true) { [createInt(EventType.error), createString(code), createString(message)] }
     }
 
     /// Sends `error`, with the HTTP status of a network error as a fourth
@@ -84,7 +84,7 @@ final class ProgressReporter {
             return sendError(code: error.code, message: error.message)
         }
         send(closing: true) {
-            [createInt(2), createString(error.code), createString(error.message), createInt(Int64(statusCode))]
+            [createInt(EventType.error), createString(error.code), createString(error.message), createInt(Int64(statusCode))]
         }
     }
 
@@ -97,19 +97,19 @@ final class ProgressReporter {
                 heldBack = nil
                 sendArray(progressMessage(bytesWritten, totalBytes))
             }
-            return [createInt(3), createString(uri)]
+            return [createInt(EventType.success), createString(uri)]
         }
     }
 
     /// Send chunk/flush ACK for streaming write sessions. Sends cumulative `bytesWritten` as `Int64`.
     /// Dart reads this as `(msg[1] as num).toInt()`.
     func sendBytes(_ bytes: Int64) {
-        send { [createInt(1), createInt(bytes)] }
+        send { [createInt(EventType.progress), createInt(bytes)] }
     }
 
     /// Send cancelled event
     func sendCancelled() {
-        send(closing: true) { [createInt(4)] }
+        send(closing: true) { [createInt(EventType.cancelled)] }
     }
 
     /// Sends the message `elements` builds unless a terminal event was sent or
@@ -147,7 +147,7 @@ final class ProgressReporter {
     }
 
     private func progressMessage(_ bytesWritten: Int64, _ totalBytes: Int64?) -> [UnsafeMutablePointer<Dart_CObject>] {
-        [createInt(1), createInt(bytesWritten), totalBytes.map(createInt) ?? createNull()]
+        [createInt(EventType.progress), createInt(bytesWritten), totalBytes.map(createInt) ?? createNull()]
     }
 
     // MARK: - Private helpers

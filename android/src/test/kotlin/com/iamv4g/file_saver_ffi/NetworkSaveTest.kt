@@ -1,6 +1,7 @@
 package com.iamv4g.file_saver_ffi
 
 import com.iamv4g.file_saver_ffi.models.ConflictResolution
+import com.iamv4g.file_saver_ffi.models.ErrorCode
 import com.iamv4g.file_saver_ffi.models.SaveLocation
 import com.iamv4g.file_saver_ffi.testing.FileSaverTestBase
 import com.iamv4g.file_saver_ffi.testing.RecordingCallback
@@ -61,7 +62,7 @@ class NetworkSaveTest : FileSaverTestBase() {
                 "application/octet-stream",
                 SaveLocation.DOWNLOADS.ordinal,
                 null,
-                ConflictResolution.AUTO_RENAME.value,
+                ConflictResolution.AUTO_RENAME.ordinal,
                 callback,
             )
         return id to callback
@@ -73,7 +74,7 @@ class NetworkSaveTest : FileSaverTestBase() {
     ) {
         val event = callback.awaitTerminal(timeoutMs = 10_000)
         assertEquals("Events: ${callback.events}", 2, event.type)
-        assertEquals(event.message, Constants.ERROR_NETWORK, event.data)
+        assertEquals(event.message, ErrorCode.NETWORK_ERROR, event.data)
         assertTrue(event.message, event.message!!.contains(messageContains))
         assertTrue("Rows left: ${mediaStore.rows}", mediaStore.rows.isEmpty())
     }
@@ -311,7 +312,7 @@ class NetworkSaveTest : FileSaverTestBase() {
 
         val event = callback.awaitTerminal()
         assertEquals(2, event.type)
-        assertEquals(Constants.ERROR_INVALID_INPUT, event.data)
+        assertEquals(ErrorCode.INVALID_INPUT, event.data)
         assertTrue(server.requests.isEmpty())
     }
 
@@ -322,7 +323,7 @@ class NetworkSaveTest : FileSaverTestBase() {
         val (_, callback) = download(server.url("/file"), headersJson = """{"X-Count":3}""")
 
         val event = callback.awaitTerminal()
-        assertEquals(Constants.ERROR_INVALID_INPUT, event.data)
+        assertEquals(ErrorCode.INVALID_INPUT, event.data)
         assertTrue(event.message!!.contains("X-Count"))
         assertTrue(server.requests.isEmpty())
     }

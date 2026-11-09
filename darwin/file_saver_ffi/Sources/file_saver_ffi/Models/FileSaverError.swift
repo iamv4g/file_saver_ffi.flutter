@@ -26,18 +26,18 @@ enum FileSaverError: Error {
     
     var code: String {
         switch self {
-        case .permissionDenied: return Constants.errorPermissionDenied
-        case .fileExists: return Constants.errorFileExists
-        case .writeSessionSkipped: return Constants.errorFileExists
-        case .invalidInput: return Constants.errorInvalidInput
-        case .unsupportedFormat: return Constants.errorUnsupportedFormat
-        case .storageFull: return Constants.errorStorageFull
-        case .fileIO: return Constants.errorFileIO
-        case .fileNotFound: return Constants.errorFileNotFound
-        case .iCloudDownloadFailed: return Constants.errorICloudDownloadFailed
-        case .networkError: return Constants.errorNetwork
-        case .platformError: return Constants.errorPlatform
-        case .cancelled: return Constants.errorCancelled
+        case .permissionDenied: return ErrorCode.permissionDenied
+        case .fileExists: return ErrorCode.fileExists
+        case .writeSessionSkipped: return ErrorCode.fileExists
+        case .invalidInput: return ErrorCode.invalidInput
+        case .unsupportedFormat: return ErrorCode.unsupportedFormat
+        case .storageFull: return ErrorCode.storageFull
+        case .fileIO: return ErrorCode.fileIO
+        case .fileNotFound: return ErrorCode.fileNotFound
+        case .iCloudDownloadFailed: return ErrorCode.iCloudDownloadFailed
+        case .networkError: return ErrorCode.network
+        case .platformError: return ErrorCode.platform
+        case .cancelled: return ErrorCode.cancelled
         }
     }
     

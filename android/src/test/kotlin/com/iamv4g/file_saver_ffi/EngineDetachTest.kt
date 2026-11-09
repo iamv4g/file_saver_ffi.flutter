@@ -91,7 +91,7 @@ class EngineDetachTest : FileSaverTestBase() {
             "text/plain",
             SaveLocation.DOWNLOADS.ordinal,
             null,
-            ConflictResolution.AUTO_RENAME.value,
+            ConflictResolution.AUTO_RENAME.ordinal,
             RecordingCallback(),
         )
         assertTrue(opening.await(5, TimeUnit.SECONDS))
@@ -110,7 +110,7 @@ class EngineDetachTest : FileSaverTestBase() {
         val engine = engine()
         val saver = FileSaver(engine.id)
         val open = RecordingCallback()
-        saver.openWriteSession("log", "txt", "text/plain", SaveLocation.DOWNLOADS.ordinal, null, ConflictResolution.OVERWRITE.value, open)
+        saver.openWriteSession("log", "txt", "text/plain", SaveLocation.DOWNLOADS.ordinal, null, ConflictResolution.OVERWRITE.ordinal, open)
         val sessionId = open.awaitTerminal().data!!.toLong()
         writeChunk(saver, sessionId, byteArrayOf(1, 2, 3))
         val renaming = CountDownLatch(1)
@@ -187,7 +187,7 @@ class EngineDetachTest : FileSaverTestBase() {
         "application/octet-stream",
         SaveLocation.DOWNLOADS.ordinal,
         null,
-        ConflictResolution.AUTO_RENAME.value,
+        ConflictResolution.AUTO_RENAME.ordinal,
         callback,
     )
 
@@ -197,7 +197,7 @@ class EngineDetachTest : FileSaverTestBase() {
         name: String,
     ): Long {
         val open = RecordingCallback()
-        saver.openWriteSession(name, "txt", "text/plain", SaveLocation.DOWNLOADS.ordinal, null, ConflictResolution.AUTO_RENAME.value, open)
+        saver.openWriteSession(name, "txt", "text/plain", SaveLocation.DOWNLOADS.ordinal, null, ConflictResolution.AUTO_RENAME.ordinal, open)
         val opened = open.awaitTerminal()
         assertEquals("Events: ${open.events}", 3, opened.type)
         return opened.data!!.toLong()

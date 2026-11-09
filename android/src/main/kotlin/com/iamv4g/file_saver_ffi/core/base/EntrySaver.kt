@@ -3,8 +3,8 @@ package com.iamv4g.file_saver_ffi.core.base
 import android.content.Context
 import com.iamv4g.file_saver_ffi.exception.NetworkDownloadException
 import com.iamv4g.file_saver_ffi.models.ConflictResolution
+import com.iamv4g.file_saver_ffi.models.ErrorCode
 import com.iamv4g.file_saver_ffi.models.SaveProgressEvent
-import com.iamv4g.file_saver_ffi.utils.Constants
 import com.iamv4g.file_saver_ffi.utils.FileHelper
 import com.iamv4g.file_saver_ffi.utils.NetworkHelper
 import com.iamv4g.file_saver_ffi.utils.ioErrorCode
@@ -39,7 +39,7 @@ class EntrySaver(
     ): Flow<SaveProgressEvent> =
         saveFlow {
             if (fileData.isEmpty()) {
-                sendError(Constants.ERROR_INVALID_INPUT, "File data cannot be empty")
+                sendError(ErrorCode.INVALID_INPUT, "File data cannot be empty")
                 return@saveFlow
             }
 
@@ -92,13 +92,13 @@ class EntrySaver(
                 try {
                     FileHelper.openSourceFile(context, filePath)
                 } catch (_: FileNotFoundException) {
-                    sendError(Constants.ERROR_FILE_NOT_FOUND, filePath)
+                    sendError(ErrorCode.FILE_NOT_FOUND, filePath)
                     return@saveFlow
                 } catch (e: SecurityException) {
-                    sendError(Constants.ERROR_PERMISSION_DENIED, "Permission denied: ${e.message}")
+                    sendError(ErrorCode.PERMISSION_DENIED, "Permission denied: ${e.message}")
                     return@saveFlow
                 } catch (e: IllegalArgumentException) {
-                    sendError(Constants.ERROR_INVALID_INPUT, e.message ?: "Invalid file path")
+                    sendError(ErrorCode.INVALID_INPUT, e.message ?: "Invalid file path")
                     return@saveFlow
                 }
 
@@ -190,9 +190,9 @@ class EntrySaver(
                     entryFactory.finishSave(this, context, entry)
                 }
             } catch (e: NetworkDownloadException) {
-                sendError(Constants.ERROR_NETWORK, e.message ?: "Download failed", e.statusCode)
+                sendError(ErrorCode.NETWORK_ERROR, e.message ?: "Download failed", e.statusCode)
             } catch (e: IllegalArgumentException) {
-                sendError(Constants.ERROR_INVALID_INPUT, e.message ?: "Invalid request headers")
+                sendError(ErrorCode.INVALID_INPUT, e.message ?: "Invalid request headers")
             }
         }
 }

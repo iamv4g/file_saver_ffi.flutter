@@ -46,7 +46,7 @@ List<Object?> _checkReply(Object? message) {
   if (message is! List<Object?> || message.isEmpty || message[0] is! int) {
     throw NativePlatformException('Invalid reply from Swift: $message');
   }
-  if (message[0] == 2) {
+  if (message[0] == NativeEventType.error.index) {
     throw (parseDarwinMessage(message) as SaveProgressError).exception;
   }
   return message;

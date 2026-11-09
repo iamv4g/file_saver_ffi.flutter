@@ -3,6 +3,7 @@ package com.iamv4g.file_saver_ffi.utils
 import com.iamv4g.file_saver_ffi.core.base.sendError
 import com.iamv4g.file_saver_ffi.core.base.sendProgress
 import com.iamv4g.file_saver_ffi.core.base.sendSuccess
+import com.iamv4g.file_saver_ffi.models.ErrorCode
 import com.iamv4g.file_saver_ffi.models.SaveProgressEvent
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.toList
@@ -48,11 +49,11 @@ class SaveFlowBuilderTest {
             slowCollect(
                 saveFlow {
                     repeat(500) { sendProgress(it.toLong(), 500) }
-                    sendError(Constants.ERROR_FILE_IO, "disk full")
+                    sendError(ErrorCode.FILE_IO_ERROR, "disk full")
                 },
             )
 
-        assertEquals(SaveProgressEvent.Error(Constants.ERROR_FILE_IO, "disk full"), events.last())
+        assertEquals(SaveProgressEvent.Error(ErrorCode.FILE_IO_ERROR, "disk full"), events.last())
     }
 
     @Test
@@ -65,13 +66,13 @@ class SaveFlowBuilderTest {
                 },
             )
 
-        assertEquals(SaveProgressEvent.Error(Constants.ERROR_PLATFORM, "Unexpected error: boom"), events.last())
+        assertEquals(SaveProgressEvent.Error(ErrorCode.PLATFORM_ERROR, "Unexpected error: boom"), events.last())
     }
 
     @Test
     fun `SecurityException maps to PERMISSION_DENIED`() {
         val events = runBlocking { saveFlow { throw SecurityException("revoked") }.toList() }
 
-        assertEquals(SaveProgressEvent.Error(Constants.ERROR_PERMISSION_DENIED, "Permission denied: revoked"), events.last())
+        assertEquals(SaveProgressEvent.Error(ErrorCode.PERMISSION_DENIED, "Permission denied: revoked"), events.last())
     }
 }

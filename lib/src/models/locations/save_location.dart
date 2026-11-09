@@ -12,6 +12,9 @@ sealed class SaveLocation {
   const SaveLocation();
 }
 
+// Dart sends an AndroidSaveLocation as its index. Kotlin uses a generated copy of this enum
+// (SaveLocation): after changing it, run `dart run tool/contracts.dart`.
+
 /// Android-specific save locations.
 ///
 /// Each value is a public top-level directory. On Android 10 and later, files
@@ -53,6 +56,9 @@ enum AndroidSaveLocation implements SaveLocation {
   const AndroidSaveLocation();
 }
 
+// Dart sends an IosSaveLocation as its index. Swift uses a generated copy of this enum
+// (SaveLocation): after changing it, run `dart run tool/contracts.dart`.
+
 /// iOS-specific save locations.
 ///
 /// These locations map to iOS's Photos Library and FileManager directories.
@@ -79,6 +85,9 @@ enum IosSaveLocation implements SaveLocation {
 
   const IosSaveLocation();
 }
+
+// Dart sends an MacosSaveLocation as its index. Swift uses a generated copy of this enum
+// (SaveLocation): after changing it, run `dart run tool/contracts.dart`.
 
 /// macOS-specific save locations.
 ///

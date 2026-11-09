@@ -4,10 +4,10 @@ import android.net.Uri
 import android.system.ErrnoException
 import android.system.OsConstants
 import com.iamv4g.file_saver_ffi.models.ConflictResolution
+import com.iamv4g.file_saver_ffi.models.ErrorCode
 import com.iamv4g.file_saver_ffi.models.SaveLocation
 import com.iamv4g.file_saver_ffi.testing.FileSaverTestBase
 import com.iamv4g.file_saver_ffi.testing.RecordingCallback
-import com.iamv4g.file_saver_ffi.utils.Constants
 import com.iamv4g.file_saver_ffi.utils.ioErrorCode
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -48,12 +48,12 @@ class ErrorReportingTest : FileSaverTestBase() {
 
     @Test
     fun `an out-of-space error is STORAGE_FULL, any other IOException FILE_IO_ERROR`() {
-        assertEquals(Constants.ERROR_STORAGE_FULL, ioErrorCode(outOfSpace()))
-        assertEquals(Constants.ERROR_STORAGE_FULL, ioErrorCode(IOException(ErrnoException("write", OsConstants.EDQUOT))))
+        assertEquals(ErrorCode.STORAGE_FULL, ioErrorCode(outOfSpace()))
+        assertEquals(ErrorCode.STORAGE_FULL, ioErrorCode(IOException(ErrnoException("write", OsConstants.EDQUOT))))
         // A provider that keeps only the text.
-        assertEquals(Constants.ERROR_STORAGE_FULL, ioErrorCode(IOException("write failed: ENOSPC (No space left on device)")))
-        assertEquals(Constants.ERROR_FILE_IO, ioErrorCode(IOException("write failed: EIO (I/O error)", ErrnoException("write", OsConstants.EIO))))
-        assertEquals(Constants.ERROR_FILE_IO, ioErrorCode(IOException()))
+        assertEquals(ErrorCode.STORAGE_FULL, ioErrorCode(IOException("write failed: ENOSPC (No space left on device)")))
+        assertEquals(ErrorCode.FILE_IO_ERROR, ioErrorCode(IOException("write failed: EIO (I/O error)", ErrnoException("write", OsConstants.EIO))))
+        assertEquals(ErrorCode.FILE_IO_ERROR, ioErrorCode(IOException()))
     }
 
     @Test
@@ -64,7 +64,7 @@ class ErrorReportingTest : FileSaverTestBase() {
 
         val event = callback.awaitTerminal()
         assertEquals("Events: ${callback.events}", 2, event.type)
-        assertEquals(Constants.ERROR_STORAGE_FULL, event.data)
+        assertEquals(ErrorCode.STORAGE_FULL, event.data)
         assertTrue(mediaStore.rows.isEmpty())
         assertNoCrash()
     }
@@ -81,7 +81,7 @@ class ErrorReportingTest : FileSaverTestBase() {
 
         val event = write.awaitTerminal()
         assertEquals("Events: ${write.events}", 2, event.type)
-        assertEquals(Constants.ERROR_STORAGE_FULL, event.data)
+        assertEquals(ErrorCode.STORAGE_FULL, event.data)
         assertNoCrash()
     }
 
@@ -100,7 +100,7 @@ class ErrorReportingTest : FileSaverTestBase() {
             )
 
         val event = callback.awaitTerminal()
-        assertEquals(Constants.ERROR_FILE_EXISTS, event.data)
+        assertEquals(ErrorCode.FILE_EXISTS, event.data)
         assertEquals("taken.bin", event.message)
     }
 
@@ -116,12 +116,12 @@ class ErrorReportingTest : FileSaverTestBase() {
             "application/octet-stream",
             SaveLocation.DOWNLOADS.ordinal,
             null,
-            ConflictResolution.AUTO_RENAME.value,
+            ConflictResolution.AUTO_RENAME.ordinal,
             callback,
         )
 
         val event = callback.awaitTerminal()
-        assertEquals(Constants.ERROR_FILE_NOT_FOUND, event.data)
+        assertEquals(ErrorCode.FILE_NOT_FOUND, event.data)
         assertEquals(source, event.message)
     }
 }

@@ -18,7 +18,7 @@ package com.iamv4g.file_saver_ffi.models
  * file as a decimal string, or null if it isn't known (a download without
  * `Content-Length`, many `content://` sources). `copyToPath` reports the same.
  *
- * An error sends the HTTP status of a [com.iamv4g.file_saver_ffi.utils.Constants.ERROR_NETWORK]
+ * An error sends the HTTP status of a [ErrorCode.NETWORK_ERROR]
  * error as `progress`, and 0 otherwise. Its `message` is the detail the Dart
  * exception for the code needs (see `FileSaverErrorCode` in Dart), such as
  * just the file name for `FILE_EXISTS` or the path for `FILE_NOT_FOUND`.

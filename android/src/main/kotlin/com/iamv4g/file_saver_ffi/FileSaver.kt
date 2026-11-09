@@ -11,11 +11,13 @@ import com.iamv4g.file_saver_ffi.core.base.EntrySaver
 import com.iamv4g.file_saver_ffi.core.base.SaveEntryFactory
 import com.iamv4g.file_saver_ffi.exception.FileOpenException
 import com.iamv4g.file_saver_ffi.models.ConflictResolution
+import com.iamv4g.file_saver_ffi.models.ErrorCode
+import com.iamv4g.file_saver_ffi.models.EventType
 import com.iamv4g.file_saver_ffi.models.FileType
 import com.iamv4g.file_saver_ffi.models.ProgressCallback
 import com.iamv4g.file_saver_ffi.models.SaveLocation
 import com.iamv4g.file_saver_ffi.models.SaveProgressEvent
-import com.iamv4g.file_saver_ffi.utils.Constants
+import com.iamv4g.file_saver_ffi.models.fromInt
 import com.iamv4g.file_saver_ffi.utils.FileHelper
 import com.iamv4g.file_saver_ffi.utils.FileOpener
 import com.iamv4g.file_saver_ffi.utils.StoragePermissionHandler
@@ -126,9 +128,9 @@ class FileSaver(
     ) {
         scope.launch {
             try {
-                callback.onEvent(3, 1.0, FileOpener.canOpenFile(context, uri).toString(), null)
+                callback.onEvent(EventType.SUCCESS, 1.0, FileOpener.canOpenFile(context, uri).toString(), null)
             } catch (e: Exception) {
-                callback.onEvent(2, 0.0, Constants.ERROR_PLATFORM, e.message)
+                callback.onEvent(EventType.ERROR, 0.0, ErrorCode.PLATFORM_ERROR, e.message)
             }
         }
     }
@@ -147,11 +149,11 @@ class FileSaver(
         scope.launch {
             try {
                 FileOpener.openFile(context, uri, mimeType)
-                callback.onEvent(3, 1.0, null, null)
+                callback.onEvent(EventType.SUCCESS, 1.0, null, null)
             } catch (e: FileOpenException) {
-                callback.onEvent(2, 0.0, e.code, e.message)
+                callback.onEvent(EventType.ERROR, 0.0, e.code, e.message)
             } catch (e: Exception) {
-                callback.onEvent(2, 0.0, Constants.ERROR_PLATFORM, e.message)
+                callback.onEvent(EventType.ERROR, 0.0, ErrorCode.PLATFORM_ERROR, e.message)
             }
         }
     }
@@ -309,7 +311,7 @@ class FileSaver(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                callback.onEvent(2, 0.0, Constants.ERROR_PLATFORM, "Unexpected error: ${e.message ?: "Unknown error"}")
+                callback.onEvent(EventType.ERROR, 0.0, ErrorCode.PLATFORM_ERROR, "Unexpected error: ${e.message ?: "Unknown error"}")
             }
         }
 
@@ -322,7 +324,7 @@ class FileSaver(
             try {
                 FileOutputStream(targetPath)
             } catch (e: IOException) {
-                callback.onEvent(2, 0.0, ioErrorCode(e), "Cannot write $targetPath: ${e.message}")
+                callback.onEvent(EventType.ERROR, 0.0, ioErrorCode(e), "Cannot write $targetPath: ${e.message}")
                 return
             }
         output.use {
@@ -330,26 +332,26 @@ class FileSaver(
                 try {
                     FileHelper.openSourceFile(context, sourceUri)
                 } catch (_: FileNotFoundException) {
-                    callback.onEvent(2, 0.0, Constants.ERROR_FILE_NOT_FOUND, sourceUri)
+                    callback.onEvent(EventType.ERROR, 0.0, ErrorCode.FILE_NOT_FOUND, sourceUri)
                     return
                 } catch (e: SecurityException) {
-                    callback.onEvent(2, 0.0, Constants.ERROR_PERMISSION_DENIED, "Permission denied: ${e.message}")
+                    callback.onEvent(EventType.ERROR, 0.0, ErrorCode.PERMISSION_DENIED, "Permission denied: ${e.message}")
                     return
                 } catch (e: IllegalArgumentException) {
-                    callback.onEvent(2, 0.0, Constants.ERROR_INVALID_INPUT, e.message ?: "Invalid file path")
+                    callback.onEvent(EventType.ERROR, 0.0, ErrorCode.INVALID_INPUT, e.message ?: "Invalid file path")
                     return
                 }
 
             try {
                 FileHelper.copyStream(source.inputStream, output, source.totalSize) { bytesWritten ->
-                    callback.onEvent(1, bytesWritten.toDouble(), source.totalSize?.toString(), null)
+                    callback.onEvent(EventType.PROGRESS, bytesWritten.toDouble(), source.totalSize?.toString(), null)
                 }
             } catch (e: IOException) {
-                callback.onEvent(2, 0.0, ioErrorCode(e), "Failed to copy file: ${e.message}")
+                callback.onEvent(EventType.ERROR, 0.0, ioErrorCode(e), "Failed to copy file: ${e.message}")
                 return
             }
         }
-        callback.onEvent(3, 1.0, targetPath, null)
+        callback.onEvent(EventType.SUCCESS, 1.0, targetPath, null)
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -481,9 +483,9 @@ class FileSaver(
         catch { e ->
             when (e) {
                 is SecurityException ->
-                    emit(SaveProgressEvent.Error(Constants.ERROR_PERMISSION_DENIED, "Permission denied: ${e.message}"))
+                    emit(SaveProgressEvent.Error(ErrorCode.PERMISSION_DENIED, "Permission denied: ${e.message}"))
                 is Exception ->
-                    emit(SaveProgressEvent.Error(Constants.ERROR_PLATFORM, "Unexpected error: ${e.message ?: "Unknown error"}"))
+                    emit(SaveProgressEvent.Error(ErrorCode.PLATFORM_ERROR, "Unexpected error: ${e.message ?: "Unknown error"}"))
                 else -> throw e
             }
         }
@@ -519,11 +521,11 @@ class FileSaver(
         launchOperation(callback) { callback ->
             flow.collect { event ->
                 when (event) {
-                    is SaveProgressEvent.Started -> callback.onEvent(0, 0.0, null, null)
+                    is SaveProgressEvent.Started -> callback.onEvent(EventType.STARTED, 0.0, null, null)
                     is SaveProgressEvent.Progress ->
-                        callback.onEvent(1, event.bytesWritten.toDouble(), event.totalBytes?.toString(), null)
-                    is SaveProgressEvent.Error -> callback.onEvent(2, event.statusCode?.toDouble() ?: 0.0, event.code, event.message)
-                    is SaveProgressEvent.Success -> callback.onEvent(3, 1.0, event.uri, null)
+                        callback.onEvent(EventType.PROGRESS, event.bytesWritten.toDouble(), event.totalBytes?.toString(), null)
+                    is SaveProgressEvent.Error -> callback.onEvent(EventType.ERROR, event.statusCode?.toDouble() ?: 0.0, event.code, event.message)
+                    is SaveProgressEvent.Success -> callback.onEvent(EventType.SUCCESS, 1.0, event.uri, null)
                 }
             }
         }
@@ -549,7 +551,7 @@ class FileSaver(
             activeJobs.remove(operationId)
             // Not after dispose(): no Dart code is left to receive it.
             if (cause is CancellationException && scope.isActive && !operation.hasResult) {
-                callback.onEvent(4, 0.0, null, null)
+                callback.onEvent(EventType.CANCELLED, 0.0, null, null)
             }
         }
         job.start()
