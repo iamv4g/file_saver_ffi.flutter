@@ -108,24 +108,10 @@ void main() {
         dirPicker.picked = IOPickedLocation(contentUri);
       });
 
-      test('persists the location by default', () async {
+      test('only picks, without persisting', () async {
         final location = await FileSaver.pickDirectory();
 
         expect(location!.uri, contentUri);
-        expect(dirPicker.calls['persist'], IOPickedLocation(contentUri));
-      });
-
-      test('shouldPersist: false only picks', () async {
-        // ignore: deprecated_member_use_from_same_package
-        await FileSaver.pickDirectory(shouldPersist: false);
-
-        expect(dirPicker.calls.keys, ['pick']);
-      });
-
-      test('a cancelled pick persists nothing', () async {
-        dirPicker.picked = null;
-
-        expect(await FileSaver.pickDirectory(), isNull);
         expect(dirPicker.calls.keys, ['pick']);
       });
     });
