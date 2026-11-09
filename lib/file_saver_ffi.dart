@@ -405,27 +405,16 @@ class FileSaver {
   ///
   /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
   ///
-  /// [shouldPersist] is Android-only and deprecated: if true, the picked
-  /// directory is persisted as with [persistDirectory], but the token is
-  /// discarded, so it can't be released. Call [persistDirectory] instead,
-  /// which works on every platform. Ignored on all other platforms.
+  /// The access to the directory may end when the app restarts. To keep it,
+  /// call [persistDirectory] on the result.
   ///
   /// Returns [PickedDirectoryLocation], or null if cancelled.
   /// Throws [UnsupportedError] on browsers without `showDirectoryPicker()`
   /// (Firefox, Safari), and [NativePlatformException] if the picker fails;
   /// its `code` is the `DirPickerException.code` of `dir_picker`, such as
   /// `ALREADY_ACTIVE` when another pick is still open.
-  static Future<PickedDirectoryLocation?> pickDirectory({
-    @Deprecated(
-      'Call persistDirectory on the result instead; it works on every '
-      'platform and returns a token for restoreDirectory and '
-      'releaseDirectory. shouldPersist will be removed in 1.0.0, and '
-      'pickDirectory will then no longer persist on Android.',
-    )
-    bool shouldPersist = true,
-  }) {
-    return _platform.pickDirectory(shouldPersist: shouldPersist);
-  }
+  static Future<PickedDirectoryLocation?> pickDirectory() =>
+      _platform.pickDirectory();
 
   /// Keeps access to [location] after the app restarts, and returns a token
   /// to store, for example in shared preferences. On a later launch, pass it

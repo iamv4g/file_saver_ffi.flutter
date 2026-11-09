@@ -43,9 +43,7 @@ class FileSaverWeb extends FileSaverPlatform {
   /// (Firefox, Safari), and [NativePlatformException] if the picker fails,
   /// for example without a user gesture.
   @override
-  Future<PickedDirectoryLocation?> pickDirectory({
-    bool shouldPersist = true,
-  }) async {
+  Future<PickedDirectoryLocation?> pickDirectory() async {
     final dp.PickedLocation? location;
     try {
       location = await dp.DirPicker.pick(

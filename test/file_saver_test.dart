@@ -87,9 +87,7 @@ class _FakePlatform extends FileSaverPlatform {
   }
 
   @override
-  Future<PickedDirectoryLocation?> pickDirectory({
-    bool shouldPersist = true,
-  }) async {
+  Future<PickedDirectoryLocation?> pickDirectory() async {
     picks++;
     final result = pickResult;
     if (result is FileSaverException) throw result;

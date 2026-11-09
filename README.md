@@ -543,10 +543,10 @@ Future<FileSaverSink?> openWriteAs({
 ```
 
 #### `pickDirectory`
-Open system picker to let user choose a folder. `shouldPersist` (Android only) is deprecated and will be removed in 1.0.0: call `persistDirectory` on the result instead.
+Open system picker to let user choose a folder. To use it after the app restarts, call `persistDirectory` on the result.
 
 ```dart
-Future<PickedDirectoryLocation?> pickDirectory({bool shouldPersist = true})
+Future<PickedDirectoryLocation?> pickDirectory()
 ```
 
 #### `persistDirectory` / `restoreDirectory` / `releaseDirectory`

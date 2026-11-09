@@ -265,17 +265,6 @@ class FileSaverAndroid extends FileSaverPlatform {
     );
   }
 
-  /// Picks a directory, and with [shouldPersist] keeps access to it after a
-  /// restart with [persistDirectory], discarding the token.
-  @override
-  Future<PickedDirectoryLocation?> pickDirectory({
-    bool shouldPersist = true,
-  }) async {
-    final location = await super.pickDirectory();
-    if (location != null && shouldPersist) await persistDirectory(location);
-    return location;
-  }
-
   @override
   Future<bool> canOpenFile(Uri uri) async {
     final (_, result) = await callForJniReply(

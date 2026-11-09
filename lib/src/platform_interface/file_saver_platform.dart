@@ -188,14 +188,9 @@ abstract class FileSaverPlatform {
   ///
   /// **Platforms:** Android · iOS · macOS · Windows · Linux · Web
   ///
-  /// [shouldPersist] is Android-only, where the Android implementation then
-  /// calls [persistDirectory] on the result. Ignored on all other platforms.
-  ///
   /// Returns [PickedDirectoryLocation], or null if cancelled.
   /// Throws [UnsupportedError] on browsers that do not support the File System Access API.
-  Future<PickedDirectoryLocation?> pickDirectory({
-    bool shouldPersist = true,
-  }) async {
+  Future<PickedDirectoryLocation?> pickDirectory() async {
     try {
       final location = await DirPicker.pick();
       if (location == null) return null;
