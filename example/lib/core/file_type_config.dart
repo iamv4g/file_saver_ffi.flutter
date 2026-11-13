@@ -1,6 +1,6 @@
 import 'package:file_saver_ffi/file_saver_ffi.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Enum for selectable media types in the example app
 enum MediaCategory {
