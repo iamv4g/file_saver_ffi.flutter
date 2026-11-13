@@ -36,18 +36,8 @@ Future<void> main(List<String> args) async {
 
   // Step 2 — Generate JNI bindings
   print('Generating JNI bindings...');
-  await generateJniBindings(
-    Config(
-      // jnigen's own suppressions miss this one, which flutter_lints reports.
-      preamble: '// ignore_for_file: prefer_initializing_formals',
-      outputConfig: OutputConfig(
-        dartConfig: DartCodeOutputConfig(
-          path: packageRoot.resolve(
-            'lib/src/platforms/android/bindings.g.dart',
-          ),
-          structure: OutputStructure.singleFile,
-        ),
-      ),
+  await JniGenerator(
+    input: Input(
       sourcePath: [
         packageRoot.resolve(
           'android/src/main/kotlin/com/iamv4g/file_saver_ffi',
@@ -65,7 +55,15 @@ Future<void> main(List<String> args) async {
         'com.iamv4g.file_saver_ffi.models.ProgressCallback',
       ],
     ),
-  );
+    output: Output(
+      dart: DartOutput(
+        path: packageRoot.resolve('lib/src/platforms/android/bindings.g.dart'),
+        structure: OutputStructure.singleFile,
+      ),
+      // jnigen's own suppressions miss this one, which flutter_lints reports.
+      preamble: '// ignore_for_file: prefer_initializing_formals',
+    ),
+  ).generate();
 
   print('JNI bindings generated successfully.');
 }

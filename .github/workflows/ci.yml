@@ -143,7 +143,9 @@ jobs:
 
   # Apps made by `flutter create` (AGP 9, built-in Kotlin off) and apps still
   # on AGP 8 build the plugin's Kotlin differently from the example app, which
-  # turns built-in Kotlin on.
+  # turns built-in Kotlin on. Flutter 3.50 stops building with AGP older than
+  # 9.1.1, so the AGP 8 app is built with the minimum Flutter, which still
+  # takes it.
   android-consumer:
     name: Build an app that uses the plugin (${{ matrix.name }})
     needs: [changes, analyze]
@@ -155,13 +157,16 @@ jobs:
         include:
           - name: flutter create
             args: ''
-          - name: AGP 8
+            flutter: stable
+          - name: AGP 8, Flutter 3.47.8
             args: 8.11.1 8.14.3 2.3.20
+            flutter: 3.47.8
     steps:
       - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: ${{ matrix.flutter != 'stable' && matrix.flutter || '' }}
           cache: true
       - uses: actions/setup-java@v5
         with:
