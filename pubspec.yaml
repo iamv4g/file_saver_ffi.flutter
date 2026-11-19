@@ -38,8 +38,11 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   analyzer: ^14.6.0
-  ffigen: ^23.0.0
-  jnigen: ^1.0.1
+  # Exact versions: CI fails when the committed bindings differ from what they
+  # generate, which a new release can change. Upgrade them on purpose, and
+  # regenerate (tool/ffigen.dart, tool/jnigen.dart). jnigen 1.1 needs jni 1.2.
+  ffigen: 23.0.0
+  jnigen: 1.0.1
 
 flutter:
   plugin:
