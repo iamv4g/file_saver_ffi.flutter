@@ -240,10 +240,14 @@ jobs:
         env:
           FLUTTER_XCODE_DEPLOYMENT_POSTPROCESSING: 'YES'
           FLUTTER_XCODE_STRIP_STYLE: all
+        # flutter drive can exit 0 when the driver gets no result from the
+        # app, so the run passes only if it printed the result line too.
         run: |
           flutter drive --profile -d macos \
             --driver=test_driver/integration_test.dart \
-            --target=integration_test/darwin_stripped_test.dart
+            --target=integration_test/darwin_stripped_test.dart 2>&1 | tee drive.log
+          grep -qx 'All tests passed.' drive.log \
+            || { echo "::error::flutter drive didn't report that all tests passed."; exit 1; }
       - name: Check that the app was stripped
         working-directory: example
         run: |
