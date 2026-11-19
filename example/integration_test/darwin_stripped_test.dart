@@ -6,7 +6,9 @@
 //     flutter drive --profile -d <device> \
 //     --driver=test_driver/integration_test.dart \
 //     --target=integration_test/darwin_stripped_test.dart
-// They save to the app's Documents/fsf_it/<run>/.
+// They save to the app's Documents/fsf_it/<run>/. The directory tests also
+// check dir_picker, which file_saver_ffi uses for them and which had the
+// same bug before 0.8.1.
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -60,5 +62,27 @@ void main() {
     sink.add('ab'.codeUnits);
     await sink.cancel();
     await expectLater(sink.result, throwsA(isA<CancelledException>()));
+  });
+
+  testWidgets('persists, restores and releases a directory', (_) async {
+    final anchor = await FileSaver.saveAsync(
+      input: SaveInput.bytes(Uint8List.fromList('x'.codeUnits)),
+      fileName: 'anchor',
+      fileType: _text,
+      saveLocation: _documents,
+      subDir: _subDir,
+    );
+    final directory = Directory('${File.fromUri(anchor).parent.path}/persisted')
+      ..createSync();
+
+    final token = await FileSaver.persistDirectory(
+      PickedDirectoryLocation(uri: directory.uri),
+    );
+    final restored = await FileSaver.restoreDirectory(token);
+    expect(
+      Directory.fromUri(restored!.uri).resolveSymbolicLinksSync(),
+      directory.resolveSymbolicLinksSync(),
+    );
+    await FileSaver.releaseDirectory(token);
   });
 }
