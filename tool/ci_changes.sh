@@ -30,7 +30,7 @@ if ! $all; then
       # The rest of test/ (contracts, exceptions, facade) runs on Ubuntu, always.
       test/*) ;;
       android/* | lib/src/platforms/android/* | example/android/* | example/integration_test/android_* | tool/jnigen.dart | tool/check_jni_keeps.dart | tool/check_consumer_app.sh) android=true ;;
-      darwin/* | lib/src/platforms/darwin/* | example/ios/* | example/macos/* | example/integration_test/ios_* | tool/ffigen.dart | tool/check_privacy_manifest.sh) darwin=true ;;
+      darwin/* | lib/src/platforms/darwin/* | example/ios/* | example/macos/* | example/integration_test/ios_* | example/integration_test/darwin_* | example/test_driver/* | tool/ffigen.dart | tool/check_privacy_manifest.sh) darwin=true ;;
       lib/src/platforms/windows/* | example/windows/*) windows=true ;;
       lib/src/platforms/linux/* | example/linux/*) linux=true ;;
       # The sink every platform builds on.
@@ -48,11 +48,12 @@ if $all; then
   android=true darwin=true windows=true linux=true web=true desktop=true
 fi
 
-# Ubuntu always runs the Dart tests, on stable and on the minimum Flutter
+# Ubuntu always runs the Dart tests, on 3.47.9 (release/0.12: Flutter 3.50
+# doesn't build its example) and on the minimum Flutter
 # version from pubspec.yaml `environment.flutter`.
-tests=('{"os":"ubuntu-latest","flutter":"stable"}' '{"os":"ubuntu-latest","flutter":"3.44.0"}')
-$desktop && tests+=('{"os":"macos-latest","flutter":"stable"}')
-{ $desktop || $windows; } && tests+=('{"os":"windows-latest","flutter":"stable"}')
+tests=('{"os":"ubuntu-latest","flutter":"3.47.9"}' '{"os":"ubuntu-latest","flutter":"3.44.0"}')
+$desktop && tests+=('{"os":"macos-latest","flutter":"3.47.9"}')
+{ $desktop || $windows; } && tests+=('{"os":"windows-latest","flutter":"3.47.9"}')
 
 builds=()
 $android && builds+=('{"os":"ubuntu-latest","target":"apk"}')

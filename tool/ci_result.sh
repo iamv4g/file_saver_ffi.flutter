@@ -23,6 +23,7 @@ failed=$(jq -r '
       "android-unit-test": ($scope.android == "true"),
       "android-consumer": ($scope.android == "true"),
       "darwin-unit-test": ($scope.darwin == "true"),
+      "darwin-stripped": ($scope.darwin == "true"),
       "web-test": ($scope.web == "true"),
       "build": (($scope.build // "[]") != "[]")
     } as $needed
