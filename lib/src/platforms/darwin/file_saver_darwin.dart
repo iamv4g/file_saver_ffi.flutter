@@ -21,6 +21,7 @@ import '../shared/single_subscription.dart';
 import 'bindings.g.dart';
 import 'darwin_file_saver_sink.dart';
 import 'darwin_reply.dart';
+import 'darwin_symbols.dart';
 
 /// FileSaver implementation for Apple platforms (iOS and macOS).
 ///
@@ -29,7 +30,8 @@ import 'darwin_reply.dart';
 /// - macOS: Supports Documents, Downloads, and Desktop
 class FileSaverDarwin extends FileSaverPlatform {
   FileSaverDarwin() {
-    _fileSaver = FileSaverFFI(DynamicLibrary.process());
+    // Not DynamicLibrary.process(): an archived app has no names to look up.
+    _fileSaver = FileSaverFFI.fromLookup(lookupDarwinSymbol);
 
     // Initialize Dart API DL for NativePort communication
     final initResult = _fileSaver.initDartApiDl(NativeApi.initializeApiDLData);
