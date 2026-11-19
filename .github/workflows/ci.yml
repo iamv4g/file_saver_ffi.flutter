@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    # release/*: patches of an older minor version. publish.yml skips CI for a
+    # tag on a commit whose push run passed.
+    branches: [main, 'release/**']
     paths-ignore: ['**.md', 'screenshots/**']
   # No paths-ignore here: `CI result` is a required status check, and a
   # skipped workflow would leave a docs-only PR waiting for it forever.
