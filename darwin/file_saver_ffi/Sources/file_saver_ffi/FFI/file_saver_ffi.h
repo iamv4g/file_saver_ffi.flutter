@@ -351,4 +351,28 @@ void file_saver_cancel_write(uint64_t sessionId);
 /// @param sessionId  Session ID from file_saver_open_write[_as], as a pointer
 void file_saver_finalize_write(void *sessionId);
 
+/// Every function above, as `X(name)`. FileSaverFFISymbols
+/// (Sources/FileSaverDartApi/file_saver_symbols.m) gives Dart their addresses
+/// from it, as Dart can't look them up by name in a stripped app. Add a new
+/// function here too; Tests/file_saver_ffiTests/SymbolsTests.swift fails
+/// otherwise.
+#define FILE_SAVER_FUNCTIONS(X)        \
+    X(file_saver_init_dart_api_dl)     \
+    X(file_saver_cancel)               \
+    X(file_saver_save_bytes)           \
+    X(file_saver_save_file)            \
+    X(file_saver_save_network)         \
+    X(file_saver_save_bytes_as)        \
+    X(file_saver_save_file_as)         \
+    X(file_saver_save_network_as)      \
+    X(file_saver_open_file)            \
+    X(file_saver_can_open_file)        \
+    X(file_saver_open_write)           \
+    X(file_saver_open_write_as)        \
+    X(file_saver_write_chunk)          \
+    X(file_saver_flush_write)          \
+    X(file_saver_close_write)          \
+    X(file_saver_cancel_write)         \
+    X(file_saver_finalize_write)
+
 #endif

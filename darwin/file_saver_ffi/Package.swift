@@ -14,9 +14,11 @@ let package = Package(
         .library(name: "file-saver-ffi", targets: ["file_saver_ffi"])
     ],
     targets: [
-        // C target providing `FileSaver_PostCObject_DL`. SwiftPM does not allow mixing C and Swift in
-        // one target. Names are prefixed (not `DartApiDl`) so they do not clash with other FFI plugins
-        // (e.g. dir_picker) that bundle their own Dart API shim in the same package graph.
+        // C target providing `FileSaver_PostCObject_DL`, and the Objective-C class
+        // `FileSaverFFISymbols`, which gives Dart the addresses of the functions of
+        // FFI/file_saver_ffi.h. SwiftPM does not allow mixing C and Swift in one target. Names are
+        // prefixed (not `DartApiDl`) so they do not clash with other FFI plugins (e.g. dir_picker)
+        // that bundle their own Dart API shim in the same package graph.
         .target(
             name: "FileSaverDartApi",
             path: "Sources/FileSaverDartApi",
@@ -26,7 +28,8 @@ let package = Package(
             name: "file_saver_ffi",
             dependencies: ["FileSaverDartApi"],
             path: "Sources/file_saver_ffi",
-            // Only used by ffigen (tool/ffigen.dart); the functions are defined via `@_cdecl`.
+            // Read by ffigen (tool/ffigen.dart) and file_saver_symbols.m; the functions are defined
+            // via `@_cdecl`.
             exclude: ["FFI/file_saver_ffi.h"],
             // The privacy manifest (PrivacyInfo.xcprivacy). The podspec ships it too.
             resources: [.process("Resources")]

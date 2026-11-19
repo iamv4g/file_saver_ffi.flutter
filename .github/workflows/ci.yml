@@ -216,6 +216,43 @@ jobs:
           git diff --exit-code -- lib/src/platforms/darwin/bindings.g.dart \
             || { echo "::error::Run 'dart run tool/ffigen.dart' and commit lib/src/platforms/darwin/bindings.g.dart."; exit 1; }
 
+      # The Objective-C runtime calls of darwin_symbols.dart, which the Test
+      # job runs on macOS only for some changes.
+      - name: Run the Dart tests of the Darwin bridge on macOS
+        run: flutter test test/platforms/darwin
+
+  # Archiving an app strips its symbols (STRIP_STYLE = all, Xcode's default
+  # for apps), which neither `flutter test` nor the builds do. Runs the Darwin
+  # bridge in a macOS app stripped the same way.
+  darwin-stripped:
+    name: Darwin bridge in a stripped app (macOS)
+    needs: [changes, analyze]
+    if: needs.changes.outputs.darwin == 'true'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Run integration_test/darwin_stripped_test.dart in a stripped profile build
+        working-directory: example
+        env:
+          FLUTTER_XCODE_DEPLOYMENT_POSTPROCESSING: 'YES'
+          FLUTTER_XCODE_STRIP_STYLE: all
+        run: |
+          flutter drive --profile -d macos \
+            --driver=test_driver/integration_test.dart \
+            --target=integration_test/darwin_stripped_test.dart
+      - name: Check that the app was stripped
+        working-directory: example
+        run: |
+          app=build/macos/Build/Products/Profile/file_saver_ffi_example.app/Contents/MacOS/file_saver_ffi_example
+          if xcrun dyld_info -exports "$app" | grep -q '_file_saver_'; then
+            echo "::error::The app still exports file_saver_* functions, so the test didn't run on a stripped app."
+            exit 1
+          fi
+
   build:
     name: Build example (${{ matrix.target }}${{ matrix.ios-deps && format(', {0}', matrix.ios-deps) || '' }})
     needs: [changes, analyze]
@@ -304,6 +341,7 @@ jobs:
       - android-unit-test
       - android-consumer
       - darwin-unit-test
+      - darwin-stripped
       - web-test
       - build
     runs-on: ubuntu-latest

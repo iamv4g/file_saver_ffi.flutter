@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- **iOS/macOS:** the plugin failed in an archived app (an App Store or TestFlight build, `flutter build ipa`) that links it statically: with Swift Package Manager, or with CocoaPods and `use_frameworks! :linkage => :static`. Archiving strips the app's symbols (`STRIP_STYLE = all`, Xcode's default for apps), and the plugin looked its native functions up by name, so it registered no platform and every call threw `No file_saver_ffi platform is registered`. It now gets their addresses through the Objective-C runtime, which keeps class names. Apps that set Strip Style to Non-Global Symbols as a workaround can set it back.
 - **iOS/macOS:** a write session (`openWrite`, `openWriteAs`) whose sink is left unclosed when its isolate exits or its engine shuts down (a background isolate, add-to-app, a hot restart) is now cancelled. Its partial file is deleted, its file handle closed and, for `openWriteAs`, the access to the picked directory given back. Before, all of it stayed for as long as the app ran, and a new file kept its final name, so a truncated `report.pdf` was left and the next save of that name got `report (1).pdf`. The sink's Dart `Finalizer` doesn't run when an isolate exits; the sink now has a native finalizer as well.
 
 ## 0.12.0
