@@ -40,7 +40,8 @@ dev_dependencies:
   analyzer: ^14.6.0
   # Exact versions: CI fails when the committed bindings differ from what they
   # generate, which a new release can change. Upgrade them on purpose, and
-  # regenerate (tool/ffigen.dart, tool/jnigen.dart). jnigen 1.1 needs jni 1.2.
+  # regenerate (tool/ffigen.dart, tool/jnigen.dart). The bindings of jnigen 1.1
+  # need jni 1.2, and jni 1.2.0 was retracted.
   ffigen: 23.0.0
   jnigen: 1.0.1
 
