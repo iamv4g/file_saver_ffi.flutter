@@ -48,6 +48,9 @@ void main() {
       'darwin-unit-test': {
         'result': result('darwin-unit-test', runs: outputs['darwin'] == 'true'),
       },
+      'darwin-stripped': {
+        'result': result('darwin-stripped', runs: outputs['darwin'] == 'true'),
+      },
       'web-test': {
         'result': result('web-test', runs: outputs['web'] == 'true'),
       },
@@ -79,6 +82,7 @@ void main() {
 
       expect(result.exitCode, 0);
       expect(result.stdout, contains('darwin-unit-test: skipped'));
+      expect(result.stdout, contains('darwin-stripped: skipped'));
     });
   });
 
@@ -91,14 +95,16 @@ void main() {
       'skipped',
       '',
     ]) {
-      test('when a job the change needs ends "$outcome"', () async {
-        final result = await check(
-          needs(scope: darwin, results: {'darwin-unit-test': outcome}),
-        );
+      for (final job in ['darwin-unit-test', 'darwin-stripped']) {
+        test('when $job, which the change needs, ends "$outcome"', () async {
+          final result = await check(
+            needs(scope: darwin, results: {job: outcome}),
+          );
 
-        expect(result.exitCode, 1);
-        expect(result.stdout, contains('darwin-unit-test ($outcome)'));
-      });
+          expect(result.exitCode, 1);
+          expect(result.stdout, contains('$job ($outcome)'));
+        });
+      }
     }
 
     test('when a job that always runs is skipped', () async {

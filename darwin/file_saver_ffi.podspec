@@ -21,7 +21,7 @@ A Flutter plugin for saving files to device storage using FFI. Supports iOS and 
   # This will ensure the source files in Classes/ are included in the native
   # builds of apps using this FFI plugin.
   s.source           = { :path => '.' }
-  s.source_files = 'file_saver_ffi/Sources/**/*.{h,c,swift}'
+  s.source_files = 'file_saver_ffi/Sources/**/*.{h,c,m,swift}'
   # Only used by ffigen (tool/ffigen.dart); the functions are defined via
   # `@_cdecl`. Package.swift excludes it too.
   s.exclude_files = 'file_saver_ffi/Sources/file_saver_ffi/FFI/file_saver_ffi.h'

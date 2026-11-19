@@ -1,3 +1,9 @@
+## 0.12.1
+
+### Fixed
+
+- **iOS/macOS:** the plugin failed in an archived app (an App Store or TestFlight build, `flutter build ipa`) that links it statically: with Swift Package Manager, or with CocoaPods and `use_frameworks! :linkage => :static`. Archiving strips the app's symbols (`STRIP_STYLE = all`, Xcode's default for apps), and the plugin looked its native functions up by name, so it registered no platform and every call threw `No file_saver_ffi platform is registered`. It now gets their addresses through the Objective-C runtime, which keeps class names. `pickDirectory`, `persistDirectory`, `restoreDirectory` and `releaseDirectory` call `dir_picker`, which had the same bug, so the plugin now requires `dir_picker` 0.8.1 (was 0.8.0), which fixes it the same way. Apps that set Strip Style to Non-Global Symbols as a workaround can set it back.
+
 ## 0.12.0
 
 This is the last release for Flutter older than 3.47.8, iOS older than 15.0 and macOS older than 12.0. 1.0.0 will require Flutter 3.47.8 (Dart 3.13.7), the first release with the fix for [GHSA-frr6-h895-5pxp](https://github.com/dart-lang/sdk/security/advisories/GHSA-frr6-h895-5pxp), in which `dart:io` trusted compromised eMudhra CA certificates on Android, Windows and Linux. That fix is in the Flutter SDK, not in this package, so upgrade Flutter whichever version of the package you use. Apps on an older Flutter keep getting 0.12.x.
