@@ -21,11 +21,6 @@ jobs:
   check-release:
     name: Check release
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      actions: read # tool/ci_passed.sh lists the CI runs
-    outputs:
-      ci-passed: ${{ steps.ci-passed.outputs.passed }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -49,33 +44,15 @@ jobs:
             echo "::error::CHANGELOG.md has no '## $version' section"
             exit 1
           fi
-      # CI runs on every push to main and release/*, with every job, so the
-      # tagged commit has usually passed already. Running it again only adds
-      # time and the chance of a flaky failure.
-      - name: Look for a CI run that passed on this commit
-        id: ci-passed
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if bash tool/ci_passed.sh "$GITHUB_SHA"; then
-            echo "passed=true" >> "$GITHUB_OUTPUT"
-          fi
 
   ci:
     name: CI
     needs: check-release
-    # Only when no CI run passed on the tagged commit.
-    if: needs.check-release.outputs.ci-passed != 'true'
     uses: ./.github/workflows/ci.yml
 
   publish:
     name: Publish
-    needs: [check-release, ci]
-    # Runs when CI passed now, or was skipped because it passed before.
-    if: >-
-      !cancelled() && needs.check-release.result == 'success'
-      && (needs.ci.result == 'success'
-          || (needs.ci.result == 'skipped' && needs.check-release.outputs.ci-passed == 'true'))
+    needs: ci
     runs-on: ubuntu-latest
     # pub.dev is configured to require this environment. Its protection rules
     # (required reviewers, tag policy) gate every publish.
