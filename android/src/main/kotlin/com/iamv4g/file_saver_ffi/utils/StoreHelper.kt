@@ -1,5 +1,6 @@
 package com.iamv4g.file_saver_ffi.utils
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.media.MediaScannerConnection
@@ -90,49 +91,54 @@ object StoreHelper {
     ): SaveEntry =
         withContext(Dispatchers.IO) {
             val (contentUri, dirPath) = FileHelper.scopedStoreTargetFor(saveLocation, subDir, fileType)
-
-            val resolution =
-                ScopedStoreConflictResolver.resolve(
-                    context,
-                    contentUri,
-                    dirPath,
-                    baseFileName,
-                    fileType.ext,
-                    conflictResolution,
-                )
-
-            val target =
-                when (resolution) {
-                    is ScopedStoreConflictResolver.Resolution.Existing -> {
-                        return@withContext SaveEntry.Existing(resolution.uri)
-                    }
-
-                    is ScopedStoreConflictResolver.Resolution.Create -> {
-                        resolution
-                    }
-                }
-
             val resolver = context.contentResolver
 
-            val contentValues =
-                ContentValues().apply {
-                    put(MediaStore.MediaColumns.DISPLAY_NAME, target.displayName)
-                    put(MediaStore.MediaColumns.MIME_TYPE, fileType.mimeType)
-                    put(MediaStore.MediaColumns.RELATIVE_PATH, dirPath)
-                    put(MediaStore.MediaColumns.IS_PENDING, 1)
-                }
+            // Until the row is inserted, a concurrent save of the same name
+            // would pick the same name.
+            val (uri, target) =
+                DirectoryLock.withLock(lockKey(dirPath)) {
+                    val target =
+                        when (
+                            val resolution =
+                                ScopedStoreConflictResolver.resolve(
+                                    context,
+                                    contentUri,
+                                    dirPath,
+                                    baseFileName,
+                                    fileType.ext,
+                                    conflictResolution,
+                                )
+                        ) {
+                            is ScopedStoreConflictResolver.Resolution.Existing -> {
+                                return@withContext SaveEntry.Existing(resolution.uri)
+                            }
 
-            val uri =
-                try {
-                    resolver.insert(contentUri, contentValues)
-                } catch (e: IllegalArgumentException) {
-                    // MediaProvider rejects a top-level directory the collection
-                    // doesn't allow, e.g. an image in Movies/.
-                    throw IllegalArgumentException(
-                        "Android rejected saving ${fileType.mimeType} to ${dirPath.substringBefore('/')}/: ${e.message}",
-                        e,
-                    )
-                } ?: throw IOException("Failed to create MediaStore entry: ${target.displayName}")
+                            is ScopedStoreConflictResolver.Resolution.Create -> {
+                                resolution
+                            }
+                        }
+
+                    val contentValues =
+                        ContentValues().apply {
+                            put(MediaStore.MediaColumns.DISPLAY_NAME, target.displayName)
+                            put(MediaStore.MediaColumns.MIME_TYPE, fileType.mimeType)
+                            put(MediaStore.MediaColumns.RELATIVE_PATH, dirPath)
+                            put(MediaStore.MediaColumns.IS_PENDING, 1)
+                        }
+
+                    val uri =
+                        try {
+                            resolver.insert(contentUri, contentValues)
+                        } catch (e: IllegalArgumentException) {
+                            // MediaProvider rejects a top-level directory the collection
+                            // doesn't allow, e.g. an image in Movies/.
+                            throw IllegalArgumentException(
+                                "Android rejected saving ${fileType.mimeType} to ${dirPath.substringBefore('/')}/: ${e.message}",
+                                e,
+                            )
+                        } ?: throw IOException("Failed to create MediaStore entry: ${target.displayName}")
+                    uri to target
+                }
 
             // Don't leave an empty pending row behind if the stream can't be opened.
             val outputStream =
@@ -144,7 +150,7 @@ object StoreHelper {
                     throw e as? IOException ?: IOException("Failed to open OutputStream: ${target.displayName}", e)
                 }
 
-            SaveEntry.Created(uri, outputStream, replaces = target.replaces)
+            SaveEntry.Created(uri, outputStream, overwrite = target.overwrite)
         }
 
     private suspend fun createEntryForLegacyStorage(
@@ -174,11 +180,15 @@ object StoreHelper {
                 }
 
                 is LegacyStoreConflictResolver.Resolution.Create -> {
-                    SaveEntry.Created(
-                        uri = Uri.fromFile(resolution.file),
-                        outputStream = FileOutputStream(resolution.file),
-                        replaces = resolution.replaces?.let(Uri::fromFile),
-                    )
+                    val outputStream =
+                        try {
+                            FileOutputStream(resolution.file)
+                        } catch (e: IOException) {
+                            // Release the name the resolver claimed.
+                            resolution.file.delete()
+                            throw e
+                        }
+                    SaveEntry.Created(Uri.fromFile(resolution.file), outputStream, overwrite = resolution.overwrite)
                 }
             }
         }
@@ -187,20 +197,26 @@ object StoreHelper {
      * Makes a fully written [entry] the saved file and returns its final URI.
      *
      * - Android 10+: clears IS_PENDING so the file becomes visible. For
-     *   OVERWRITE it then deletes the replaced row and renames the new row
-     *   (inserted under a numbered name such as `photo (1).jpg`) back to
-     *   [displayName].
-     *   If the old row cannot be deleted (for example a row the app does not
-     *   own throws `RecoverableSecurityException`), the new file keeps its
-     *   numbered name.
-     * - Android ≤ 9: for OVERWRITE, renames the temporary file over the original,
-     *   then asks the media scanner to index the file so it shows up in gallery
-     *   and music apps (MediaStore is not updated by plain file writes there).
+     *   OVERWRITE it then deletes the row that holds [displayName] and gives
+     *   the new row (inserted under a numbered name such as `photo (1).jpg`)
+     *   that name.
+     *   The new file keeps its numbered name if that row can't be deleted
+     *   (for example a row the app does not own throws
+     *   `RecoverableSecurityException`), or is still being written by another
+     *   save.
+     * - Android ≤ 9: for OVERWRITE, renames the temporary file to
+     *   [displayName], replacing the file there, then asks the media scanner
+     *   to index the file so it shows up in gallery and music apps (MediaStore
+     *   is not updated by plain file writes there).
+     *
+     * Concurrent overwrites of one name end with the content of the one that
+     * commits last.
      *
      * The stream of [entry] must already be closed.
      *
      * @param displayName The requested file name WITH extension
-     * @param mimeType MIME type passed to the media scanner on Android ≤ 9
+     * @param fileType The type of the file; its MIME type is passed to the
+     *   media scanner on Android ≤ 9
      * @throws IOException if the entry cannot be finalized; the replaced file
      *   is still intact in that case
      */
@@ -208,15 +224,17 @@ object StoreHelper {
         context: Context,
         entry: SaveEntry.Created,
         displayName: String,
-        mimeType: String,
+        fileType: FileType,
+        saveLocation: SaveLocation,
+        subDir: String?,
     ): Uri =
         withContext(Dispatchers.IO) {
             if (entry.uri.scheme == "file") {
-                val uri = commitLegacyEntry(entry)
+                val uri = commitLegacyEntry(entry, displayName)
                 // Fire-and-forget: the file is saved either way, the scan only
                 // makes it visible to other apps.
                 uri.path?.let { path ->
-                    MediaScannerConnection.scanFile(context, arrayOf(path), arrayOf(mimeType), null)
+                    MediaScannerConnection.scanFile(context, arrayOf(path), arrayOf(fileType.mimeType), null)
                 }
                 return@withContext uri
             }
@@ -229,32 +247,53 @@ object StoreHelper {
                 throw IOException("Failed to publish ${entry.uri}: MediaStore did not clear IS_PENDING")
             }
 
-            val replaces = entry.replaces ?: return@withContext entry.uri
+            if (!entry.overwrite) return@withContext entry.uri
 
-            val deleted =
-                try {
-                    resolver.delete(replaces, null, null) > 0
-                } catch (_: SecurityException) {
-                    false
+            val (contentUri, dirPath) = FileHelper.scopedStoreTargetFor(saveLocation, subDir, fileType)
+            // So that no other save inserts or renames a row to displayName in
+            // between.
+            DirectoryLock.withLock(lockKey(dirPath)) {
+                val holder =
+                    try {
+                        ScopedStoreConflictResolver.findRow(context, contentUri, dirPath, displayName)
+                    } catch (_: Exception) {
+                        return@withLock entry.uri
+                    }
+                if (holder != null && ContentUris.parseId(holder.uri) != ContentUris.parseId(entry.uri)) {
+                    // Another save is writing it: its content isn't ours to drop.
+                    if (holder.isPending) return@withLock entry.uri
+                    val deleted =
+                        try {
+                            resolver.delete(holder.uri, null, null) > 0
+                        } catch (_: SecurityException) {
+                            false
+                        }
+                    if (!deleted) return@withLock entry.uri
                 }
-            if (deleted) {
                 try {
                     val rename = ContentValues().apply { put(MediaStore.MediaColumns.DISPLAY_NAME, displayName) }
                     resolver.update(entry.uri, rename, null, null)
                 } catch (_: Exception) {
                     // The content is saved; only the name stays numbered.
                 }
+                entry.uri
             }
-            entry.uri
         }
 
-    private fun commitLegacyEntry(entry: SaveEntry.Created): Uri {
-        val replaces = entry.replaces ?: return entry.uri
+    private fun commitLegacyEntry(
+        entry: SaveEntry.Created,
+        displayName: String,
+    ): Uri {
+        if (!entry.overwrite) return entry.uri
         val temp = File(requireNotNull(entry.uri.path))
-        val target = File(requireNotNull(replaces.path))
+        val target = File(temp.parentFile, displayName)
+        // rename(2) replaces the target in one step.
         if (!temp.renameTo(target)) {
             throw IOException("Failed to replace ${target.name}")
         }
-        return replaces
+        return Uri.fromFile(target)
     }
+
+    /** The [DirectoryLock] key of a MediaStore directory. */
+    private fun lockKey(dirPath: String) = "media:${ScopedStoreConflictResolver.normalizeRelativePath(dirPath)}"
 }

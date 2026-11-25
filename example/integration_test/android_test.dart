@@ -6,6 +6,7 @@
 //   adb shell content delete --uri content://media/external/file \
 //     --where "\"_data LIKE '%/Download/fsf_it/%'\""
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -460,5 +461,141 @@ void main() {
     );
     expect(await FileSaver.restoreDirectory(tree.toString()), isNull);
     expect(await FileSaver.restoreDirectory('not a uri'), isNull);
+  });
+  group('saves of one name started at the same time', () {
+    // As when a save button is tapped several times quickly. Each save must
+    // end with a file of its own holding its whole content, and the conflict
+    // mode must hold across them.
+    const count = 8;
+    late Directory copies;
+
+    setUp(() async {
+      copies = await Directory.systemTemp.createTemp('fsf_copies');
+    });
+    tearDown(() => copies.delete(recursive: true));
+
+    /// About 64 KB that tell the saves apart.
+    String content(int i) => 'save $i\n' * 8192;
+
+    /// The content of the saved file at [uri], copied out with the plugin.
+    Future<String> contentOf(Uri uri) async {
+      final copy = await FileSaver.saveAsync(
+        input: SaveInput.file(uri.toString()),
+        fileType: _text,
+        fileName: 'copy',
+        saveLocation: PathLocation(copies.path),
+      );
+      return File.fromUri(copy).readAsString();
+    }
+
+    /// Starts [count] saves of `leg.txt` in their own directory at once, after
+    /// one more if [existing], and returns each one's URI or error.
+    Future<List<Object>> saveAll(
+      ConflictResolution mode, {
+      bool existing = false,
+    }) async {
+      final dir = '$_subDir/concurrent_${mode.name}_$existing';
+      Future<Uri> save(int i) => FileSaver.saveAsync(
+        input: SaveInput.bytes(utf8.encode(content(i))),
+        fileType: _text,
+        fileName: 'leg',
+        saveLocation: AndroidSaveLocation.downloads,
+        subDir: dir,
+        conflictResolution: mode,
+      );
+      if (existing) await save(0);
+      return Future.wait([
+        for (var i = 1; i <= count; i++)
+          save(i).then<Object>((uri) => uri, onError: (Object e) => e),
+      ]);
+    }
+
+    Future<void> expectEachSavedItsOwnFile(List<Object> results) async {
+      final uris = results.cast<Uri>();
+      expect(uris.toSet(), hasLength(count), reason: '$uris');
+      for (final (i, uri) in uris.indexed) {
+        expect(await contentOf(uri), content(i + 1), reason: '$uri');
+      }
+    }
+
+    for (final existing in [false, true]) {
+      final where = existing
+          ? 'next to an existing file'
+          : 'in a new directory';
+
+      testWidgets('autoRename gives each a name and file of its own $where', (
+        _,
+      ) async {
+        await expectEachSavedItsOwnFile(
+          await saveAll(ConflictResolution.autoRename, existing: existing),
+        );
+      });
+
+      testWidgets('overwrite ends with the file of one of them $where', (
+        _,
+      ) async {
+        final results = await saveAll(
+          ConflictResolution.overwrite,
+          existing: existing,
+        );
+
+        // Every save but the last to finish has had its file replaced. On
+        // Android 9 and below every save reports the same file URI.
+        final uris = results.cast<Uri>();
+        final kept = {
+          for (final uri in uris)
+            if (await FileSaver.canOpenFile(uri)) uri,
+        };
+        expect(kept, hasLength(1), reason: '$uris');
+        expect([
+          for (final (i, uri) in uris.indexed)
+            if (uri == kept.single) content(i + 1),
+        ], contains(await contentOf(kept.single)));
+      });
+    }
+
+    testWidgets('fail lets exactly one create the file', (_) async {
+      final results = await saveAll(ConflictResolution.fail);
+
+      final saved = results.whereType<Uri>().toList();
+      expect(saved, hasLength(1), reason: '$results');
+      expect(results.whereType<FileExistsException>(), hasLength(count - 1));
+      expect(
+        await contentOf(saved.single),
+        content(results.indexOf(saved.single) + 1),
+      );
+    });
+
+    testWidgets('skip lets exactly one create the file, and reports it to '
+        'the others', (_) async {
+      final results = await saveAll(ConflictResolution.skip);
+
+      expect(results.toSet(), hasLength(1), reason: '$results');
+      expect(
+        List.generate(count, (i) => content(i + 1)),
+        contains(await contentOf(results.first as Uri)),
+      );
+    });
+
+    testWidgets('openWrite gives each sink a name and file of its own', (
+      _,
+    ) async {
+      final sinks = await Future.wait([
+        for (var i = 1; i <= count; i++)
+          FileSaver.openWrite(
+            fileName: 'leg',
+            fileType: _text,
+            saveLocation: AndroidSaveLocation.downloads,
+            subDir: '$_subDir/concurrent_open_write',
+          ).then((sink) => sink!),
+      ]);
+      for (final (i, sink) in sinks.indexed) {
+        sink.add(utf8.encode(content(i + 1)));
+      }
+
+      await expectEachSavedItsOwnFile(
+        await Future.wait([for (final sink in sinks) sink.close()]),
+      );
+    });
   });
 }

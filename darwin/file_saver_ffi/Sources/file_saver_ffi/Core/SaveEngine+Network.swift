@@ -263,7 +263,7 @@ extension SaveEngine {
                     self.saveDownloadedFileToPhotosImpl(
                         tmpURL: tmpURL,
                         hasReadAccess: hasReadAccess,
-                        outcome: outcome,
+                        conflictResolution: conflictResolution,
                         fileType: fileType,
                         baseFileName: baseFileName,
                         subDir: subDir,
@@ -289,7 +289,7 @@ extension SaveEngine {
     private func saveDownloadedFileToPhotosImpl(
         tmpURL: URL,
         hasReadAccess: Bool,
-        outcome: PhotosConflictOutcome,
+        conflictResolution: ConflictResolution,
         fileType: FileType,
         baseFileName: String,
         subDir: String?,
@@ -313,15 +313,16 @@ extension SaveEngine {
         let fileName = buildFileName(base: baseFileName, extension: fileType.ext)
 
         do {
-            let uri = try PhotosHelper.createAsset(
+            let uri = try PhotosHelper.addAsset(
                 from: .file(tmpURL),
                 fileType: fileType,
                 fileName: fileName,
-                albumName: hasReadAccess ? subDir : nil
+                subDir: subDir,
+                conflictResolution: conflictResolution,
+                hasReadAccess: hasReadAccess
             )
 
             cleanup()
-            PhotosHelper.deleteReplacedAsset(outcome)
             onSuccess(uri)
             onComplete()
         } catch FileSaverError.cancelled {
