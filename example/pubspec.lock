@@ -167,7 +167,7 @@ packages:
       path: ".."
       relative: true
     source: path
-    version: "0.12.1"
+    version: "0.12.2"
   file_selector_linux:
     dependency: transitive
     description:

@@ -3,6 +3,14 @@ import Foundation
 import Photos
 
 class PhotosHelper {
+    /// Makes saves of one name (in one album) check for an existing asset and
+    /// add theirs one at a time.
+    private static let nameLock = KeyedLock()
+
+    /// Makes concurrent saves to an album that doesn't exist yet create it
+    /// only once.
+    private static let albumLock = NSLock()
+
     /// Requests photo library permission from the user.
     ///
     /// Read/write access the app already has (full or limited) is always used,
@@ -63,6 +71,8 @@ class PhotosHelper {
 
     /// Find or create album with given name
     static func findOrCreateAlbum(name: String) throws -> PHAssetCollection {
+        albumLock.lock()
+        defer { albumLock.unlock() }
         let options = PHFetchOptions()
         options.predicate = NSPredicate(format: "title = %@", name)
         let collections = PHAssetCollection.fetchAssetCollections(with: .album, subtype: .any, options: options)
@@ -178,6 +188,50 @@ class PhotosHelper {
             return .save(replacing: existing)
         case .autoRename:
             return .save(replacing: nil)
+        }
+    }
+
+    /// Resolves the conflict for `fileName` again and adds the asset, as one
+    /// step for each name: a concurrent save of the same name waits, so that
+    /// `fail` and `skip` see the asset this one adds, and `overwrite` replaces
+    /// it. For `overwrite` it then deletes the replaced asset.
+    ///
+    /// Callers check the conflict once beforehand with
+    /// `handleConflictResolution`, to fail or skip before preparing the
+    /// content; this checks again, as another save may have added the asset
+    /// since.
+    ///
+    /// - Returns: The `ph://` URI of the new asset, or of the existing one for
+    ///   `skip`.
+    /// - Throws: `FileSaverError.fileExists` if the asset exists and
+    ///   `conflictResolution` is `.fail`, and the errors of `createAsset`.
+    static func addAsset(
+        from source: AssetSource,
+        fileType: FileType,
+        fileName: String,
+        subDir: String?,
+        conflictResolution: ConflictResolution,
+        hasReadAccess: Bool
+    ) throws -> String {
+        let albumName = hasReadAccess ? subDir : nil
+        // An autoRename save adds its asset whatever exists.
+        guard hasReadAccess, conflictResolution != .autoRename else {
+            return try createAsset(from: source, fileType: fileType, fileName: fileName, albumName: albumName)
+        }
+
+        return try nameLock.withLock("\(subDir ?? "")/\(fileName)") {
+            let outcome = try handleConflictResolution(
+                fileName: fileName,
+                subDir: subDir,
+                conflictResolution: conflictResolution,
+                hasReadAccess: hasReadAccess
+            )
+            if case .existing(let uri) = outcome {
+                return uri
+            }
+            let uri = try createAsset(from: source, fileType: fileType, fileName: fileName, albumName: albumName)
+            deleteReplacedAsset(outcome)
+            return uri
         }
     }
 

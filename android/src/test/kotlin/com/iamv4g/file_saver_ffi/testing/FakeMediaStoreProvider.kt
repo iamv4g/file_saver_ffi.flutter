@@ -24,12 +24,19 @@ import java.nio.file.Files
  * - `insert` rejects a `RELATIVE_PATH` whose top-level directory the
  *   collection doesn't allow (an image in `Movies/`), like MediaProvider's
  *   "Primary directory … not allowed" check.
- * - `insert` auto-renames a duplicate `DISPLAY_NAME` in the same
- *   `RELATIVE_PATH` to `name (1).ext`, up to `name (31).ext`, and then
- *   throws `IllegalStateException("Failed to build unique file: …")`, as
- *   MediaProvider's `FileUtils.buildUniqueNameIterator` does. (Android 10
- *   numbers the name on insert; Android 11 and later when `IS_PENDING` is
- *   cleared.)
+ * - A duplicate `DISPLAY_NAME` in the same `RELATIVE_PATH` is renamed to
+ *   `name (1).ext`, up to `name (31).ext`, and then it throws
+ *   `IllegalStateException("Failed to build unique file: …")`, as
+ *   MediaProvider's `FileUtils.buildUniqueNameIterator` does. Android 10
+ *   numbers the name on insert; Android 11 and later number a pending row
+ *   when `IS_PENDING` is cleared.
+ * - Android 11 and later keep a pending file at `.pending-<expiry>-<name>`,
+ *   with the expiry in seconds, so pending rows inserted with one name share
+ *   one file (as measured on Android 16). Clearing `IS_PENDING` moves the
+ *   file, and the other rows are left without one.
+ * - Android 10 leaves pending rows out of a query unless the URI asks for
+ *   them (`MediaStore.setIncludePending`). Android 11 and later include the
+ *   app's own pending rows, which are all the rows here.
  * - `insert` stores `RELATIVE_PATH` with a trailing slash (`Pictures/album/`),
  *   as MediaProvider does, so queries must match that form.
  * - `query` supports `col=?` selections joined with `AND`.
@@ -63,6 +70,10 @@ class FakeMediaStoreProvider : ContentProvider() {
     @Volatile
     var readOnly = false
 
+    /** Runs at the start of `insert`, before the provider's lock, e.g. to widen a race between saves. */
+    @Volatile
+    var beforeInsert: () -> Unit = {}
+
     /** False makes a query return a null SIZE, as many providers do. */
     var reportsSize = true
 
@@ -70,8 +81,16 @@ class FakeMediaStoreProvider : ContentProvider() {
 
     override fun getType(uri: Uri): String? = rowFor(uri)?.values?.getAsString(MediaColumns.MIME_TYPE)
 
-    @Synchronized
     override fun insert(
+        uri: Uri,
+        values: ContentValues?,
+    ): Uri {
+        beforeInsert()
+        return insertLocked(uri, values)
+    }
+
+    @Synchronized
+    private fun insertLocked(
         uri: Uri,
         values: ContentValues?,
     ): Uri {
@@ -103,10 +122,20 @@ class FakeMediaStoreProvider : ContentProvider() {
             )
         }
 
-        row.put(MediaColumns.DISPLAY_NAME, uniqueName(row.getAsString(MediaColumns.DISPLAY_NAME), row.getAsString(MediaColumns.RELATIVE_PATH)))
+        val name = row.getAsString(MediaColumns.DISPLAY_NAME)
+        val relativePath = row.getAsString(MediaColumns.RELATIVE_PATH)
+        val pending = row.getAsInteger(MediaColumns.IS_PENDING) == 1
+        val numbersLater = pending && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+        val sharedFile =
+            if (numbersLater) {
+                rows.values.firstOrNull { it.isPending && it.displayName == name && it.relativePath == relativePath }?.file
+            } else {
+                row.put(MediaColumns.DISPLAY_NAME, uniqueName(name, relativePath))
+                null
+            }
 
         val id = nextId++
-        val file = File(storageDir, "$id").apply { createNewFile() }
+        val file = sharedFile ?: File(storageDir, "$id").apply { createNewFile() }
         rows[id] = Row(id, collection, row, file)
         return ContentUris.withAppendedId(baseUri(uri), id)
     }
@@ -124,8 +153,11 @@ class FakeMediaStoreProvider : ContentProvider() {
         val id = idOf(uri)
         val collection = collectionOf(uri)
 
+        val includesPending = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R || uri.getQueryParameter("includePending") == "1"
+
         val cursor = MatrixCursor(columns)
         rows.values
+            .filter { includesPending || !it.isPending }
             .filter { id == null || it.id == id }
             .filter { collection == "file" || it.collection == collection }
             .filter { row -> filters.all { (column, value) -> row.values.getAsString(column) == value } }
@@ -154,7 +186,15 @@ class FakeMediaStoreProvider : ContentProvider() {
         val row = rowFor(uri) ?: return 0
         val changes = values ?: ContentValues()
         updateResult?.let { override -> return override(row, changes) }
+        val publishes = row.isPending && changes.getAsInteger(MediaColumns.IS_PENDING) == 0
         row.values.putAll(changes)
+        if (publishes && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            row.values.put(MediaColumns.DISPLAY_NAME, uniqueName(row.displayName, row.relativePath, except = row))
+            // Moves the pending file: other rows that shared it lose it.
+            val published = File(storageDir, "${row.id}-published")
+            row.file.renameTo(published)
+            rows[row.id] = row.copy(file = published)
+        }
         return 1
     }
 
@@ -197,6 +237,10 @@ class FakeMediaStoreProvider : ContentProvider() {
         return Row(id, collection, values, File(storageDir, "$id").apply { createNewFile() }).also { rows[id] = it }
     }
 
+    /** The content of the row of [uri], or null if its file is gone. */
+    @Synchronized
+    fun contentOf(uri: Uri): ByteArray? = rowFor(uri)?.file?.takeIf { it.exists() }?.readBytes()
+
     /** The row with [displayName], or null. */
     @Synchronized
     fun rowNamed(displayName: String): Row? = rows.values.firstOrNull { it.displayName == displayName }
@@ -206,8 +250,9 @@ class FakeMediaStoreProvider : ContentProvider() {
     private fun uniqueName(
         name: String,
         relativePath: String?,
+        except: Row? = null,
     ): String {
-        fun taken(candidate: String) = rows.values.any { it.displayName == candidate && it.relativePath == relativePath }
+        fun taken(candidate: String) = rows.values.any { it !== except && it.id != except?.id && it.displayName == candidate && it.relativePath == relativePath }
         if (!taken(name)) return name
         val dot = name.lastIndexOf('.')
         val (base, ext) = if (dot > 0) name.substring(0, dot) to name.substring(dot) else name to ""
