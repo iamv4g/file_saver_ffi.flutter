@@ -11,12 +11,13 @@ object LegacyStoreConflictResolver {
     /** Outcome of resolving a filesystem name conflict. */
     sealed class Resolution {
         /**
-         * Write to [file]. When [replaces] is set (OVERWRITE), [file] is a
-         * temporary file that is renamed over [replaces] after a successful write.
+         * Write to [file], which exists and is empty. For OVERWRITE
+         * ([overwrite]) it is a temporary file, which the commit renames to
+         * the requested name.
          */
         data class Create(
             val file: File,
-            val replaces: File? = null,
+            val overwrite: Boolean = false,
         ) : Resolution()
 
         /** Keep the existing file and write nothing (SKIP). */
@@ -28,9 +29,11 @@ object LegacyStoreConflictResolver {
     /**
      * Resolve file conflict using filesystem (Android ≤ 9)
      *
-     * Nothing is deleted here. OVERWRITE writes to a temporary file in the same
-     * directory, which the caller renames over the original after a successful
-     * write.
+     * The file to write is created empty, so the name is checked and claimed
+     * in one step ([File.createNewFile]) and concurrent saves never pick the
+     * same one. Nothing is deleted here: OVERWRITE always writes to a
+     * temporary file in the same directory, which the caller renames over
+     * the requested name after a successful write.
      *
      * @param directory Target directory (must exist)
      * @param baseFileName File name WITHOUT extension
@@ -38,6 +41,7 @@ object LegacyStoreConflictResolver {
      * @param conflictResolution Strategy
      *
      * @throws FileExistsException if the file exists and [conflictResolution] is FAIL
+     * @throws java.io.IOException if the file can't be created
      */
     suspend fun resolve(
         directory: File,
@@ -46,24 +50,22 @@ object LegacyStoreConflictResolver {
         conflictResolution: ConflictResolution,
     ): Resolution =
         withContext(Dispatchers.IO) {
-            val original =
-                File(
-                    directory,
-                    FileHelper.buildFileName(baseFileName, extension),
-                )
+            val name = FileHelper.buildFileName(baseFileName, extension)
 
-            if (!original.exists()) {
+            if (conflictResolution == ConflictResolution.OVERWRITE) {
+                val temp = File(directory, ".$name.${UUID.randomUUID()}.tmp").apply { createNewFile() }
+                return@withContext Resolution.Create(temp, overwrite = true)
+            }
+
+            val original = File(directory, name)
+            if (original.createNewFile()) {
                 return@withContext Resolution.Create(original)
             }
 
             when (conflictResolution) {
                 ConflictResolution.AUTO_RENAME -> {
-                    Resolution.Create(autoRename(directory, baseFileName, extension))
-                }
-
-                ConflictResolution.OVERWRITE -> {
-                    val temp = File(directory, ".${original.name}.${UUID.randomUUID()}.tmp")
-                    Resolution.Create(temp, replaces = original)
+                    val renamed = FileHelper.numberedName(baseFileName, extension) { !File(directory, it).createNewFile() }
+                    Resolution.Create(File(directory, renamed))
                 }
 
                 ConflictResolution.SKIP -> {
@@ -73,12 +75,10 @@ object LegacyStoreConflictResolver {
                 ConflictResolution.FAIL -> {
                     throw FileExistsException(original.name)
                 }
+
+                ConflictResolution.OVERWRITE -> {
+                    error("Handled above")
+                }
             }
         }
-
-    private fun autoRename(
-        directory: File,
-        baseFileName: String,
-        extension: String,
-    ): File = File(directory, FileHelper.numberedName(baseFileName, extension) { File(directory, it).exists() })
 }

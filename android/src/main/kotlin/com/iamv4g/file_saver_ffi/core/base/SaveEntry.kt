@@ -12,17 +12,18 @@ sealed class SaveEntry {
      * A new entry to write the content to.
      *
      * It only becomes the saved file once [SaveEntryFactory.commitEntry]
-     * succeeds. Until then [replaces] is left untouched, so a failed or
-     * cancelled write never loses the file being overwritten.
+     * succeeds, so a failed or cancelled write never touches another file.
      *
-     * @param uri URI of the new entry (a temporary file for legacy overwrites)
+     * @param uri URI of the new entry
      * @param outputStream Stream to write the content to
-     * @param replaces Existing file to replace on commit (OVERWRITE only)
+     * @param overwrite OVERWRITE: the entry has a name of its own (a numbered
+     *   or temporary one), and the commit gives it the requested name,
+     *   replacing the file that holds that name then
      */
     class Created(
         val uri: Uri,
         val outputStream: OutputStream,
-        val replaces: Uri? = null,
+        val overwrite: Boolean = false,
     ) : SaveEntry()
 
     /**

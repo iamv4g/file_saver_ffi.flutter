@@ -65,8 +65,9 @@ sealed class SaveEntryFactory {
      * Makes a fully written [entry] the saved file and returns its final URI.
      *
      * For OVERWRITE, the replaced file is removed only here, after the new
-     * content exists. If it cannot be removed, the new file is kept under its
-     * numbered name instead of failing, so no data is lost.
+     * content exists: the new entry takes the requested name from whichever
+     * file holds it now. If that file cannot be removed, the new file is kept
+     * under its numbered name instead of failing, so no data is lost.
      *
      * Implementations must only throw before they modify the replaced file.
      *
@@ -166,7 +167,9 @@ sealed class SaveEntryFactory {
                 context,
                 entry,
                 FileHelper.buildFileName(baseFileName, fileType.ext),
-                fileType.mimeType,
+                fileType,
+                saveLocation,
+                subDir,
             )
     }
 
@@ -228,6 +231,7 @@ sealed class SaveEntryFactory {
             SAFHelper.commitFile(
                 context,
                 entry,
+                treeUri,
                 FileHelper.buildFileName(baseFileName, fileType.ext),
             )
     }

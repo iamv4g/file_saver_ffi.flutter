@@ -48,6 +48,14 @@ class FakeDocumentsProvider : DocumentsProvider() {
 
     private var nextId = 1
 
+    /** Runs at the start of `createDocument`, before the provider's lock, e.g. to widen a race between saves. */
+    @Volatile
+    var beforeCreateDocument: () -> Unit = {}
+
+    /** False leaves out `FLAG_SUPPORTS_RENAME`, like a provider that can't rename documents. */
+    @Volatile
+    var supportsRename = true
+
     /** Runs before `openDocument` opens a document's file, e.g. to block like a slow provider. */
     @Volatile
     var beforeOpenDocument: () -> Unit = {}
@@ -101,8 +109,17 @@ class FakeDocumentsProvider : DocumentsProvider() {
         documentId: String,
     ): Boolean = generateSequence(docs[documentId]) { docs[it.parentId] }.any { it.id == parentDocumentId }
 
-    @Synchronized
     override fun createDocument(
+        parentDocumentId: String,
+        mimeType: String,
+        displayName: String,
+    ): String {
+        beforeCreateDocument()
+        return createDocumentLocked(parentDocumentId, mimeType, displayName)
+    }
+
+    @Synchronized
+    private fun createDocumentLocked(
         parentDocumentId: String,
         mimeType: String,
         displayName: String,
@@ -129,6 +146,7 @@ class FakeDocumentsProvider : DocumentsProvider() {
         documentId: String,
         displayName: String,
     ): String? {
+        if (!supportsRename) throw UnsupportedOperationException("Rename not supported")
         val doc = docs[documentId] ?: throw FileNotFoundException(documentId)
         if (docs.values.any { it.parentId == doc.parentId && it.name == displayName && it !== doc }) {
             throw IllegalStateException("$displayName exists")
@@ -158,7 +176,8 @@ class FakeDocumentsProvider : DocumentsProvider() {
             if (doc.mimeType == Document.MIME_TYPE_DIR) {
                 Document.FLAG_DIR_SUPPORTS_CREATE
             } else {
-                Document.FLAG_SUPPORTS_WRITE or Document.FLAG_SUPPORTS_DELETE or Document.FLAG_SUPPORTS_RENAME
+                Document.FLAG_SUPPORTS_WRITE or Document.FLAG_SUPPORTS_DELETE or
+                    (if (supportsRename) Document.FLAG_SUPPORTS_RENAME else 0)
             }
         val row = newRow()
         row.add(Document.COLUMN_DOCUMENT_ID, doc.id)
