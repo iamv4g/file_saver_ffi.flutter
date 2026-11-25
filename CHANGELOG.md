@@ -17,6 +17,13 @@
 - **iOS:** saves of one name to the Photos Library started at the same time could all add an asset: `fail` let several succeed, `skip` added duplicates, and saves to an album that didn't exist yet could create the album twice. Saves of one name now check for the asset and add theirs one at a time.
 - **iOS/macOS:** a write session (`openWrite`, `openWriteAs`) whose sink is left unclosed when its isolate exits or its engine shuts down (a background isolate, add-to-app, a hot restart) is now cancelled. Its partial file is deleted, its file handle closed and, for `openWriteAs`, the access to the picked directory given back. Before, all of it stayed for as long as the app ran, and a new file kept its final name, so a truncated `report.pdf` was left and the next save of that name got `report (1).pdf`. The sink's Dart `Finalizer` doesn't run when an isolate exits; the sink now has a native finalizer as well.
 
+## 0.12.2
+
+### Fixed
+
+- **Android:** saves of one name started at the same time, as when a save button is tapped several times quickly, could pick the same name and write into one file. With `autoRename` several saves reported the same URI, files were lost or left empty (0 bytes), and some names were numbered twice (`report (1) (1).pdf`). `fail` let several saves succeed, `skip` could fail with `UNIQUE constraint failed` or add a second file, and `overwrite` left numbered copies behind. This affected MediaStore on Android 10 and later, plain files on Android 9 and below, and a picked directory (`saveAs`, `openWriteAs`). Saves into one directory now pick a name and create their file one at a time, while their content is still written in parallel. Each save now gets a name and file of its own, `fail` and `skip` let exactly one save create the file, and concurrent overwrites end with one file, of the save that finishes last. On Android 10, a file that another save is still writing now counts as taken too.
+- **iOS:** saves of one name to the Photos Library started at the same time could all add an asset: `fail` let several succeed, `skip` added duplicates, and saves to an album that didn't exist yet could create the album twice. Saves of one name now check for the asset and add theirs one at a time.
+
 ## 0.12.1
 
 ### Fixed
