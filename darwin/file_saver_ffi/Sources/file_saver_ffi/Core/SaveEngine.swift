@@ -38,9 +38,9 @@ extension SaveEngine {
     }
 
     #if os(iOS)
-    /// Handles Photos permission and conflict resolution.
-    /// Nothing is deleted here: for `overwrite` the outcome carries the asset to
-    /// delete after the new one has been saved.
+    /// Handles Photos permission and a first conflict check, which fails or
+    /// skips the save before its content is prepared. Nothing is deleted
+    /// here: `PhotosHelper.addAsset` checks again as it adds the asset.
     func handlePhotosSetup(
         fileName: String,
         subDir: String?,
@@ -114,13 +114,14 @@ extension SaveEngine {
             // The permission dialog can stay open for a while. Once the asset
             // is being added, it can't be stopped.
             try cancellationToken?.throwIfCancelled()
-            let uri = try PhotosHelper.createAsset(
+            let uri = try PhotosHelper.addAsset(
                 from: .data(fileData),
                 fileType: fileType,
                 fileName: fileName,
-                albumName: hasReadAccess ? subDir : nil
+                subDir: subDir,
+                conflictResolution: conflictResolution,
+                hasReadAccess: hasReadAccess
             )
-            PhotosHelper.deleteReplacedAsset(outcome)
             // Photos takes the whole file at once.
             let size = Int64(fileData.count)
             onProgress?(size, size)
@@ -229,13 +230,14 @@ extension SaveEngine {
 
             // Once the asset is being added, it can't be stopped.
             try cancellationToken?.throwIfCancelled()
-            let uri = try PhotosHelper.createAsset(
+            let uri = try PhotosHelper.addAsset(
                 from: .file(sourceFile.url),
                 fileType: fileType,
                 fileName: fileName,
-                albumName: hasReadAccess ? subDir : nil
+                subDir: subDir,
+                conflictResolution: conflictResolution,
+                hasReadAccess: hasReadAccess
             )
-            PhotosHelper.deleteReplacedAsset(outcome)
             // Photos takes the whole file at once.
             onProgress?(sourceFile.totalSize, sourceFile.totalSize)
             onSuccess(uri)

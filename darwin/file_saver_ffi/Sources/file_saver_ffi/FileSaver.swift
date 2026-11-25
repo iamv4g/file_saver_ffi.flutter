@@ -313,8 +313,6 @@ class FileSaver {
             throw FileSaverError.writeSessionSkipped
         }
 
-        let albumName: String? = hasReadAccess ? subDir : nil
-
         // Write chunks to a temp file; commit to Photos Library on close.
         let tmpURL = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -324,14 +322,14 @@ class FileSaver {
         // Closure captures everything needed for commit; caller invokes on closeWrite.
         let photosCommit: () throws -> String = {
             defer { try? FileManager.default.removeItem(at: tmpURL) }
-            let uri = try PhotosHelper.createAsset(
+            return try PhotosHelper.addAsset(
                 from: .file(tmpURL),
                 fileType: fileType,
                 fileName: fullFileName,
-                albumName: albumName
+                subDir: subDir,
+                conflictResolution: conflictResolution,
+                hasReadAccess: hasReadAccess
             )
-            PhotosHelper.deleteReplacedAsset(outcome)
-            return uri
         }
 
         return (tmpURL, fileHandle, photosCommit)

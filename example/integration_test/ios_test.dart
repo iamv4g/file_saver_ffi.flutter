@@ -565,6 +565,38 @@ void main() {
       );
     });
 
+    testWidgets('saves of one name at the same time: fail adds one asset, '
+        'and skip adds one and reports it to the others', (_) async {
+      Future<Object> attempt(
+        String name,
+        ConflictResolution mode, {
+        String? album,
+      }) => _saveToPhotos(
+        name,
+        album: album,
+        conflictResolution: mode,
+      ).then<Object>((uri) => uri, onError: (Object e) => e);
+
+      final failed = await Future.wait([
+        for (var i = 0; i < 5; i++)
+          attempt('concurrent_fail', ConflictResolution.fail),
+      ]);
+      expect(failed.whereType<Uri>(), hasLength(1), reason: '$failed');
+      expect(failed.whereType<FileExistsException>(), hasLength(4));
+
+      // Into an album that doesn't exist yet, which must be created once.
+      final skipped = await Future.wait([
+        for (var i = 0; i < 5; i++)
+          attempt(
+            'concurrent_skip',
+            ConflictResolution.skip,
+            album: _photoName('album'),
+          ),
+      ]);
+      expect(skipped.toSet(), hasLength(1), reason: '$skipped');
+      expect(skipped.first, isA<Uri>());
+    });
+
     testWidgets('a save reports one update with the whole size', (_) async {
       final events = await FileSaver.save(
         input: SaveInput.bytes(_png),
